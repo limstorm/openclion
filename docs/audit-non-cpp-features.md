@@ -39,6 +39,31 @@
 
 ---
 
+## 0. 当前进度（Java/JVM 专用清理）
+
+范围已收窄：**只清 Java/JVM 工具，其它语言的语法、server、安装器与 UI/Git 等功能保留**。下表是截至 HEAD `1146022` 的状态。
+
+| 已完成                                                              | 提交      |
+| ------------------------------------------------------------------- | --------- |
+| jdtls（语言服务、格式化、class 文件虚拟文档、usages 扩展）          | `ae257a2` |
+| JDWP / java-debug / HotSwap / Remote JVM / 字段观察点               | `ae257a2` |
+| Lombok agent 与 jar                                                 | `ae257a2` |
+| Kotlin 桥（Maven/Gradle 重配置、源码镜像、Kotlin 调试适配器）       | `ae257a2` |
+| Java 应用 / 按模块 JUnit 运行配置与 classpath 启动                  | `ae257a2` |
+| jdtls 设置页（Language server JDK、JVM options）                    | `ae257a2` |
+| Kotlin 语言服务（需要 Java 运行时）                                 | `3e90d2e` |
+| JVM 文件图标（读 `.java/.kt` 前 64 KB 的 `jvm_file_presentations`） | `1146022` |
+
+| 仍待删除                                      | 入口                                                                                                                                                    |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Java 测试报告（Surefire/Gradle XML → 测试树） | `crates/ide-run/src/junit.rs`、`run_test_reports`、`src/features/run/testing/jvm.ts`、`run/store.ts::jvmReportEvents`                                   |
+| Tomcat 运行/部署                              | `crates/ide-run/src/tomcat.rs`、`run_tomcat_*`、`src/features/run/{tomcat.ts,applicationUpdate.ts,updatePolicies.ts}`                                   |
+| Gradle fork JVM 参数                          | `crates/ide-run/src/gradle_jvm.rs`、`run_gradle_jvm_args_script`、`src/features/run/jvmTypes.ts::gradleForkedJvm/prepareLaunch`                         |
+| Maven/Gradle 构建模型与同步                   | `ide-build/src/{maven,gradle,sync,pom_edit,application_update}.rs`、`ops/build.rs`、`features/build-tools`、`settings/pages/build.{maven,gradle}.tsx`   |
+| JDK 下载与 Java 设置页                        | `platform/jdk.ts`、`features/tools/jdk.ts`、`DownloadJdkDialog.tsx`、`settings/languages/LanguagePages.tsx::JavaPage`、`ide-sdk` 的 JDK/库发现 JVM 部分 |
+
+**删除顺序（每步都要全量绿色）**：前端摘除入口 → 后端删模块/命令 → `cargo test -p openclion --test export_bindings` → 修 `menu.rs`/keymap 静态 id → `cargo test --workspace` + `pnpm test`。硬约束：`ide_build::compile` 的 CMake 路径与 `ide_http::client` 必须保留。
+
 ## 1. `languages/*.toml`：谁还在声明 language server / debugger
 
 ### 1.1 判定规则
