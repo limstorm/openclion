@@ -556,31 +556,6 @@ pub static TOOLS: &[ToolSpec] = &[
         homepage: "https://github.com/microsoft/vscode-js-debug",
         needs: &[],
     },
-    ToolSpec {
-        name: "kotlin-lsp",
-        display: "Kotlin LSP (JetBrains)",
-        kind: LanguageServer,
-        commands: &["kotlin-lsp"],
-        method: Method::Release {
-            source: ReleaseSource::GitHub { repo: "Kotlin/kotlin-lsp" },
-            assets: &[
-                rule(Mac, Arm64, "kotlin-lsp-*-mac-aarch64.zip"),
-                rule(Mac, X64, "kotlin-lsp-*-mac-x64.zip"),
-                rule(Linux, X64, "kotlin-lsp-*-linux-x64.zip"),
-                rule(Linux, Arm64, "kotlin-lsp-*-linux-aarch64.zip"),
-                rule(Windows, X64, "kotlin-lsp-*-win-x64.zip"),
-                // Older releases ship one platform-independent archive.
-                any_arch(Mac, "kotlin-*.zip"),
-                any_arch(Linux, "kotlin-*.zip"),
-                any_arch(Windows, "kotlin-*.zip"),
-            ],
-            locate: &["kotlin-lsp", "kotlin-lsp.sh", "kotlin-lsp.cmd"],
-        },
-        fallback: None,
-        version: V,
-        homepage: "https://github.com/Kotlin/kotlin-lsp",
-        needs: &[],
-    },
     // ElixirLS ships launcher scripts only: on first start they build the server
     // with the Elixir / OTP found for the project (Mix.install, needs network).
     ToolSpec {

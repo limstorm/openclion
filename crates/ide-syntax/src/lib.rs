@@ -20,7 +20,6 @@
 
 mod cpp;
 mod identifiers;
-mod jvm;
 mod kinds;
 mod lines;
 mod locals;
@@ -31,7 +30,6 @@ mod types;
 mod tests;
 
 pub use cpp::{CppClass, CppDeclaration, CppMember, class_in_text};
-pub use jvm::{JvmPresentation, JvmTypeKind};
 pub use types::*;
 
 use ide_core::{CancellationToken, DocId, IdeError, LanguageId, Pos, Range};

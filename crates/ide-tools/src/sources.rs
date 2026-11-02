@@ -257,18 +257,6 @@ mod tests {
     }
 
     #[test]
-    fn github_links_in_release_notes() {
-        let json = r#"{"tag_name":"kotlin-lsp/v0.253.10629","assets":[],"body":
-            "Downloads:\n* [macOS arm](https://download-cdn.jetbrains.com/kotlin-lsp/0.253.10629/kotlin-lsp-0.253.10629-mac-aarch64.zip)\n* [Linux](https://download-cdn.jetbrains.com/kotlin-lsp/0.253.10629/kotlin-lsp-0.253.10629-linux-x64.zip)."}"#;
-        let rules = find("kotlin-lsp").unwrap().asset_rules();
-        let d = github_pick(json, rules, MAC_ARM).unwrap();
-        assert_eq!(d.name, "kotlin-lsp-0.253.10629-mac-aarch64.zip");
-        assert!(d.url.starts_with("https://download-cdn.jetbrains.com/"));
-        let d = github_pick(json, rules, LINUX).unwrap();
-        assert_eq!(d.name, "kotlin-lsp-0.253.10629-linux-x64.zip");
-    }
-
-    #[test]
     fn hashicorp() {
         let json = r#"{"version":"0.36.4","url_shasums":"https://r/terraform-ls_0.36.4_SHA256SUMS","builds":[
             {"arch":"arm64","os":"darwin","url":"https://r/terraform-ls_0.36.4_darwin_arm64.zip"},

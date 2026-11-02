@@ -16,7 +16,6 @@ pub mod doc;
 pub mod env;
 pub mod fs;
 pub mod history;
-pub mod jvm_icons;
 pub mod lsp;
 pub mod nav;
 pub mod notebook;

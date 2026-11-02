@@ -2,7 +2,6 @@
 //! whole-word occurrence of an identifier (1-based), so fixtures stay readable.
 
 mod cpp;
-mod jvm;
 mod locals_langs;
 mod structure;
 
