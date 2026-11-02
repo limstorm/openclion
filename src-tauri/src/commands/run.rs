@@ -139,19 +139,6 @@ pub async fn run_gradle_jvm_args_script(
     ide_host::ops::run::run_gradle_jvm_args_script(&state.host, window.label(), jvm_args).await
 }
 
-/// Results from the JUnit XML reports (Surefire, Failsafe, Gradle) of the module at
-/// `module` (relative to the project root) written since `since_ms` (Unix epoch, ms).
-#[tauri::command]
-#[specta::specta]
-pub async fn run_test_reports(
-    window: Window,
-    state: State<'_, AppState>,
-    module: Option<std::path::PathBuf>,
-    since_ms: f64,
-) -> IdeResult<Vec<ide_run::junit::TestCaseReport>> {
-    ide_host::ops::run::run_test_reports(&state.host, window.label(), module, since_ms).await
-}
-
 #[tauri::command]
 #[specta::specta]
 pub async fn run_test_report_file(

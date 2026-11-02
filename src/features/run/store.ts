@@ -693,8 +693,6 @@ function finishSession(sessionId: string, code: number | null) {
       rt.console.flush();
       if (rt.tests && rt.parser) {
         rt.tests.apply(rt.parser.end?.() ?? []);
-        // Surefire / Gradle print only failures and class totals: per-test results come from the XML reports.
-        if (frameworkFor(session.config) === "jvm") rt.tests.apply(await jvmReportEvents(session));
         if (frameworkFor(session.config) === "ctest") rt.tests.apply(ctestReportEvents(await ctestReports(session)));
         if (runtimes.get(sessionId) !== rt) return;
         rt.tests.finish(code);
@@ -710,17 +708,6 @@ function finishSession(sessionId: string, code: number | null) {
       }
     })();
   }, 30);
-}
-
-async function jvmReportEvents(session: RunSession): Promise<TestEvent[]> {
-  if (!isTauri()) return [];
-  try {
-    // Report files are written during the run; allow for coarse file-system timestamps.
-    const reports = await call(commands.runTestReports(session.config.cwd ?? null, session.startedAt - 2000));
-    return testReportEvents(reports);
-  } catch {
-    return [];
-  }
 }
 
 /** CTest's JUnit report (`--output-junit`): the configuration names the file. */

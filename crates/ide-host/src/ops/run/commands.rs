@@ -122,22 +122,6 @@ pub async fn run_gradle_jvm_args_script(_host: &Host, _window: &str, jvm_args: V
     .map_err(|e| IdeError::internal(e.to_string()))?
 }
 
-/// Results from the JUnit XML reports (Surefire, Failsafe, Gradle) of the module at
-/// `module` (relative to the project root) written since `since_ms` (Unix epoch, ms).
-pub async fn run_test_reports(
-    host: &Host,
-    window: &str,
-    module: Option<std::path::PathBuf>,
-    since_ms: f64,
-) -> IdeResult<Vec<ide_run::junit::TestCaseReport>> {
-    let root = host.project(window)?.root.clone();
-    let dir = module.map(|m| root.join(m)).unwrap_or(root);
-    let since = std::time::UNIX_EPOCH + std::time::Duration::from_millis(since_ms.max(0.0) as u64);
-    tokio::task::spawn_blocking(move || ide_run::junit::read_reports(&ide_run::junit::report_dirs(&dir), since))
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))
-}
-
 /// Results from one JUnit XML file (CTest's `--output-junit`) written since
 /// `since_ms`; `path` is relative to the project root.
 pub async fn run_test_report_file(
@@ -263,8 +247,5 @@ pub(crate) fn register(d: &mut Dispatcher) {
     });
     d.add("run_test_report_file", |c| async move {
         run_test_report_file(&c.host, &c.window, c.arg("path")?, c.arg("sinceMs")?).await
-    });
-    d.add("run_test_reports", |c| async move {
-        run_test_reports(&c.host, &c.window, c.arg("module")?, c.arg("sinceMs")?).await
     });
 }

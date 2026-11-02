@@ -604,11 +604,6 @@ export const commands = {
 	runApplicationBuild: (config: RunConfig_Deserialize, module: string) => typedError<RunConfig_Serialize, IdeError>(__TAURI_INVOKE("run_application_build", { config, module })),
 	runApplicationPublish: (config: RunConfig_Deserialize, classPaths: string[], mainClass: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_application_publish", { config, classPaths, mainClass })),
 	runTomcatUpdate: (config: RunConfig_Deserialize, mode: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_tomcat_update", { config, mode })),
-	/**
-	 *  Results from the JUnit XML reports (Surefire, Failsafe, Gradle) of the module at
-	 *  `module` (relative to the project root) written since `since_ms` (Unix epoch, ms).
-	 */
-	runTestReports: (module: string | null, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_reports", { module, sinceMs })),
 	runTestReportFile: (path: string, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_report_file", { path, sinceMs })),
 	/**  Maven and Gradle projects of the window's project, from the build files plus the last sync. */
 	buildModel: () => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_model")),
