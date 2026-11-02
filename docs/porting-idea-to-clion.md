@@ -188,6 +188,14 @@ which is what the Toolchains page edits.
   `cCompiler`, `cxxCompiler` and `toolchainFile` become
   `-DCMAKE_C_COMPILER` / `-DCMAKE_CXX_COMPILER` / `-DCMAKE_TOOLCHAIN_FILE`.
 
+* **CMakePresets as profiles** — `CMakeSettings.presets` selects configure
+  presets by name; `ide-run` then emits `cmake --preset <name>`, the build preset
+  that names it (else `cmake --build <dir> --config <type>`), CTest and the
+  targets of its build directory. `CMakePresets.json` `inherits` chains are
+  resolved for generator/binaryDir/cacheVariables. Settings › CMake has a preset
+  mode with a selection list; the CMake tool window shows the preset build
+  directories labelled by preset name.
+
 ## 6. Deliberate gaps (roadmap)
 
 Ordered by how much they would be missed by a CLion user:
@@ -195,15 +203,13 @@ Ordered by how much they would be missed by a CLion user:
 1. **Debugger views beyond memory** — Disassembly, registers and the "inline
    variables" gutter; the Memory view is in, the rest is frontend work in
    `src/features/debugger`.
-2. **CMakePresets as profiles** — presets are listed read-only; CLion lets you
-   select a preset and drive configure/build from it.
-3. **C++ editor features** — the source ↔ header switch is in (`Go to Related
+2. **C++ editor features** — the source ↔ header switch is in (`Go to Related
    Symbol`, `navigate.relatedSymbol`, `ide_host::ops::cpp`); still missing are
    generate definitions, the include fixer, "Extract function" for C++ and
    clang-format as a first-class formatter.
-4. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
+3. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
    no counterpart here yet.
-5. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
+4. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
    jdtls/JDWP paths in `ide-sdk`, `ide-lsp`, `ide-dap`, `ide-run` are still
    compiled in. They are inert in a C/C++ project, but a clean fork would gate
    them behind a feature flag or delete them.
