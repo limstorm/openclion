@@ -83,6 +83,8 @@ const UNTRANSLATED = new Set<string>([
   "netcoredbg (.NET)",
   // Product names and format names
   "ASCII",
+  // Sample data of the browser preview (a compiler banner, not UI text)
+  "Ubuntu clang version 18.1.3 (1ubuntu1)",
   "Cargo",
   "CMake",
   "Prettier",

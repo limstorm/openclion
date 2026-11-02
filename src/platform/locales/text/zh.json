@@ -5469,7 +5469,6 @@
   "Build directory": "构建目录",
   "Build arguments": "构建参数",
   "CMake default": "CMake 默认",
-  "Quote arguments containing spaces. Build arguments go to cmake --build; use -- before native build tool options.": "包含空格的参数请加引号。构建参数传给 cmake --build；原生构建工具参数前请加 --。",
   "CMake profile {0}": "CMake 配置 {0}",
   ".NET Project": ".NET 项目",
   ".NET project": ".NET 项目",
@@ -5534,5 +5533,11 @@
   "Previous 512 bytes": "前 512 字节",
   "Next 512 bytes": "后 512 字节",
   "Memory is shown while the debugger is stopped.": "调试器暂停时才显示内存内容。",
-  "No memory view": "没有内存视图"
+  "No memory view": "没有内存视图",
+  "Detected toolchains": "检测到的工具链",
+  "No C/C++ compiler was found on PATH. Install clang or GCC and refresh.": "PATH 中未找到 C/C++ 编译器。请安装 clang 或 GCC 后刷新。",
+  "Quote arguments containing spaces. Build arguments go to cmake --build; use -- before native build tool options. Compilers become -DCMAKE_C_COMPILER / -DCMAKE_CXX_COMPILER; a toolchain file replaces them for cross-compilation. Empty fields keep CMake's default (the detected compiler).": "包含空格的参数请加引号。构建参数传给 cmake --build；本地构建工具的参数放在 -- 之后。编译器会变成 -DCMAKE_C_COMPILER / -DCMAKE_CXX_COMPILER；交叉编译时可用工具链文件替代。留空则使用 CMake 的默认值（检测到的编译器）。",
+  "C compiler": "C 编译器",
+  "C++ compiler": "C++ 编译器",
+  "Toolchain file": "工具链文件"
 }

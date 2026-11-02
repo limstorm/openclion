@@ -10,6 +10,9 @@ export const DEFAULT_CMAKE_PROFILE: CMakeProfileValid = {
   buildDir: "",
   buildArgs: [],
   env: {},
+  cCompiler: "",
+  cxxCompiler: "",
+  toolchainFile: "",
 };
 
 export function validateCMake(raw: unknown): { profiles?: CMakeProfileValid[] } {
@@ -28,6 +31,9 @@ export function validateCMake(raw: unknown): { profiles?: CMakeProfileValid[] } 
         cmakeArgs: args(p.cmakeArgs),
         buildDir: string(p.buildDir),
         buildArgs: args(p.buildArgs),
+        cCompiler: string(p.cCompiler),
+        cxxCompiler: string(p.cxxCompiler),
+        toolchainFile: string(p.toolchainFile),
         env: Object.fromEntries(
           Object.entries(p.env && typeof p.env === "object" ? p.env : {}).filter(
             (entry): entry is [string, string] => typeof entry[1] === "string",

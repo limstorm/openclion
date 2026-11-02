@@ -8,10 +8,13 @@
  * clang-tidy is not launched by the IDE: clangd runs it, so the toggle edits
  * clangd's arguments instead.
  */
+import { useEffect } from "react";
 import { useSetting } from "@/features/settings/components/context";
+import { tx } from "@/platform/i18n";
+import { loadKits, useKits } from "./kits";
 import { Row, Section } from "@/features/settings/components/Form";
 import type { LanguageServerEntry } from "@/features/settings/model/schema";
-import { Checkbox, Input, T } from "@/ui";
+import { Button, Checkbox, Input, T } from "@/ui";
 import styles from "@/features/settings/pages/Workflow.module.css";
 
 /** clangd's arguments as `languages/cpp.toml` declares them. */
@@ -34,6 +37,11 @@ const TOOLS: ReadonlyArray<{ command: string; label: string; placeholder: string
 
 export function CppToolchain() {
   const [tools, setTools] = useSetting<Record<string, { path: string }>>("tools");
+  const kits = useKits((s) => s.kits);
+  const detected = useKits((s) => s.loaded);
+  useEffect(() => {
+    void loadKits();
+  }, []);
   const [servers, setServers] = useSetting<Record<string, LanguageServerEntry>>("languageServers");
   const clangd = servers.clangd ?? {};
   const args = clangd.args ?? CLANGD_ARGS;
@@ -78,6 +86,29 @@ export function CppToolchain() {
             one for that project only.
           </T>
         </div>
+      </Section>
+      <Section title="Detected toolchains">
+        {detected && kits.length === 0 ? (
+          <div className={styles.note}>
+            <T>No C/C++ compiler was found on PATH. Install clang or GCC and refresh.</T>
+          </div>
+        ) : (
+          <div role="list" aria-label={tx("Detected toolchains")}>
+            {kits.map((kit) => (
+              <div key={kit.id} role="listitem" className={styles.note}>
+                <strong>{kit.name}</strong>
+                {kit.debugger ? ` · ${kit.debugger}` : ""}
+                {kit.buildTool ? ` · ${kit.buildTool}` : ""}
+                <div>
+                  {kit.compiler} · {kit.cxxCompiler}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <Button onClick={() => void loadKits(true)}>
+          <T>Refresh</T>
+        </Button>
       </Section>
       <Section title="Clang-Tidy">
         <Row label="Run clang-tidy inspections">

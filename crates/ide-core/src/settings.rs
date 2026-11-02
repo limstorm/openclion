@@ -81,6 +81,12 @@ pub struct CMakeProfile {
     pub build_dir: String,
     pub build_args: Vec<String>,
     pub env: BTreeMap<String, String>,
+    /// C compiler for this profile (`-DCMAKE_C_COMPILER`); empty keeps CMake's default.
+    pub c_compiler: String,
+    /// C++ compiler for this profile (`-DCMAKE_CXX_COMPILER`).
+    pub cxx_compiler: String,
+    /// `-DCMAKE_TOOLCHAIN_FILE`: a cross-compilation toolchain instead of compilers.
+    pub toolchain_file: String,
 }
 
 impl Default for CMakeProfile {
@@ -93,7 +99,27 @@ impl Default for CMakeProfile {
             build_dir: String::new(),
             build_args: Vec::new(),
             env: BTreeMap::new(),
+            c_compiler: String::new(),
+            cxx_compiler: String::new(),
+            toolchain_file: String::new(),
         }
+    }
+}
+
+impl CMakeProfile {
+    /// `-D` arguments selecting the toolchain this profile names (empty: CMake's default).
+    pub fn toolchain_definitions(&self) -> Vec<String> {
+        let mut args = Vec::new();
+        if !self.c_compiler.trim().is_empty() {
+            args.push(format!("-DCMAKE_C_COMPILER={}", self.c_compiler.trim()));
+        }
+        if !self.cxx_compiler.trim().is_empty() {
+            args.push(format!("-DCMAKE_CXX_COMPILER={}", self.cxx_compiler.trim()));
+        }
+        if !self.toolchain_file.trim().is_empty() {
+            args.push(format!("-DCMAKE_TOOLCHAIN_FILE={}", self.toolchain_file.trim()));
+        }
+        args
     }
 }
 

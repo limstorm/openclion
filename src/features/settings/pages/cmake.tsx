@@ -1,5 +1,6 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { DEFAULT_CMAKE_PROFILE, type CMakeProfileValid } from "@/platform/cmakeSettings";
+import { kitCompilers, loadKits, useKits } from "@/features/cmake/kits";
 import { formatArgs, parseArgs } from "@/platform/commandLine";
 import { tx } from "@/platform/i18n";
 import { IconButton, Input, T } from "@/ui";
@@ -27,6 +28,10 @@ function ArgumentsInput({ id, value, onChange }: { id: string; value: string[]; 
 
 export function CMakeProfiles() {
   const [saved, setProfiles] = useSetting<CMakeProfileValid[] | undefined>("cmake.profiles");
+  const kits = useKits((s) => s.kits);
+  useEffect(() => {
+    void loadKits();
+  }, []);
   const profiles = saved ?? [DEFAULT_CMAKE_PROFILE];
   const [selected, setSelected] = useState(0);
   const index = Math.min(selected, Math.max(0, profiles.length - 1));
@@ -41,6 +46,9 @@ export function CMakeProfiles() {
     ["cmakeArgs", "CMake arguments"],
     ["buildDir", "Build directory"],
     ["buildArgs", "Build arguments"],
+    ["cCompiler", "C compiler"],
+    ["cxxCompiler", "C++ compiler"],
+    ["toolchainFile", "Toolchain file"],
   ] as const;
   return (
     <div className={styles.toolsLayout}>
@@ -103,7 +111,11 @@ export function CMakeProfiles() {
                   id={`${id}-${key}`}
                   className={styles.wide}
                   value={current[key]}
-                  list={key === "buildType" || key === "generator" ? `${id}-${key}-options` : undefined}
+                  list={
+                    key === "buildType" || key === "generator" || key === "cCompiler" || key === "cxxCompiler"
+                      ? `${id}-${key}-options`
+                      : undefined
+                  }
                   placeholder={
                     key === "buildDir"
                       ? "cmake-build-" + current.buildType.toLowerCase()
@@ -116,6 +128,16 @@ export function CMakeProfiles() {
               )}
             </Row>
           ))}
+          <datalist id={`${id}-cCompiler-options`}>
+            {kitCompilers(kits).map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
+          <datalist id={`${id}-cxxCompiler-options`}>
+            {kitCompilers(kits).map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
           <datalist id={`${id}-buildType-options`}>
             {["Debug", "Release", "RelWithDebInfo", "MinSizeRel"].map((v) => (
               <option key={v} value={v} />
@@ -141,7 +163,8 @@ export function CMakeProfiles() {
           <div className={styles.note}>
             <T>
               Quote arguments containing spaces. Build arguments go to cmake --build; use -- before native build tool
-              options.
+              options. Compilers become -DCMAKE_C_COMPILER / -DCMAKE_CXX_COMPILER; a toolchain file replaces them for
+              cross-compilation. Empty fields keep CMake's default (the detected compiler).
             </T>
           </div>
         </Section>

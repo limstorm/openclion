@@ -360,6 +360,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         tools::jdk_download_location,
         tools::jdk_download,
         sdk::sdk_detect,
+        sdk::toolchain_kits,
         sdk::sdk_python_effective,
         sdk::sdk_project_libraries,
         sdk::sdk_locate_tools,

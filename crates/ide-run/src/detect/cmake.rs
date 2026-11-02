@@ -103,6 +103,7 @@ fn detect_profile(root: &Path, profile: &CMakeProfile, index: usize, multiple: b
     configure.args.push(format!("-DCMAKE_BUILD_TYPE={}", profile.build_type));
     configure.args.push("-DCMAKE_EXPORT_COMPILE_COMMANDS=ON".into());
     configure.args.extend_from_slice(&profile.cmake_args);
+    configure.args.extend(profile.toolchain_definitions());
     configure.extras.params.insert("buildDir".into(), dir.clone());
     out.push(configure);
     let mut all = config(

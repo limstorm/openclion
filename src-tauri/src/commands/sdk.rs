@@ -13,6 +13,12 @@ use tauri::{State, Window};
 /// Installed interpreters / toolchains of `kind`; project-local ones first.
 #[tauri::command]
 #[specta::specta]
+pub async fn toolchain_kits(window: Window, state: State<'_, AppState>) -> IdeResult<Vec<ide_sdk::cpp::CompilerKit>> {
+    ide_host::ops::sdk::toolchain_kits(&state.host, window.label()).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn sdk_detect(window: Window, state: State<'_, AppState>, kind: SdkKind) -> IdeResult<Vec<Sdk>> {
     ide_host::ops::sdk::sdk_detect(&state.host, window.label(), kind).await
 }

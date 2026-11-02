@@ -168,32 +168,45 @@ which is what the Toolchains page edits.
 - `src/features/settings/index.ts` — "Settings for New Projects" opens Toolchains
   instead of the Java page.
 
-## 5. Deliberate gaps (roadmap)
+## 5. Second milestone: what was added after the first port
+
+- **Debugger Memory view** — `DebugManager::read_memory` (DAP `readMemory`,
+  base64 payload, 64 KiB cap) behind `debug_read_memory`; a Memory tab in the
+  Debug tool window taking an address or an expression evaluated to one,
+  512-byte pages, 16 bytes per row with the ASCII column, unreadable bytes
+  shown as `??`, refreshed on every stop.
+- **CTest in the test tree** — CTest configurations are test configurations and
+  run with `--output-junit <build>/ctest-junit.xml`; the run reads that report
+  through `run_test_report_file` (freshness checked, so an older report is
+  ignored), the console parser gives live progress, and "Rerun Failed Tests"
+  filters with `ctest -R '^(a|b)$'`. Covers `add_test`, `gtest_discover_tests`,
+  `catch_discover_tests` and doctest.
+- **Compiler kits** — `ide_sdk::cpp::detect` finds the clang/GCC pairs on the
+  `PATH` (with Settings › Tools overrides, `--version` probed), pairs each with
+  a debugger (`lldb-dap`/`lldb`/`gdb`) and the CMake and Ninja/Make that go with
+  it, and the Toolchains page lists them. A CMake profile can select a kit:
+  `cCompiler`, `cxxCompiler` and `toolchainFile` become
+  `-DCMAKE_C_COMPILER` / `-DCMAKE_CXX_COMPILER` / `-DCMAKE_TOOLCHAIN_FILE`.
+
+## 6. Deliberate gaps (roadmap)
 
 Ordered by how much they would be missed by a CLion user:
 
-1. **Debugger views** — Memory (hex) and Disassembly tabs, registers, and the
-   "inline variables" gutter. The DAP layer already supports `readMemory`; this
-   is frontend work in `src/features/debugger`.
-2. **Test integration** — `ctest` results reach the test tree only as console
-   output; GoogleTest/Catch2/Doctest frameworks need a `--gtest_output`/CTest XML
-   parser and a test tree producer.
-3. **Compiler kits** — detect installed toolchains (clang/gcc/msvc + lldb/gdb +
-   CMake + Ninja), pick one per profile, pass `-DCMAKE_C_COMPILER=…` and
-   `-DCMAKE_TOOLCHAIN_FILE=…`. Today a profile has build type/generator/args only.
-4. **CMakePresets as profiles** — presets are listed read-only; CLion lets you
+1. **Debugger views beyond memory** — Disassembly, registers and the "inline
+   variables" gutter; the Memory view is in, the rest is frontend work in
+   `src/features/debugger`.
+2. **CMakePresets as profiles** — presets are listed read-only; CLion lets you
    select a preset and drive configure/build from it.
-5. **C++ editor features** — header/source switch, generate definitions, include
-   fixer, "Extract function" for C++, and C++-specific code style (clang-format
-   integration exists as an external formatter).
-6. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
+3. **C++ editor features** — header/source switch, generate definitions, include
+   fixer, "Extract function" for C++, and clang-format as a first-class formatter.
+4. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
    no counterpart here yet.
-7. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
+5. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
    jdtls/JDWP paths in `ide-sdk`, `ide-lsp`, `ide-dap`, `ide-run` are still
    compiled in. They are inert in a C/C++ project, but a clean fork would gate
    them behind a feature flag or delete them.
 
-## 6. Verifying a change
+## 7. Verifying a change
 
 ```bash
 cargo check --workspace --all-targets

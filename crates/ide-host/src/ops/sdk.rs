@@ -27,6 +27,21 @@ pub async fn sdk_detect(host: &Host, window: &str, kind: SdkKind) -> IdeResult<V
     tokio::task::spawn_blocking(move || ide_sdk::detect(kind, root.as_deref())).await.map_err(join_err)
 }
 
+/// C/C++ toolchains installed on this machine (CLion's compiler kits): the
+/// compilers with the debugger and build tools that go with them.
+pub async fn toolchain_kits(host: &Host, window: &str) -> IdeResult<Vec<ide_sdk::cpp::CompilerKit>> {
+    // Projects in Restricted Mode do not run tools; without a project the
+    // settings page still lists what the machine has.
+    let (root, settings) = match host.project(window) {
+        Ok(project) => {
+            host.require_trust(window)?;
+            (project.root.clone(), project.settings.effective())
+        }
+        Err(_) => (std::env::current_dir().unwrap_or_default(), ide_core::settings::Settings::default()),
+    };
+    tokio::task::spawn_blocking(move || ide_sdk::cpp::detect(&root, &settings)).await.map_err(join_err)
+}
+
 /// The interpreter the project uses: the configured one, else its virtualenv.
 pub fn sdk_python_effective(host: &Host, window: &str) -> IdeResult<Option<ide_core::IpcPath>> {
     host.require_trust(window)?;
@@ -142,6 +157,7 @@ pub async fn sdk_python_pip(
 /// Commands of this module the remote server answers.
 pub(crate) fn register(d: &mut Dispatcher) {
     d.add("sdk_detect", |c| async move { sdk_detect(&c.host, &c.window, c.arg("kind")?).await });
+    d.add("toolchain_kits", |c| async move { toolchain_kits(&c.host, &c.window).await });
     d.add("sdk_python_effective", |c| async move { sdk_python_effective(&c.host, &c.window) });
     d.add("sdk_project_libraries", |c| async move { sdk_project_libraries(&c.host, &c.window).await });
     d.add("sdk_locate_tools", |c| async move {

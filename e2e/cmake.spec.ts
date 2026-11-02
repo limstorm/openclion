@@ -37,3 +37,16 @@ test("keeps the workbench version and the CMake tool window", async ({ workbench
     contentType: "image/png",
   });
 });
+
+test("Toolchains settings lists the detected C/C++ toolchain", async ({ workbench: page }) => {
+  await page.keyboard.press("Meta+,");
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("textbox", { name: "Search settings" }).fill("Toolchains");
+  await dialog.getByRole("treeitem", { name: "Toolchains", exact: true }).click();
+  const detected = dialog.getByRole("region", { name: "Detected toolchains" });
+  await expect(detected.getByText("Clang 18.1.3")).toBeVisible();
+  await expect(detected.getByText("/usr/bin/clang++")).toBeVisible();
+  await expect(dialog.getByLabel("CMake")).toBeVisible();
+  await expect(dialog.getByRole("checkbox", { name: "Report clang-tidy warnings in the editor" })).toBeChecked();
+  await page.screenshot({ path: "docs/media/openclion-toolchains.png", animations: "disabled" });
+});

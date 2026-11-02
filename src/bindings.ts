@@ -690,8 +690,9 @@ export const commands = {
 	 *  and language servers waiting for a JDK (jdtls) start on it.
 	 */
 	jdkDownload: (vendor: string, version: number, location: string | null, request: RequestId, onEvent: Channel<InstallEvent>) => typedError<Sdk, IdeError>(__TAURI_INVOKE("jdk_download", { vendor, version, location, request, onEvent })),
-	/**  Installed interpreters / toolchains of `kind`; project-local ones first. */
 	sdkDetect: (kind: SdkKind) => typedError<Sdk[], IdeError>(__TAURI_INVOKE("sdk_detect", { kind })),
+	/**  Installed interpreters / toolchains of `kind`; project-local ones first. */
+	toolchainKits: () => typedError<CompilerKit[], IdeError>(__TAURI_INVOKE("toolchain_kits")),
 	/**  The interpreter the project uses: the configured one, else its virtualenv. */
 	sdkPythonEffective: () => typedError<string | null, IdeError>(__TAURI_INVOKE("sdk_python_effective")),
 	/**
@@ -1655,6 +1656,12 @@ export type CMakeProfile = {
 	buildDir?: string,
 	buildArgs?: string[],
 	env?: { [key in string]: string },
+	/**  C compiler for this profile (`-DCMAKE_C_COMPILER`); empty keeps CMake's default. */
+	cCompiler?: string,
+	/**  C++ compiler for this profile (`-DCMAKE_CXX_COMPILER`). */
+	cxxCompiler?: string,
+	/**  `-DCMAKE_TOOLCHAIN_FILE`: a cross-compilation toolchain instead of compilers. */
+	toolchainFile?: string,
 };
 
 /**  Absent profiles retain automatic discovery for existing projects. */
@@ -2080,6 +2087,26 @@ export type CompareScope = {
 	/**  Selected content outside registered repositories; workspace parents expand to their skipped children. */
 	skippedPaths: IpcPath[],
 	singleFile: boolean,
+};
+
+/**  One detected C/C++ toolchain. */
+export type CompilerKit = {
+	/**  Stable id: the C compiler's path. */
+	id: string,
+	/**  Display name, e.g. `Clang 18.1.3` or `GCC 13.3.0`. */
+	name: string,
+	/**  `clang` | `gcc` | `cc`. */
+	family: string,
+	compiler: string,
+	cxxCompiler: string,
+	version: string | null,
+	/**  The compiler's own first `--version` line. */
+	description: string,
+	/**  `lldb-dap` / `lldb` for Clang, `gdb` for GCC, when installed. */
+	debugger: string | null,
+	cmake: string | null,
+	/**  `ninja`, else `make`. */
+	buildTool: string | null,
 };
 
 export type CompletionItem = {

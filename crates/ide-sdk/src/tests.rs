@@ -464,6 +464,36 @@ fn a_tool_path_setting_applies_to_any_bare_run_command() {
     assert_eq!(explicit.command, "/usr/local/bin/cmake");
 }
 
+#[cfg(unix)]
+#[test]
+fn cpp_toolchains_are_detected_from_the_tool_settings() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let script = |name: &str, banner: &str| {
+        let path = root.join(name);
+        std::fs::write(&path, format!("#!/bin/sh\necho '{banner}'\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        path
+    };
+    let cc = script("clang-18", "Ubuntu clang version 18.1.3 (1ubuntu1)");
+    let cxx = script("clang++-18", "Ubuntu clang version 18.1.3 (1ubuntu1)");
+    let debugger = script("lldb-dap-18", "lldb-dap version 18.1.3");
+    let mut settings = Settings::default();
+    for (command, path) in [("clang", &cc), ("clang++", &cxx), ("lldb-dap", &debugger)] {
+        settings
+            .tools
+            .insert(command.to_owned(), ide_core::settings::ToolSettings { path: path.to_string_lossy().into_owned() });
+    }
+    let kits = crate::cpp::detect(root, &settings);
+    let kit = kits.iter().find(|k| k.family == "clang").expect("the configured clang kit");
+    assert_eq!(kit.name, "Clang 18.1.3");
+    assert_eq!(kit.version.as_deref(), Some("18.1.3"));
+    assert_eq!(std::path::Path::new(&kit.compiler), cc);
+    assert_eq!(std::path::Path::new(&kit.cxx_compiler), cxx);
+    assert_eq!(kit.debugger.as_deref().map(std::path::Path::new), Some(debugger.as_path()));
+}
+
 #[test]
 fn python_library_paths_are_parsed_and_deduplicated() {
     let tmp = tempfile::tempdir().unwrap();
