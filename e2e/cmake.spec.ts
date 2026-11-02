@@ -75,6 +75,15 @@ test("Search Everywhere finds Generate Definition", async ({ workbench: page }) 
   await expect(dialog.getByRole("option", { name: /Generate Definition/ }).first()).toBeVisible();
 });
 
+test("Search Everywhere lists the C++ generation actions", async ({ workbench: page }) => {
+  await doubleShift(page);
+  const dialog = page.getByRole("dialog", { name: "Search Everywhere" });
+  for (const name of ["Generate Override/Implement Methods", "Fix Missing Includes"]) {
+    await dialog.getByRole("combobox").fill(name);
+    await expect(dialog.getByRole("option", { name: new RegExp(name) }).first()).toBeVisible();
+  }
+});
+
 test("Search Everywhere lists the Valgrind and sanitizer runs", async ({ workbench: page }) => {
   await doubleShift(page);
   const dialog = page.getByRole("dialog", { name: "Search Everywhere" });
