@@ -62,6 +62,16 @@
 | Maven/Gradle 构建模型与同步                   | `ide-build/src/{maven,gradle,sync,pom_edit,application_update}.rs`、`ops/build.rs`、`features/build-tools`、`settings/pages/build.{maven,gradle}.tsx`   |
 | JDK 下载与 Java 设置页                        | `platform/jdk.ts`、`features/tools/jdk.ts`、`DownloadJdkDialog.tsx`、`settings/languages/LanguagePages.tsx::JavaPage`、`ide-sdk` 的 JDK/库发现 JVM 部分 |
 
+### 剩余 4 项必须一次性完成的原因
+
+它们共享前端同一组类型契约，拆成小步会产生无法独立变绿的状态：
+
+- `buildToolType(id, label, icon, tasks, wrapper, jvm: ForkedJvm)` 同时构造 Maven 与 Gradle 运行类型，第六个参数是 `ForkedJvm { fields, args(), prepareLaunch?() }`。
+- Gradle 的 `prepareLaunch` 调用的正是待删的 `run_gradle_jvm_args_script`；删它就要把第六参数改为可选，进而牵动 `src/features/run/types.ts` 的构造点与 6 个测试（`RunWidget`、`contextRun`、`dotnetTypes`、`executors`、`goActions`、`remote`）。
+- Tomcat 与 Maven/Gradle 共用 `updatePolicies`/`applicationUpdate`；JDK 下载页被 `build.maven`、`build.gradle`、Java 设置页同时引用。
+
+因此下一轮应当**作为一个整体提交**：移除 `ForkedJvm` 与 `buildToolType` 的 JVM 参数（Maven/Gradle 的 VM options 与 Spring profiles 字段、`gradleJvmArgs`、`prepareLaunch`）、`junit` 的 Java 扫描、Tomcat 类型与设置页、JDK 下载入口，同步改上述 6 个测试，再删后端 `gradle_jvm.rs`、`tomcat.rs`、`run_*` 命令与 `ide-build` 的 maven/gradle/sync，最后 `pnpm gen:bindings` 并修菜单/keymap。
+
 **删除顺序（每步都要全量绿色）**：前端摘除入口 → 后端删模块/命令 → `cargo test -p openclion --test export_bindings` → 修 `menu.rs`/keymap 静态 id → `cargo test --workspace` + `pnpm test`。硬约束：`ide_build::compile` 的 CMake 路径与 `ide_http::client` 必须保留。
 
 ## 1. `languages/*.toml`：谁还在声明 language server / debugger
