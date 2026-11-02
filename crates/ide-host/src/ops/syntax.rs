@@ -73,6 +73,18 @@ pub async fn syntax_expression_at(
     on_doc(host, window, doc, request, move |s, snap, c| s.expression_at(snap, range, c)).await
 }
 
+/// The C/C++ declaration at `pos` ("Generate definition"): name, class, return
+/// type, parameters and trailing qualifiers.
+pub async fn syntax_cpp_declaration(
+    host: &Host,
+    window: &str,
+    doc: DocId,
+    pos: Pos,
+    request: Option<RequestId>,
+) -> IdeResult<Option<ide_syntax::CppDeclaration>> {
+    on_doc(host, window, doc, request, move |s, snap, c| s.cpp_declaration_at(snap, pos, c)).await
+}
+
 /// `ERROR` / `MISSING` nodes (e.g. a missing `;`) in document order.
 pub async fn syntax_errors(
     host: &Host,

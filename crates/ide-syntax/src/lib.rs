@@ -18,6 +18,7 @@
 //!    thread (`spawn_blocking`), never from a command or UI thread. Parsing and
 //!    the query loops honour the [`CancellationToken`].
 
+mod cpp;
 mod identifiers;
 mod jvm;
 mod kinds;
@@ -29,6 +30,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
+pub use cpp::CppDeclaration;
 pub use jvm::{JvmPresentation, JvmTypeKind};
 pub use types::*;
 
@@ -158,6 +160,26 @@ impl StructureService {
         cancel: &CancellationToken,
     ) -> StructureResult<Option<NodeAt>> {
         self.run(snap, cancel, |cx| Ok(nodes::node_at(cx, range)))
+    }
+
+    /// The C/C++ declaration at `pos`, for "Generate definition": `None` when the
+    /// caret is not on a function declaration a definition can be generated for
+    /// (already defined, `= default`/`= delete`/pure virtual, operator or template).
+    pub fn cpp_declaration_at(
+        &self,
+        snap: &Snapshot,
+        pos: Pos,
+        cancel: &CancellationToken,
+    ) -> StructureResult<Option<CppDeclaration>> {
+        let found = self.run(snap, cancel, |cx| cpp::declaration_at(cx, pos))?;
+        // `.h` headers are C and C++ at once: when the C grammar finds no
+        // declaration, C++ classes and methods are the likely reading.
+        if found.is_some() || snap.language.as_str() != "c" {
+            return Ok(found);
+        }
+        let cpp = LanguageId::new("cpp");
+        let as_cpp = Snapshot::text(&cpp, snap.text);
+        self.run(&as_cpp, cancel, |cx| cpp::declaration_at(cx, pos))
     }
 
     /// The expression a selection denotes (exact or minimally enclosing), its

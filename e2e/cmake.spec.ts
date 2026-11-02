@@ -4,7 +4,7 @@
  * shows the model the backend would return.
  */
 import type { Page } from "@playwright/test";
-import { expect, openFromTree, test } from "./fixtures";
+import { doubleShift, expect, openFromTree, test } from "./fixtures";
 
 async function openCmakeWindow(page: Page) {
   const stripe = page.getByRole("toolbar", { name: "Right tool windows" });
@@ -64,4 +64,13 @@ test("CMake settings offer the preset mode", async ({ workbench: page }) => {
   await presets.getByRole("checkbox", { name: "Configure and build with presets instead of profiles" }).click();
   await expect(presets.getByRole("group", { name: "Configure presets" })).toBeVisible();
   await page.screenshot({ path: "docs/media/openclion-cmake-presets.png", animations: "disabled" });
+});
+
+test("Search Everywhere finds Generate Definition", async ({ workbench: page }) => {
+  await openFromTree(page, "include/greeter.h");
+  // The new C/C++ action is registered and searchable (running it needs the backend).
+  await doubleShift(page);
+  const dialog = page.getByRole("dialog", { name: "Search Everywhere" });
+  await dialog.getByRole("combobox").fill("Generate Definition");
+  await expect(dialog.getByRole("option", { name: /Generate Definition/ }).first()).toBeVisible();
 });

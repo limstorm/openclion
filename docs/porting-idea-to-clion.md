@@ -196,6 +196,13 @@ which is what the Toolchains page edits.
   mode with a selection list; the CMake tool window shows the preset build
   directories labelled by preset name.
 
+* **Generate Definition** — the C/C++ declaration at the caret in a header
+  (`ide_syntax::cpp_declaration_at`, tree-sitter; `.h` files fall back to the C++
+  grammar) is turned into a stub and appended to the matching source file
+  through the same `src/` ↔ `include/` pairing as Go to Related Symbol.
+  `cpp_generate_definition` in the IPC, `Generate Definition` in the Code menu,
+  and `code.generate` (⌘N) falls back to it when clangd has nothing to generate.
+
 ## 6. Deliberate gaps (roadmap)
 
 Ordered by how much they would be missed by a CLion user:

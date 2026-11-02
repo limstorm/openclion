@@ -13,6 +13,7 @@ import { expressionTypeInfo } from "./typeInfo";
 import { gotoHighlightedUsage, gotoTargets, highlightUsages } from "./navigation";
 import { gotoDiagnostic, showErrorDescription } from "./diagnostics";
 import { applyKindSilently, applyQuickFix, runKindAction, showIntentions } from "./intentions";
+import { fallbackGenerateDefinition } from "@/editor/cpp";
 import { implementPythonAbstractMethods } from "./pythonMembers";
 import { workflowSettings, type ActionsOnSaveValid } from "@/platform/workflowSettings";
 import { startRename } from "./rename";
@@ -293,6 +294,7 @@ export function registerLspActions(): () => void {
           predicate: isGenerateAction,
           none: "Nothing to generate here",
           label: "Generate",
+          fallback: (reason) => (reason === "error" ? Promise.resolve(false) : fallbackGenerateDefinition(v)),
         }),
       { keyWhen: GENERATE_KEY_WHEN },
     ),

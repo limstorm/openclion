@@ -828,6 +828,11 @@ export const commands = {
 	/**  Headers related to a C/C++ source (or sources related to a header), best first. */
 	cppRelatedFiles: (path: string) => typedError<IpcPath[], IdeError>(__TAURI_INVOKE("cpp_related_files", { path })),
 	/**
+	 *  Appends the definition of the declaration at `pos` in the header `doc` to the
+	 *  matching source file, and returns where it was written.
+	 */
+	cppGenerateDefinition: (doc: DocId, pos: Pos, request: number | null) => typedError<GeneratedDefinition, IdeError>(__TAURI_INVOKE("cpp_generate_definition", { doc, pos, request })),
+	/**
 	 *  How to run `config` with coverage: the command to launch and where its report will be,
 	 *  or which tool is missing.
 	 */
@@ -3463,6 +3468,13 @@ export type GeneralSettings = {
 	powerSaveMode?: boolean,
 	/**  File › Rename Project… (project layer): the name shown for the project; empty = its folder name. */
 	projectName?: string,
+};
+
+/**  Where "Generate definition" put the stub. */
+export type GeneratedDefinition = {
+	file: IpcPath,
+	/**  1-based line of the generated stub. */
+	line: number,
 };
 
 /**

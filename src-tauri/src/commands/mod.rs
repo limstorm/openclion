@@ -407,6 +407,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         debug::debug_listen_for_jvm,
         debug::debug_redefine_classes,
         cpp::cpp_related_files,
+        cpp::cpp_generate_definition,
         coverage::coverage_prepare,
         coverage::coverage_collect,
         coverage::coverage_import,

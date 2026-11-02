@@ -450,6 +450,7 @@ pub fn spec(os: Os) -> Vec<Entry> {
             act("editor.contextInfo", "Context Info"),
             act("code.showIntentions", "Show Context Actions"),
             act("code.generate", "Generate…"),
+            act("cpp.generateDefinition", "Generate Definition"),
             act("code.overrideMethods", "Override Methods…"),
             act("code.implementMethods", "Implement Methods…"),
             SEP,

@@ -5549,5 +5549,7 @@
   "Configure and build with presets instead of profiles": "使用预设而不是配置文件进行配置和构建",
   "Configure presets": "配置预设",
   "No configure preset was found in this project's CMakePresets.json.": "该项目的 CMakePresets.json 中没有配置预设。",
-  "Selected presets drive configure, build and CTest through cmake --preset; the profiles below are ignored while presets are in use.": "选中的预设通过 cmake --preset 驱动配置、构建与 CTest；使用预设时下方的配置文件会被忽略。"
+  "Selected presets drive configure, build and CTest through cmake --preset; the profiles below are ignored while presets are in use.": "选中的预设通过 cmake --preset 驱动配置、构建与 CTest；使用预设时下方的配置文件会被忽略。",
+  "Generate Definition": "生成定义",
+  "Creates the definition of a C/C++ declaration in the matching source file": "在对应源文件中为 C/C++ 声明创建定义"
 }
