@@ -62,6 +62,13 @@
 | Maven/Gradle 构建模型与同步                   | `ide-build/src/{maven,gradle,sync,pom_edit,application_update}.rs`、`ops/build.rs`、`features/build-tools`、`settings/pages/build.{maven,gradle}.tsx`   |
 | JDK 下载与 Java 设置页                        | `platform/jdk.ts`、`features/tools/jdk.ts`、`DownloadJdkDialog.tsx`、`settings/languages/LanguagePages.tsx::JavaPage`、`ide-sdk` 的 JDK/库发现 JVM 部分 |
 
+### 已决定的范围：A（彻底）
+
+按你的指示（「spring boot 构建支持这种完全不需要，java/kotlin 相关功能或文件都尽量移除」），下一轮按 **A** 执行：
+
+- **删除**：Maven/Gradle 构建模型、同步与两个设置页；Tomcat 运行/部署；Gradle fork-JVM 参数；Java 测试报告扫描（已完成）；JDK 下载与 Java 设置页。
+- **保留**：`ide_build::compile` 的 CMake 路径（Build Project、CTest）、`ide_http::client`（Tauri updater）、Java/Kotlin 的语法高亮与语言定义、所有 UI/Git/搜索/终端等功能与测试。
+
 ### 剩余 4 项必须一次性完成的原因
 
 它们共享前端同一组类型契约，拆成小步会产生无法独立变绿的状态：
