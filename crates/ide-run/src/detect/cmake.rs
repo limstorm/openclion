@@ -68,13 +68,16 @@ pub(super) fn detect(root: &Path, profiles: Option<&[CMakeProfile]>, out: &mut V
             before(&mut all, &configure_id);
         }
         out.push(all);
+        let report = format!("{dir}/ctest-junit.xml");
         let mut test = config(
             format!("{prefix}:test"),
             format!("CTest ({dir})"),
             "cmake",
             "ctest",
-            &["--test-dir", &dir, "-C", &configuration, "--output-on-failure"],
-        );
+            &["--test-dir", &dir, "-C", &configuration, "--output-junit", &report, "--output-on-failure"],
+        )
+        .test();
+        test.extras.params.insert("ctestReport".into(), report.clone());
         before(&mut test, &build_id);
         out.push(test);
         targets(root, &build, &dir, &prefix, None, out);
@@ -114,13 +117,16 @@ fn detect_profile(root: &Path, profile: &CMakeProfile, index: usize, multiple: b
         before(&mut all, &configure_id);
     }
     out.push(all);
+    let report = format!("{dir}/ctest-junit.xml");
     let mut test = config(
         format!("{prefix}:test"),
         format!("CTest ({dir})"),
         "cmake",
         "ctest",
-        &["--test-dir", &dir, "-C", &profile.build_type, "--output-on-failure"],
-    );
+        &["--test-dir", &dir, "-C", &profile.build_type, "--output-junit", &report, "--output-on-failure"],
+    )
+    .test();
+    test.extras.params.insert("ctestReport".into(), report.clone());
     before(&mut test, &build_id);
     out.push(test);
     targets(root, &build, &dir, &prefix, Some(profile), out);

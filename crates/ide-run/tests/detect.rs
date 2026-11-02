@@ -567,6 +567,11 @@ fn cmake_detection_is_read_only_and_preserves_existing_build_directories() {
     assert!(build.args.windows(2).any(|a| a == ["--config", "Release"]));
     let test = find(&configs, "cmake:cmake-build-debug:test");
     assert_eq!(test.extras.before_launch[0].target, build.id);
+    // CTest is a test configuration: it writes JUnit XML the test tree reads.
+    assert!(test.is_test);
+    assert_eq!(test.args[test.args.len() - 3], "--output-junit");
+    assert_eq!(test.args[test.args.len() - 2], "cmake-build-debug/ctest-junit.xml");
+    assert_eq!(test.extras.params["ctestReport"], "cmake-build-debug/ctest-junit.xml");
 }
 
 #[test]

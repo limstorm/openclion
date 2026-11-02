@@ -1,6 +1,7 @@
 /** Picks the test output parser for a run configuration. */
 import type { RunConfig } from "@/platform/ipc";
 import { cargoParser } from "./cargo";
+import { ctestParser, ctestReportEvents } from "./ctest";
 import { goParser } from "./go";
 import { jsParser } from "./js";
 import { jvmParser } from "./jvm";
@@ -10,7 +11,7 @@ import type { TestEvent, TestOutputParser } from "./types";
 export type { TestEvent, TestOutputParser, TestStatus } from "./types";
 export { parseDuration } from "./types";
 export { TestResults, nodeStatus, type TestNode } from "./results";
-export { cargoParser, goParser, jsParser, jvmParser, pytestParser };
+export { cargoParser, ctestParser, ctestReportEvents, goParser, jsParser, jvmParser, pytestParser };
 
 /** Runs several parsers side by side (unknown tool: e.g. `make test`). */
 export function combinedParser(parsers: TestOutputParser[]): TestOutputParser {
@@ -20,7 +21,7 @@ export function combinedParser(parsers: TestOutputParser[]): TestOutputParser {
   };
 }
 
-export type Framework = "cargo" | "js" | "pytest" | "go" | "jvm" | "auto";
+export type Framework = "cargo" | "js" | "pytest" | "go" | "jvm" | "ctest" | "auto";
 
 export function frameworkFor(config: Pick<RunConfig, "kind" | "command" | "args">): Framework {
   const cmd = [config.command, ...config.args].join(" ");
@@ -39,6 +40,9 @@ export function frameworkFor(config: Pick<RunConfig, "kind" | "command" | "args"
     case "gradle":
     case "maven":
       return "jvm";
+    case "cmake":
+      // CMake build/configure configurations are not tests; CTest is.
+      return /(^|[\\/])ctest$/.test(config.command) ? "ctest" : "auto";
   }
   if (/\bcargo\b/.test(cmd)) return "cargo";
   if (/\b(jest|vitest|npm|pnpm|yarn|bun|npx|deno)\b/.test(cmd)) return "js";
@@ -84,6 +88,8 @@ export function createTestParser(config: Pick<RunConfig, "kind" | "command" | "a
       return goParser();
     case "jvm":
       return jvmParser();
+    case "ctest":
+      return ctestParser();
     default:
       return combinedParser([cargoParser(), jsParser(), pytestParser(), goParser(), jvmParser()]);
   }

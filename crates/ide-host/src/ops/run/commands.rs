@@ -138,6 +138,23 @@ pub async fn run_test_reports(
         .map_err(|e| IdeError::internal(e.to_string()))
 }
 
+/// Results from one JUnit XML file (CTest's `--output-junit`) written since
+/// `since_ms`; `path` is relative to the project root.
+pub async fn run_test_report_file(
+    host: &Host,
+    window: &str,
+    path: std::path::PathBuf,
+    since_ms: f64,
+) -> IdeResult<Vec<ide_run::junit::TestCaseReport>> {
+    host.require_trust(window)?;
+    let root = host.project(window)?.root.clone();
+    let file = root.join(path);
+    let since = std::time::UNIX_EPOCH + std::time::Duration::from_millis(since_ms.max(0.0) as u64);
+    tokio::task::spawn_blocking(move || ide_run::junit::read_file(&file, since))
+        .await
+        .map_err(|e| IdeError::internal(e.to_string()))
+}
+
 pub async fn run_tomcat_home(host: &Host, window: &str, home: String) -> IdeResult<ide_run::tomcat::TomcatHome> {
     host.require_trust(window)?;
     let root = host.project(window)?.root.clone();
@@ -243,6 +260,9 @@ pub(crate) fn register(d: &mut Dispatcher) {
     d.add("run_system_env", |c| async move { Ok(run_system_env(&c.host, &c.window)) });
     d.add("run_gradle_jvm_args_script", |c| async move {
         run_gradle_jvm_args_script(&c.host, &c.window, c.arg("jvmArgs")?).await
+    });
+    d.add("run_test_report_file", |c| async move {
+        run_test_report_file(&c.host, &c.window, c.arg("path")?, c.arg("sinceMs")?).await
     });
     d.add("run_test_reports", |c| async move {
         run_test_reports(&c.host, &c.window, c.arg("module")?, c.arg("sinceMs")?).await

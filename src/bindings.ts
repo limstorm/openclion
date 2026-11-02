@@ -611,6 +611,7 @@ export const commands = {
 	 *  `module` (relative to the project root) written since `since_ms` (Unix epoch, ms).
 	 */
 	runTestReports: (module: string | null, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_reports", { module, sinceMs })),
+	runTestReportFile: (path: string, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_report_file", { path, sinceMs })),
 	/**  Maven and Gradle projects of the window's project, from the build files plus the last sync. */
 	buildModel: () => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_model")),
 	/**  Build directories, codemodel targets and presets of the window's CMake project. */

@@ -154,6 +154,17 @@ pub async fn run_test_reports(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn run_test_report_file(
+    window: Window,
+    state: State<'_, AppState>,
+    path: std::path::PathBuf,
+    since_ms: f64,
+) -> IdeResult<Vec<ide_run::junit::TestCaseReport>> {
+    ide_host::ops::run::run_test_report_file(&state.host, window.label(), path, since_ms).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn run_tomcat_home(
     window: Window,
     state: State<'_, AppState>,

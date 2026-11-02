@@ -84,6 +84,14 @@ function pytestArgs(base: string[], paths: string[][]): string[] | null {
   return [...kept, ...ids];
 }
 
+/** `ctest -R '^(a|b)$'`: CTest picks the named tests, keeping the report arguments. */
+function ctestArgs(config: RunConfig, paths: string[][]): string[] | null {
+  const names = unique(paths.map((p) => p[p.length - 1]!).filter(Boolean));
+  if (!names.length) return null;
+  const pattern = names.length === 1 ? `^${escapeRegExp(names[0]!)}$` : `^(${names.map(escapeRegExp).join("|")})$`;
+  return [...dropFlag(config.args, ["-R", "--tests-regex"]), "-R", pattern];
+}
+
 function goArgs(base: string[], paths: string[][]): string[] | null {
   const pkgs = unique(paths.map((p) => p[0]!).filter(Boolean));
   if (!pkgs.length) return null;
@@ -162,6 +170,9 @@ export function testsConfig(config: RunConfig, paths: string[][], name: string):
       break;
     case "jvm":
       args = jvmArgs(config, paths);
+      break;
+    case "ctest":
+      args = ctestArgs(config, paths);
       break;
     default:
       args = null;

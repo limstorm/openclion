@@ -153,10 +153,17 @@ pub fn parse_report(xml: &str) -> Vec<TestCaseReport> {
                 let base = test.split('(').next().unwrap_or(test).trim().to_owned();
                 let duration_ms =
                     attr(&a, "time").and_then(|t| t.replace(',', "").parse::<f64>().ok()).map(|s| s * 1000.0);
+                // CTest writes the outcome as an attribute (`status="fail|disabled|notrun"`)
+                // instead of a child element; Surefire and Gradle use the children below.
+                let outcome = attr(&a, "status").unwrap_or_default();
                 let case = TestCaseReport {
                     class_name,
                     name: if base.is_empty() { test.to_owned() } else { base },
-                    status: TestCaseStatus::Passed,
+                    status: match outcome {
+                        "fail" | "failed" => TestCaseStatus::Failed,
+                        "disabled" | "skipped" | "notrun" => TestCaseStatus::Skipped,
+                        _ => TestCaseStatus::Passed,
+                    },
                     duration_ms,
                     message: None,
                     output: None,
@@ -185,6 +192,16 @@ pub fn parse_report(xml: &str) -> Vec<TestCaseReport> {
     }
     out.extend(current.take());
     out
+}
+
+/// Test cases from one JUnit XML file (CTest's `--output-junit`), written at or
+/// after `since`; a stale file from an earlier run reads as empty.
+pub fn read_file(path: &Path, since: SystemTime) -> Vec<TestCaseReport> {
+    let Ok(meta) = std::fs::metadata(path) else { return Vec::new() };
+    if !meta.modified().is_ok_and(|t| t >= since) {
+        return Vec::new();
+    }
+    std::fs::read_to_string(path).ok().map(|xml| parse_report(&xml)).unwrap_or_default()
 }
 
 /// Report directories of a module: Surefire, Failsafe and Gradle test results.
@@ -296,5 +313,52 @@ mod tests {
         assert_eq!(all.len(), 5);
         let future = SystemTime::now() + std::time::Duration::from_secs(3600);
         assert!(read_reports(&dirs, future).is_empty());
+    }
+
+    /// CTest's `--output-junit`: one `<testsuite>` root, outcome as an attribute.
+    const CTEST: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="(empty)" tests="3" failures="1" disabled="1" skipped="0" hostname="" time="0" timestamp="2026-11-02T11:46:15">
+	<testcase name="passing" classname="passing" time="0.00667869" status="run">
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="failing" classname="failing" time="0.00575418" status="fail">
+		<failure message="Failed"/>
+		<properties/>
+		<system-out></system-out>
+	</testcase>
+	<testcase name="skipped" classname="skipped" time="0" status="disabled">
+		<properties/>
+		<system-out>Disabled</system-out>
+	</testcase>
+</testsuite>
+"#;
+
+    #[test]
+    fn one_report_file_is_read_only_when_fresh() {
+        let dir = std::env::temp_dir().join(format!("ide-run-ctest-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("ctest-junit.xml");
+        std::fs::write(&file, CTEST).unwrap();
+        let now = std::time::SystemTime::now();
+        // A report of this run is read…
+        assert_eq!(read_file(&file, now - std::time::Duration::from_secs(60)).len(), 3);
+        // …a report older than the run is not.
+        assert!(read_file(&file, now + std::time::Duration::from_secs(60)).is_empty());
+        assert!(read_file(&dir.join("missing.xml"), now - std::time::Duration::from_secs(60)).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ctest_reports_read_the_status_attribute() {
+        let cases = parse_report(CTEST);
+        assert_eq!(cases.len(), 3);
+        assert_eq!(cases[0].name, "passing");
+        assert_eq!(cases[0].status, TestCaseStatus::Passed);
+        let duration = cases[0].duration_ms.unwrap();
+        assert!((duration - 6.67869).abs() < 1e-6, "{duration}");
+        assert_eq!(cases[1].status, TestCaseStatus::Failed);
+        assert_eq!(cases[1].message.as_deref(), Some("Failed"));
+        assert_eq!(cases[2].status, TestCaseStatus::Skipped);
     }
 }

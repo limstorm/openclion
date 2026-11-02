@@ -27,6 +27,7 @@ import { ConsoleModel } from "./console";
 import { jvmFrameTarget } from "./links";
 import { confirmRerun, confirmTerminate } from "./dialogs";
 import {
+  ctestReportEvents,
   createTestParser,
   frameworkFor,
   TestResults,
@@ -776,6 +777,7 @@ function finishSession(sessionId: string, code: number | null) {
         rt.tests.apply(rt.parser.end?.() ?? []);
         // Surefire / Gradle print only failures and class totals: per-test results come from the XML reports.
         if (frameworkFor(session.config) === "jvm") rt.tests.apply(await jvmReportEvents(session));
+        if (frameworkFor(session.config) === "ctest") rt.tests.apply(ctestReportEvents(await ctestReports(session)));
         if (runtimes.get(sessionId) !== rt) return;
         rt.tests.finish(code);
         recordTestStates(rt.tests);
@@ -798,6 +800,18 @@ async function jvmReportEvents(session: RunSession): Promise<TestEvent[]> {
     // Report files are written during the run; allow for coarse file-system timestamps.
     const reports = await call(commands.runTestReports(session.config.cwd ?? null, session.startedAt - 2000));
     return testReportEvents(reports);
+  } catch {
+    return [];
+  }
+}
+
+/** CTest's JUnit report (`--output-junit`): the configuration names the file. */
+async function ctestReports(session: RunSession): Promise<TestCaseReport[]> {
+  const report = session.config.params?.ctestReport;
+  if (!report || !isTauri()) return [];
+  try {
+    // The file is rewritten by this run; allow for coarse file-system timestamps.
+    return await call(commands.runTestReportFile(report, session.startedAt - 2000));
   } catch {
     return [];
   }
