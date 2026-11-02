@@ -81,7 +81,8 @@ const BUILT_AT_RUNTIME = new Set<string>([]);
 const UNTRANSLATED = new Set<string>([
   "dotnet test",
   "netcoredbg (.NET)",
-  // Product names
+  // Product names and format names
+  "ASCII",
   "Cargo",
   "CMake",
   "Prettier",

@@ -5526,5 +5526,13 @@
   "Template:": "模板：",
   "Template": "模板",
   "Presets": "预设",
-  "Targets": "目标"
+  "Targets": "目标",
+  "'{value}' is not an address": "“{value}”不是地址",
+  "Memory is not available for this debugger": "此调试器没有可用的内存视图",
+  "Address or expression, e.g. 0x7ffd… or &buffer": "地址或表达式，例如 0x7ffd… 或 &buffer",
+  "Memory address or expression": "内存地址或表达式",
+  "Previous 512 bytes": "前 512 字节",
+  "Next 512 bytes": "后 512 字节",
+  "Memory is shown while the debugger is stopped.": "调试器暂停时才显示内存内容。",
+  "No memory view": "没有内存视图"
 }

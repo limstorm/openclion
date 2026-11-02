@@ -65,6 +65,7 @@ const caps = (p: Partial<DebugCapabilities> = {}): DebugCapabilities => ({
   functionBreakpoints: false,
   dataBreakpoints: false,
   hotCodeReplace: false,
+  readMemory: true,
   setValue: true,
   conditionalBreakpoints: true,
   hitConditionalBreakpoints: true,

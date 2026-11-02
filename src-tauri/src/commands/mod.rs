@@ -342,6 +342,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         debug::debug_scopes,
         debug::debug_variables,
         debug::debug_evaluate,
+        debug::debug_read_memory,
         debug::debug_resume,
         debug::debug_pause,
         debug::debug_step,

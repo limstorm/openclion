@@ -36,6 +36,7 @@ import {
   type DebugSession,
 } from "../state";
 import { DebugConsole } from "./DebugConsole";
+import { DebugMemory } from "./MemoryView";
 import { VariablesView, type VarRoot } from "./VariablesView";
 import { sortVariables } from "../values";
 import { workflowSettings } from "@/platform/workflowSettings";
@@ -99,7 +100,7 @@ function MoreActions() {
   );
 }
 
-type Tab = "variables" | "console";
+type Tab = "variables" | "memory" | "console";
 
 function statusText(s: DebugSession): string {
   if (s.status === "terminated") return s.exitCode != null ? `Finished · exit code ${s.exitCode}` : "Finished";
@@ -168,6 +169,7 @@ export function DebugToolWindow() {
           {(
             [
               ["variables", "Threads & Variables"],
+              ["memory", "Memory"],
               ["console", "Console"],
             ] as const
           ).map(([id, label]) => (
@@ -217,6 +219,8 @@ export function DebugToolWindow() {
       <div role="tabpanel" id={`debug-panel-${tab}`} aria-labelledby={`debug-tab-${tab}`} className={styles.panel}>
         {tab === "variables" ? (
           <ThreadsAndVariables session={active} />
+        ) : tab === "memory" ? (
+          <DebugMemory session={active} />
         ) : (
           <DebugConsole key={active.id} session={active} />
         )}

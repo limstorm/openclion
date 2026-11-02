@@ -79,6 +79,7 @@ async fn fake_adapter<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(stream
                     "supportsDataBreakpoints": true,
                     "supportsStepInTargetsRequest": true,
                     "supportsRestartFrame": true,
+                    "supportsReadMemoryRequest": true,
                     "exceptionBreakpointFilters": [
                         {"filter": "raised", "label": "Raised"},
                         {"filter": "uncaught", "label": "Uncaught", "default": true, "description": "Uncaught exceptions"},
@@ -172,6 +173,15 @@ async fn fake_adapter<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(stream
                 ]})
             ),
             "evaluate" => ok!(msg, json!({"result": "42", "type": "int", "variablesReference": 0})),
+            "readMemory" => ok!(
+                msg,
+                json!({
+                    // "hello" in base64: the view decodes the adapter's payload.
+                    "address": "0x1000",
+                    "data": "aGVsbG8=",
+                    "unreadableBytes": 1
+                })
+            ),
             "continue" => {
                 ok!(msg, json!({"allThreadsContinued": true}));
                 send!(json!({"type": "event", "event": "exited", "body": {"exitCode": 3}}));
@@ -808,6 +818,22 @@ async fn function_and_data_breakpoints_are_stored_and_sent() {
     let caps = h.manager.capabilities(id).unwrap();
     assert!(caps.function_breakpoints && caps.data_breakpoints && caps.restart_frame && caps.step_in_targets);
     assert!(caps.set_value && !caps.log_points);
+    h.manager.stop(id).await.unwrap();
+}
+
+#[tokio::test]
+async fn memory_reads_decode_the_adapter_payload() {
+    let h = harness(Script::default());
+    let id = h.start(config()).await.unwrap();
+    h.wait_event(|e| matches!(e, DebugEvent::Stopped { .. })).await;
+
+    let memory = h.manager.read_memory(id, "&buf".into(), 16, 32).await.unwrap();
+    assert_eq!(memory.address, "0x1000");
+    assert_eq!(memory.data, b"hello");
+    assert_eq!(memory.unreadable_bytes, 1);
+    // The request names the reference, the offset inside it and the byte count.
+    assert_eq!(h.request("readMemory")["arguments"], json!({"memoryReference": "&buf", "offset": 16, "count": 32}));
+    assert!(h.manager.capabilities(id).unwrap().read_memory);
     h.manager.stop(id).await.unwrap();
 }
 

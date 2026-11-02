@@ -144,6 +144,18 @@ pub async fn debug_variables(
     host.debugger.variables(session, reference).await
 }
 
+/// Bytes at `memory_reference` for the Memory view (DAP `readMemory`).
+pub async fn debug_read_memory(
+    host: &Host,
+    _window: &str,
+    session: DebugSessionId,
+    memory_reference: String,
+    offset: i64,
+    count: u32,
+) -> IdeResult<MemoryBytes> {
+    host.debugger.read_memory(session, memory_reference, offset, count).await
+}
+
 pub async fn debug_evaluate(
     host: &Host,
     _window: &str,
@@ -351,6 +363,17 @@ pub(crate) fn register(d: &mut Dispatcher) {
     });
     d.add("debug_evaluate", |c| async move {
         debug_evaluate(&c.host, &c.window, c.arg("session")?, c.arg("frameId")?, c.arg("expression")?).await
+    });
+    d.add("debug_read_memory", |c| async move {
+        debug_read_memory(
+            &c.host,
+            &c.window,
+            c.arg("session")?,
+            c.arg("memoryReference")?,
+            c.arg("offset")?,
+            c.arg("count")?,
+        )
+        .await
     });
     d.add(
         "debug_resume",

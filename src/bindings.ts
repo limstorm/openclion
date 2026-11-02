@@ -655,6 +655,7 @@ export const commands = {
 	debugScopes: (session: DebugSessionId, frameId: number) => typedError<Scope[], IdeError>(__TAURI_INVOKE("debug_scopes", { session, frameId })),
 	debugVariables: (session: DebugSessionId, reference: number) => typedError<Variable[], IdeError>(__TAURI_INVOKE("debug_variables", { session, reference })),
 	debugEvaluate: (session: DebugSessionId, frameId: number | null, expression: string) => typedError<Variable, IdeError>(__TAURI_INVOKE("debug_evaluate", { session, frameId, expression })),
+	debugReadMemory: (session: DebugSessionId, memoryReference: string, offset: number, count: number) => typedError<MemoryBytes, IdeError>(__TAURI_INVOKE("debug_read_memory", { session, memoryReference, offset, count })),
 	debugResume: (session: DebugSessionId, threadId: number) => typedError<null, IdeError>(__TAURI_INVOKE("debug_resume", { session, threadId })),
 	debugPause: (session: DebugSessionId, threadId: number) => typedError<null, IdeError>(__TAURI_INVOKE("debug_pause", { session, threadId })),
 	debugStep: (session: DebugSessionId, threadId: number, kind: StepKind) => typedError<null, IdeError>(__TAURI_INVOKE("debug_step", { session, threadId, kind })),
@@ -2546,6 +2547,8 @@ export type DebugCapabilities = {
 	logPoints: boolean,
 	/**  HotSwap ("Reload Changed Classes"): java-debug's `redefineClasses` request. */
 	hotCodeReplace: boolean,
+	/**  The Memory view can read the debuggee's memory (`readMemory`). */
+	readMemory: boolean,
 };
 
 export type DebugEvent = 
@@ -4527,6 +4530,15 @@ export type MavenSettings = {
 	userSettings?: string,
 	/**  Local repository (`-Dmaven.repo.local`); empty = from `settings.xml`. */
 	localRepository?: string,
+};
+
+/**  A page of debuggee memory for the Memory view (DAP `readMemory`). */
+export type MemoryBytes = {
+	/**  Address of the first byte as the adapter reports it (hex, or a symbolic reference). */
+	address: string,
+	/**  The bytes read; the last `unreadable_bytes` of them are not valid memory. */
+	data: number[],
+	unreadableBytes: number,
 };
 
 export type MemoryCategory = 

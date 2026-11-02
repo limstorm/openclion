@@ -74,6 +74,18 @@ pub async fn debug_evaluate(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn debug_read_memory(
+    state: State<'_, AppState>,
+    session: DebugSessionId,
+    memory_reference: String,
+    offset: i64,
+    count: u32,
+) -> IdeResult<MemoryBytes> {
+    ide_host::ops::debug::debug_read_memory(&state.host, "", session, memory_reference, offset, count).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn debug_resume(state: State<'_, AppState>, session: DebugSessionId, thread_id: i64) -> IdeResult<()> {
     ide_host::ops::debug::debug_resume(&state.host, "", session, thread_id).await
 }

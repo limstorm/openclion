@@ -125,6 +125,8 @@ pub struct DebugCapabilities {
     pub log_points: bool,
     /// HotSwap ("Reload Changed Classes"): java-debug's `redefineClasses` request.
     pub hot_code_replace: bool,
+    /// The Memory view can read the debuggee's memory (`readMemory`).
+    pub read_memory: bool,
 }
 
 /// Result of [`DebugManager::redefine_classes`].
@@ -210,6 +212,17 @@ pub struct Variable {
     /// > 0 when expandable.
     pub variables_reference: i64,
     pub evaluate_name: Option<String>,
+}
+
+/// A page of debuggee memory for the Memory view (DAP `readMemory`).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct MemoryBytes {
+    /// Address of the first byte as the adapter reports it (hex, or a symbolic reference).
+    pub address: String,
+    /// The bytes read; the last `unreadable_bytes` of them are not valid memory.
+    pub data: Vec<u8>,
+    pub unreadable_bytes: u32,
 }
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, Type)]
@@ -477,6 +490,7 @@ pub(crate) fn capabilities_from(caps: &Value) -> DebugCapabilities {
         hit_conditional_breakpoints: has("supportsHitConditionalBreakpoints"),
         log_points: has("supportsLogPoints"),
         hot_code_replace: false,
+        read_memory: has("supportsReadMemoryRequest"),
     }
 }
 
@@ -1127,6 +1141,40 @@ impl DebugManager {
             .and_then(Value::as_array)
             .map(|v| v.iter().map(variable_from).collect())
             .unwrap_or_default())
+    }
+
+    /// Reads `count` bytes at `memory_reference` (DAP `readMemory`), for the Memory view.
+    /// `offset` addresses inside a reference the adapter resolved (`&buf` + 0x10).
+    pub async fn read_memory(
+        &self,
+        s: DebugSessionId,
+        memory_reference: String,
+        offset: i64,
+        count: u32,
+    ) -> IdeResult<MemoryBytes> {
+        const MAX_BYTES: u32 = 64 * 1024;
+        let session = self.session(s)?;
+        if !session.supports("supportsReadMemoryRequest") {
+            return Err(IdeError::unavailable(format!("{} doesn't support memory reads", session.name)));
+        }
+        let count = count.clamp(1, MAX_BYTES);
+        let body = session
+            .conn
+            .request_timeout(
+                "readMemory",
+                json!({ "memoryReference": memory_reference, "offset": offset, "count": count }),
+                REQUEST_TIMEOUT,
+            )
+            .await?;
+        let address = body.get("address").and_then(Value::as_str).unwrap_or(&memory_reference).to_owned();
+        let encoded = body.get("data").and_then(Value::as_str).unwrap_or_default();
+        let data = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, encoded)
+            .map_err(|e| IdeError::internal(format!("readMemory: {e}")))?;
+        Ok(MemoryBytes {
+            address,
+            data,
+            unreadable_bytes: body.get("unreadableBytes").and_then(Value::as_u64).unwrap_or(0) as u32,
+        })
     }
 
     /// Evaluates in the `repl` context.
