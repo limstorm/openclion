@@ -8,3 +8,9 @@ line-comment = "#"
 indent = { tab-size = 2, insert-spaces = true }
 ui-mode = "YAML"
 tree-sitter = "yaml"
+
+[[language-servers]]
+name = "yaml-language-server"
+command = "yaml-language-server"
+args = ["--stdio"]
+install-hint = "npm i -g yaml-language-server"

@@ -862,11 +862,6 @@ mod tests {
 
     #[test]
     fn registry_names_match_language_configs() {
-        // One direction only: every server/debugger/formatter a language declares
-        // must have an installer entry. Installer entries for languages whose
-        // servers are no longer started (Python, Go, Rust, …) are inert metadata;
-        // they are being removed in a follow-up pass so a settings page open does
-        // not have to parse them.
         let langs = ide_language::LanguageRegistry::load(None).unwrap().all();
         let mut known = std::collections::HashSet::new();
         for l in &langs {
@@ -882,13 +877,12 @@ mod tests {
                 known.insert((f.tool.clone(), f.tool.clone()));
             }
         }
-        for (name, command) in &known {
-            if command.is_empty() || name == "cmake-language-server" {
-                continue;
-            }
+        for t in TOOLS.iter() {
             assert!(
-                TOOLS.iter().any(|t| t.name == name.as_str() && t.commands.contains(&command.as_str())),
-                "{name} / {command} is declared by languages/*.toml but has no installer entry"
+                known.contains(&(t.name.to_string(), t.commands[0].to_string())),
+                "{} / {} is not referenced by languages/*.toml",
+                t.name,
+                t.commands[0]
             );
         }
     }

@@ -1742,6 +1742,40 @@ async fn inspect_reports_files_without_a_server() {
     assert!(matches!(results[0].1, ide_lsp::FileInspection::NoServer));
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn css_family_configuration_returns_default_objects() {
+    for language in ["css", "scss", "less"] {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().to_path_buf();
+        let registry = Arc::new(LanguageRegistry::load(None).unwrap());
+        let launcher = Arc::new(MockLauncher::default());
+        let state = launcher.state("vscode-css-language-server");
+        *state.caps.lock() = incremental_caps();
+        let mgr = LspManager::with_launcher(root.clone(), registry, Arc::new(|_| {}), launcher);
+        let path = root.join(format!("a.{language}"));
+        let text = ".qa { colr: red; }";
+        std::fs::write(&path, text).unwrap();
+        mgr.did_open(DocId::next(), &path, &LanguageId::new(language), 1, text);
+        eventually(|| !state.notified("textDocument/didOpen").is_empty()).await;
+        let reply: Value = state
+            .peer()
+            .request(
+                "workspace/configuration",
+                json!({ "items": [
+            { "section": "css", "scopeUri": uri_of(&path) },
+            { "section": "scss", "scopeUri": uri_of(&path) },
+            { "section": "less", "scopeUri": uri_of(&path) },
+            { "section": "unknown" }
+        ] }),
+                None,
+            )
+            .await
+            .unwrap();
+        assert_eq!(reply, json!([{}, {}, {}, null]), "{language}");
+        assert_eq!(state.requested("initialize")[0]["initializationOptions"]["provideFormatter"], true);
+    }
+}
+
 // ------------------------------------------------------------------ references beyond the analysis scope
 
 const WORD: &str = "target";
