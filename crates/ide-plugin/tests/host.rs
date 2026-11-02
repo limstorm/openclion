@@ -31,7 +31,7 @@ fn write_theme_pair(dir: &Path) {
     std::fs::create_dir_all(dir.join("t")).unwrap();
     std::fs::write(
         dir.join("plugin.toml"),
-        "id = \"theme-pair\"\nname = \"Pair\"\nversion = \"1.0.0\"\nopenidea-api = \"0.1\"\n\
+        "id = \"theme-pair\"\nname = \"Pair\"\nversion = \"1.0.0\"\nopenclion-api = \"0.1\"\n\
          [[contributes.themes]]\npath = \"t/day.json\"\n[[contributes.themes]]\npath = \"t/night.json\"\n",
     )
     .unwrap();
@@ -337,7 +337,7 @@ fn theme_with_broken_editor_scheme_fails_to_load() {
     std::fs::create_dir(dir.path().join("t")).unwrap();
     std::fs::write(
         dir.path().join("plugin.toml"),
-        "id = \"bad-scheme\"\nname = \"B\"\nversion = \"1.0.0\"\nopenidea-api = \"0.1\"\n\
+        "id = \"bad-scheme\"\nname = \"B\"\nversion = \"1.0.0\"\nopenclion-api = \"0.1\"\n\
          [[contributes.themes]]\npath = \"t/a.json\"\neditor-scheme = \"t/a.scheme.json\"\n",
     )
     .unwrap();
@@ -412,7 +412,7 @@ fn install_validation_and_uninstall() {
     std::fs::create_dir_all(&pkg).unwrap();
     std::fs::write(
         pkg.join("plugin.toml"),
-        "id = \"b\"\nname = \"B\"\nversion = \"1.0.0\"\nopenidea-api = \"0.1\"\nwasm = \"x.wasm\"",
+        "id = \"b\"\nname = \"B\"\nversion = \"1.0.0\"\nopenclion-api = \"0.1\"\nwasm = \"x.wasm\"",
     )
     .unwrap();
     assert!(f.host.install_from_dir(&pkg).unwrap_err().message.contains("missing"));
@@ -456,7 +456,7 @@ fn catalog_lists_sample_packages() {
     std::fs::create_dir_all(&broken).unwrap();
     std::fs::write(
         broken.join("plugin.toml"),
-        "id = \"x\"\nname = \"X\"\nversion = \"1.0.0\"\nopenidea-api = \"0.1\"\nwasm = \"dist/plugin.wasm\"\n",
+        "id = \"x\"\nname = \"X\"\nversion = \"1.0.0\"\nopenclion-api = \"0.1\"\nwasm = \"dist/plugin.wasm\"\n",
     )
     .unwrap();
     std::fs::create_dir_all(tmp.path().join("junk")).unwrap();

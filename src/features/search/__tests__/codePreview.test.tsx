@@ -29,9 +29,9 @@ describe("CodePreview", () => {
     });
     expect(out).toEqual([
       "3-3:cm-activeLine",
-      "3-8:cm-openidea-findMatch cm-openidea-findMatch-current",
-      "9-14:cm-openidea-findMatch cm-openidea-findMatch-current",
-      "15-16:cm-openidea-findMatch",
+      "3-8:cm-openclion-findMatch cm-openclion-findMatch-current",
+      "9-14:cm-openclion-findMatch cm-openclion-findMatch-current",
+      "15-16:cm-openclion-findMatch",
     ]);
   });
 
@@ -40,6 +40,6 @@ describe("CodePreview", () => {
     await act(() => new Promise((r) => setTimeout(r, 150)));
     expect(container.querySelector(".cm-content")?.textContent).toContain("val order = 1");
     expect(container.querySelector(".cm-content")?.getAttribute("contenteditable")).not.toBe("true");
-    expect(container.querySelector(".cm-openidea-findMatch")?.textContent).toBe("order");
+    expect(container.querySelector(".cm-openclion-findMatch")?.textContent).toBe("order");
   });
 });

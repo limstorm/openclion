@@ -271,7 +271,7 @@ export function RunTabs() {
       activeId={"session" in current ? current.session.id : current.trace.id}
       onSelect={(id) => useRun.setState({ activeSession: id })}
       onClose={(id) => (traces.some((t) => t.id === id) ? closeStackTrace(id) : void closeSessionTab(id))}
-      panelIdPrefix="openidea-run"
+      panelIdPrefix="openclion-run"
     />
   );
 }
@@ -315,8 +315,8 @@ export function RunView() {
       <div
         className={styles.panel}
         role="tabpanel"
-        id={`openidea-run-panel-${id}`}
-        aria-labelledby={`openidea-run-tab-${id}`}
+        id={`openclion-run-panel-${id}`}
+        aria-labelledby={`openclion-run-tab-${id}`}
       >
         {"session" in current ? (
           <SessionPanel key={id} session={current.session} />

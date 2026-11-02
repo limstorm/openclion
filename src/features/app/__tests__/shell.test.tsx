@@ -10,9 +10,9 @@ import { usePlatform } from "@/platform/platformInfo";
 
 describe("window title", () => {
   it("is `<project> – <file>` like IDEA", () => {
-    expect(windowTitle("openidea", "/p/openidea/src/main.rs")).toBe("openidea – main.rs");
-    expect(windowTitle("openidea", null)).toBe("openidea");
-    expect(windowTitle(null, null)).toBe("OpenIDEA");
+    expect(windowTitle("openclion", "/p/openclion/src/main.rs")).toBe("openclion – main.rs");
+    expect(windowTitle("openclion", null)).toBe("openclion");
+    expect(windowTitle(null, null)).toBe("OpenCLion");
   });
 });
 

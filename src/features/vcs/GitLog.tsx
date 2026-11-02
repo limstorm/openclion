@@ -124,7 +124,7 @@ export function GitTabs() {
       onSelect={selectGitTab}
       onClose={closeLogTab}
       aria-label="Git"
-      panelIdPrefix="openidea-git"
+      panelIdPrefix="openclion-git"
       items={tabItems(tabs)}
     />
   );
@@ -144,8 +144,8 @@ export function GitToolWindow() {
     <div
       className={styles.root}
       role="tabpanel"
-      id={`openidea-git-panel-${shown}`}
-      aria-labelledby={`openidea-git-tab-${shown}`}
+      id={`openclion-git-panel-${shown}`}
+      aria-labelledby={`openclion-git-tab-${shown}`}
     >
       {shown === "changes" ? (
         <ChangesTree mode="local" />

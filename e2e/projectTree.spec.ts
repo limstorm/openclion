@@ -16,16 +16,16 @@ test("keyboard navigation: arrows move, Right/Left expand and collapse, Enter op
   await expect(src).toHaveAttribute("aria-expanded", "false");
   await page.keyboard.press("ArrowRight");
   await expect(src).toHaveAttribute("aria-expanded", "true");
-  await expect(tree.getByRole("treeitem", { name: "main", exact: true })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: "main.cpp", exact: true })).toBeVisible();
   await page.keyboard.press("ArrowLeft");
   await expect(src).toHaveAttribute("aria-expanded", "false");
-  await expect(tree.getByRole("treeitem", { name: "main", exact: true })).toBeHidden();
+  await expect(tree.getByRole("treeitem", { name: "main.cpp", exact: true })).toBeHidden();
 
   await page.keyboard.press("End");
-  await expect(selected).toHaveText("settings.gradle.kts");
+  await expect(selected).toHaveText("README.md");
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab", { name: "settings.gradle.kts" }),
+    page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab", { name: "README.md" }),
   ).toBeVisible();
 });
 

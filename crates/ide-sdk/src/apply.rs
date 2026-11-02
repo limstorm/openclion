@@ -317,12 +317,11 @@ pub fn tool_command(root: &Path, s: &Settings, command: &str) -> Option<PathBuf>
     custom
 }
 
-/// Points a run configuration launching a bare tool name at the executable from
-/// [`tool_command`] (Godot apps live outside the search path).
+/// Points a run configuration launching a bare tool name (Godot, CMake, `ctest`,
+/// Ninja…) at the executable from Settings › Tools, when the user set one there.
 pub fn resolve_run_command(config: &mut RunConfig, root: &Path, s: &Settings) {
-    if config.command == godot::COMMAND
-        && let Some(path) = tool_command(root, s, &config.command)
-    {
+    let bare = !config.command.contains('/') && !config.command.contains('\\');
+    if bare && let Some(path) = tool_command(root, s, &config.command) {
         config.command = path.to_string_lossy().into_owned();
     }
 }

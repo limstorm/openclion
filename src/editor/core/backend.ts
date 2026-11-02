@@ -126,7 +126,14 @@ const EXT_LANG: Record<string, string> = {
   toml: "toml",
   c: "c",
   cpp: "cpp",
-  h: "c",
+  cc: "cpp",
+  cxx: "cpp",
+  "c++": "cpp",
+  h: "cpp",
+  hpp: "cpp",
+  hh: "cpp",
+  hxx: "cpp",
+  cmake: "cmake",
   sh: "shellscript",
   bat: "bat",
   cmd: "bat",
@@ -172,6 +179,33 @@ const MEM_LANGUAGES: LanguageInfo[] = [
     lineComment: "//",
     blockComment: ["/*", "*/"],
     indent: null,
+  },
+  {
+    id: "cpp",
+    name: "C++",
+    extensions: ["cpp", "cc", "cxx", "c++", "hpp", "hh", "hxx", "h"],
+    uiMode: "C++",
+    lineComment: "//",
+    blockComment: ["/*", "*/"],
+    indent: { tabSize: 4, insertSpaces: true },
+  },
+  {
+    id: "c",
+    name: "C",
+    extensions: ["c"],
+    uiMode: "C",
+    lineComment: "//",
+    blockComment: ["/*", "*/"],
+    indent: { tabSize: 4, insertSpaces: true },
+  },
+  {
+    id: "cmake",
+    name: "CMake",
+    extensions: ["cmake"],
+    uiMode: "CMake",
+    lineComment: "#",
+    blockComment: null,
+    indent: { tabSize: 4, insertSpaces: true },
   },
   {
     id: "kotlin",
@@ -265,31 +299,195 @@ const MEM_LANGUAGES: LanguageInfo[] = [
   },
 ];
 
-const SAMPLE_KOTLIN = `package com.acme.orders
+const SAMPLE_CMAKE = `cmake_minimum_required(VERSION 3.20)
 
-import org.springframework.web.bind.annotation.*
-import com.acme.orders.service.OrderService
+project(acme VERSION 0.1.0 LANGUAGES CXX)
 
-@RestController
-@RequestMapping("/api/orders")
-class OrderController(private val service: OrderService) {
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-    // Paged order lookup, optionally filtered by status
-    @GetMapping
-    fun list(
-        @RequestParam status: OrderStatus?,
-        @RequestParam page: Int = 0,
-        @RequestParam size: Int = 20
-    ): Page<OrderDto> =
-        service.find(status, PageRequest(page, size)).map { it.toDto() }
+add_library(greeter
+    src/greeter.cpp
+    src/util/string_utils.cpp
+)
+target_include_directories(greeter PUBLIC include)
 
-    @PostMapping
-    fun create(@RequestBody req: CreateOrderRequest): OrderDto {
-        val order: Order = service.create(req)
-        return order.toDto()
-    }
+add_executable(acme src/main.cpp)
+target_link_libraries(acme PRIVATE greeter)
+
+enable_testing()
+add_executable(acme_tests tests/test_greeter.cpp)
+target_link_libraries(acme_tests PRIVATE greeter)
+add_test(NAME greeter COMMAND acme_tests)
+`;
+
+const SAMPLE_GREETER_H = `#pragma once
+
+#include <string>
+
+namespace acme {
+
+class Greeter {
+public:
+    explicit Greeter(std::string name);
+
+    // "Hello, <name>!"
+    std::string greet() const;
+
+    // "<greeting>, <name>!"
+    std::string greet(const std::string& greeting) const;
+
+    const std::string& name() const { return name_; }
+
+private:
+    std::string name_;
+};
+
+}  // namespace acme
+`;
+
+const SAMPLE_GREETER_CPP = `#include "greeter.h"
+
+#include <utility>
+
+namespace acme {
+
+Greeter::Greeter(std::string name) : name_(std::move(name)) {}
+
+std::string Greeter::greet() const { return greet("Hello"); }
+
+std::string Greeter::greet(const std::string& greeting) const {
+    return greeting + ", " + name_ + "!";
+}
+
+}  // namespace acme
+`;
+
+const SAMPLE_MAIN_CPP = `#include <iostream>
+
+#include "greeter.h"
+
+int main(int argc, char** argv) {
+    const std::string name = argc > 1 ? argv[1] : "world";
+    const acme::Greeter greeter(name);
+
+    std::cout << greeter.greet() << '\\n';
+    return 0;
 }
 `;
+
+const SAMPLE_STRING_UTILS_CPP = `#include <algorithm>
+#include <cctype>
+#include <string>
+
+namespace acme::util {
+
+std::string trim(std::string text) {
+    const auto first = text.find_first_not_of(" \\t\\n\\r");
+    if (first == std::string::npos) return {};
+    const auto last = text.find_last_not_of(" \\t\\n\\r");
+    return text.substr(first, last - first + 1);
+}
+
+std::string to_upper(std::string text) {
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char ch) {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return text;
+}
+
+}  // namespace acme::util
+`;
+
+const SAMPLE_TEST_GREETER_CPP = `#include <cassert>
+#include <string>
+
+#include "greeter.h"
+
+namespace {
+
+void greets_by_name() {
+    const acme::Greeter greeter("Ada");
+    assert(greeter.greet() == "Hello, Ada!");
+}
+
+void uses_a_custom_greeting() {
+    const acme::Greeter greeter("Ada");
+    assert(greeter.greet("Welcome") == "Welcome, Ada!");
+}
+
+}  // namespace
+
+int main() {
+    greets_by_name();
+    uses_a_custom_greeting();
+    return 0;
+}
+`;
+
+const SAMPLE_README = `# acme-api
+
+A small C++20 service built with CMake. The greeting library is deliberately
+tiny so the editor, run configurations and tests have something real to work
+with.
+
+## Layout
+
+- \`include/greeter.h\` — the public \`Greeter\` API.
+- \`src/greeter.cpp\` — greeting formatting.
+- \`src/util/string_utils.cpp\` — string trimming and case helpers.
+- \`tests/test_greeter.cpp\` — a hand-written test executable.
+
+## Build and test
+
+    cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
+    cmake --build build
+    ctest --test-dir build --output-on-failure
+
+## Run
+
+    ./build/acme Ada
+`;
+
+const SAMPLE_CMAKE_CACHE = `# This is the CMakeCache file.
+# For build in directory: /dev/acme-api/build
+# It was generated by CMake: /usr/bin/cmake
+
+########################
+# EXECUTABLE AND LINKABLE TARGETS
+########################
+
+CMAKE_BUILD_TYPE:STRING=Debug
+CMAKE_CXX_COMPILER:FILEPATH=/usr/bin/c++
+CMAKE_CXX_STANDARD:STRING=20
+CMAKE_HOME_DIRECTORY:INTERNAL=/dev/acme-api
+CMAKE_PROJECT_NAME:STATIC=acme
+acme_BINARY_DIR:STATIC=/dev/acme-api/build
+`;
+
+const SAMPLE_GITIGNORE = `build/
+cmake-build-*/
+compile_commands.json
+`;
+
+const SAMPLE_GIT_HEAD = `ref: refs/heads/main
+`;
+
+/** Contents of the plain-browser sample project, by path below its root. */
+const SAMPLE_FILES: Record<string, string> = {
+  "CMakeLists.txt": SAMPLE_CMAKE,
+  "README.md": SAMPLE_README,
+  ".gitignore": SAMPLE_GITIGNORE,
+  ".git/HEAD": SAMPLE_GIT_HEAD,
+  "include/greeter.h": SAMPLE_GREETER_H,
+  "src/main.cpp": SAMPLE_MAIN_CPP,
+  "src/greeter.cpp": SAMPLE_GREETER_CPP,
+  "src/util/string_utils.cpp": SAMPLE_STRING_UTILS_CPP,
+  "tests/test_greeter.cpp": SAMPLE_TEST_GREETER_CPP,
+  "build/CMakeCache.txt": SAMPLE_CMAKE_CACHE,
+};
 
 function applyChanges(text: string, changes: TextChange[]): string {
   let out = "";
@@ -302,8 +500,17 @@ function applyChanges(text: string, changes: TextChange[]): string {
 }
 
 function sampleFor(path: string): string {
-  if (/\.kts?$/.test(path)) return SAMPLE_KOTLIN;
-  return `// ${path}\n`;
+  const normalized = path.replace(/\\/g, "/");
+  const file = Object.keys(SAMPLE_FILES).find((rel) => normalized === rel || normalized.endsWith(`/${rel}`));
+  return (file && SAMPLE_FILES[file]) ?? `// ${path}\n`;
+}
+
+/** Language of a file: fixed-name files first (`CMakeLists.txt`), then its extension. */
+function languageFor(path: string): string {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  if (name === "CMakeLists.txt") return "cmake";
+  const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+  return EXT_LANG[ext] ?? "plaintext";
 }
 
 /** Offset → 0-based line/col, using a precomputed table of line starts. */
@@ -393,7 +600,6 @@ export function createMemoryBackend(files: Record<string, string> = {}): MemoryB
         return info(d);
       }
       const text = store.get(path) ?? sampleFor(path);
-      const ext = path.slice(path.lastIndexOf(".") + 1).toLowerCase();
       const d: MemDoc = {
         id: nextId++,
         path,
@@ -403,7 +609,7 @@ export function createMemoryBackend(files: Record<string, string> = {}): MemoryB
         refs: 1,
         lineEnding: "lf",
         readOnly: false,
-        language: EXT_LANG[ext] ?? "plaintext",
+        language: languageFor(path),
       };
       const uiMode = uiModeOf(path);
       if (uiMode) d.uiMode = uiMode;

@@ -5,7 +5,7 @@ use ide_language::LanguageServerConfig;
 use serde_json::json;
 use std::path::Path;
 
-const PROFILE: &str = "OpenIDEA IntelliJ IDEA";
+const PROFILE: &str = "OpenCLion IntelliJ IDEA";
 const XML: &str = include_str!("intellij.xml");
 
 /// Protocol settings only: switching profiles reaches a running jdtls through

@@ -1,5 +1,5 @@
 {
-  "name": "openidea",
+  "name": "openclion",
   "private": true,
   "description": "An open-source IDE inspired by IntelliJ IDEA",
   "version": "0.1.33",
@@ -17,7 +17,7 @@
     "format:check": "oxfmt --check",
     "knip": "knip",
     "typecheck": "tsrs --noEmit && tsrs -p tsconfig.node.json --noEmit && tsrs -p perf --noEmit && tsrs -p scripts --noEmit",
-    "gen:bindings": "cargo test -p openidea --test export_bindings",
+    "gen:bindings": "cargo test -p openclion --test export_bindings",
     "gen:angular-grammar": "lezer-generator src/editor/core/cm/angular/angular.grammar --typeScript -o src/editor/core/cm/angular/parser.ts",
     "gen:theme-docs": "node scripts/theme/gen-docs.ts",
     "theme:import-intellij": "node scripts/theme/import-intellij-theme.ts",

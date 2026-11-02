@@ -422,8 +422,9 @@ describe("Settings dialog", () => {
       });
       const dialog = screen.getByRole("dialog", { name: "Settings for New Projects" });
       expect(within(dialog).queryByRole("radiogroup", { name: "Settings scope" })).toBeNull();
-      expect(within(dialog).getByLabelText("JVM options")).toHaveValue("-Xmx1g");
-      expect(within(dialog).getByLabelText("Language server JDK")).toBeInTheDocument();
+      // The new-projects dialog opens Toolchains (the C/C++ page) in the global layer.
+      expect(within(dialog).getByLabelText("CMake")).toHaveValue("");
+      expect(within(dialog).getByRole("checkbox", { name: "Report clang-tidy warnings in the editor" })).toBeChecked();
       expect(within(dialog).getByText(/used by new projects/)).toBeInTheDocument();
     });
   });

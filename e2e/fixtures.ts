@@ -35,8 +35,14 @@ export async function doubleShift(page: Page) {
   await page.keyboard.press("Shift");
 }
 
-/** Opens a top-level sample file from the Project tree and waits for the editor. */
-export async function openFromTree(page: Page, name: string) {
+/** Opens a sample file from the Project tree (a path may name its folders) and waits for the editor. */
+export async function openFromTree(page: Page, path: string) {
+  const parts = path.split("/");
+  for (const dir of parts.slice(0, -1)) {
+    const item = page.getByRole("treeitem", { name: dir, exact: true });
+    if ((await item.getAttribute("aria-expanded")) !== "true") await item.dblclick();
+  }
+  const name = parts.at(-1)!;
   await page.getByRole("treeitem", { name, exact: true }).dblclick();
   await expect(page.getByRole("tablist", { name: "Editor tabs" }).getByRole("tab", { name })).toHaveAttribute(
     "aria-selected",

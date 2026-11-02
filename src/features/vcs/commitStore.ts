@@ -41,7 +41,7 @@ export const useCommit = create<CommitState>(() => ({
   signOff: false,
   author: "",
   runHooks: true,
-  groupByDir: readBool("openidea.vcs.groupByDir", false),
+  groupByDir: readBool("openclion.vcs.groupByDir", false),
   checks: new Map(),
   excludedHunks: new Map(),
   selection: [],
@@ -65,13 +65,13 @@ function readBool(key: string, fallback: boolean): boolean {
 export function setGroupByDir(v: boolean) {
   useCommit.setState({ groupByDir: v });
   try {
-    localStorage.setItem("openidea.vcs.groupByDir", String(v));
+    localStorage.setItem("openclion.vcs.groupByDir", String(v));
   } catch {
     // ignore
   }
 }
 
-const historyKey = () => `openidea.vcs.commitMessages:${useVcs.getState().root ?? ""}`;
+const historyKey = () => `openclion.vcs.commitMessages:${useVcs.getState().root ?? ""}`;
 const MAX_HISTORY = 20;
 
 export function messageHistory(): string[] {

@@ -1,12 +1,12 @@
 [package]
-name = "openidea"
-description = "OpenIDEA desktop shell: an open-source IDE inspired by IntelliJ IDEA"
+name = "openclion"
+description = "OpenCLion desktop shell: an open-source IDE inspired by IntelliJ IDEA"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [lib]
-name = "openidea_lib"
+name = "openclion_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -52,6 +52,7 @@ ide-terminal.workspace = true
 ide-run.workspace = true
 ide-sdk.workspace = true
 ide-build.workspace = true
+ide-cmake.workspace = true
 ide-analysis.workspace = true
 ide-coverage.workspace = true
 ide-profiler.workspace = true

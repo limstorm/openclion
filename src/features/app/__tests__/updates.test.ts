@@ -66,9 +66,9 @@ afterEach(() => vi.clearAllMocks());
 describe("Install and Restart", () => {
   it("runs as a background task with download progress, then restarts", async () => {
     const done = installUpdate("0.1.22");
-    expect(notes.at(-1)).toMatchObject({ title: "Downloading OpenIDEA 0.1.22", key: UPDATE_KEY, sticky: true });
+    expect(notes.at(-1)).toMatchObject({ title: "Downloading OpenCLion 0.1.22", key: UPDATE_KEY, sticky: true });
     expect(notes.at(-1)!.actions![0]!.label).toBe("Cancel");
-    expect(task(INSTALL_TASK_ID)).toMatchObject({ title: "Downloading OpenIDEA 0.1.22", fraction: null, done: false });
+    expect(task(INSTALL_TASK_ID)).toMatchObject({ title: "Downloading OpenCLion 0.1.22", fraction: null, done: false });
     expect(task(INSTALL_TASK_ID)?.cancel).toBeTypeOf("function");
 
     channel!.onmessage({ type: "downloading", downloaded: 21 * 1024 * 1024, total: 84 * 1024 * 1024 });
@@ -82,7 +82,7 @@ describe("Install and Restart", () => {
     expect(task(INSTALL_TASK_ID)?.done).toBe(true);
     expect(appRestart).toHaveBeenCalledTimes(1);
     const installed = notes.at(-1)!;
-    expect(installed).toMatchObject({ title: "OpenIDEA 0.1.22 is installed", key: UPDATE_KEY, sticky: true });
+    expect(installed).toMatchObject({ title: "OpenCLion 0.1.22 is installed", key: UPDATE_KEY, sticky: true });
     installed.actions![0]!.run();
     expect(appRestart).toHaveBeenCalledTimes(2);
   });
@@ -101,7 +101,7 @@ describe("Install and Restart", () => {
       ok({ enabled: true, update: { version: "0.1.22", currentVersion: "0.1.21", notes: null, date: null } }),
     );
     await checked;
-    expect(notes.map((n) => n.title)).toEqual(["OpenIDEA 0.1.22 is available", "Downloading OpenIDEA 0.1.22"]);
+    expect(notes.map((n) => n.title)).toEqual(["OpenCLion 0.1.22 is available", "Downloading OpenCLion 0.1.22"]);
 
     install.resolve(ok(null));
     await tick();
@@ -143,14 +143,14 @@ describe("Check for Updates", () => {
     check.resolve(ok({ enabled: true, update: null }));
     await first;
     expect(task(CHECK_TASK_ID)?.done).toBe(true);
-    expect(notes.at(-1)).toMatchObject({ title: "OpenIDEA 0.1.21 is up to date" });
+    expect(notes.at(-1)).toMatchObject({ title: "OpenCLion 0.1.21 is up to date" });
   });
 
   it.each([
     [ok({ enabled: false, update: null }), "Automatic updates are not configured"],
     [
       ok({ enabled: true, update: { version: "0.1.22", currentVersion: "0.1.21", notes: null, date: null } }),
-      "OpenIDEA 0.1.22 is available",
+      "OpenCLion 0.1.22 is available",
     ],
     [
       { status: "error", error: { kind: "unavailable", message: "offline" } } as Result<UpdateCheck>,

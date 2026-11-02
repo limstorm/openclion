@@ -8,7 +8,7 @@ import { create } from "zustand";
 import { call, commands, isTauri } from "@/platform/ipc";
 import { useProject } from "@/platform/project";
 import { useTxTemplate } from "@/platform/i18n";
-import { Button, Checkbox, Dialog, Input, T } from "@/ui";
+import { Button, Checkbox, Dialog, Input, Select, T } from "@/ui";
 import { defaultProjectDirectory, openProjectInWindow } from "./windows";
 import styles from "./app.module.css";
 
@@ -51,6 +51,101 @@ export async function createProjectFolder(path: string, gitInit: boolean): Promi
   if (gitInit) await call(commands.vcsInit(path));
 }
 
+/** Project skeletons File › New Project offers: CLion's CMake templates and an empty folder. */
+type ProjectTemplate = "cpp-executable" | "cpp-library" | "empty";
+
+const TEMPLATES: ReadonlyArray<{ value: ProjectTemplate; label: string }> = [
+  { value: "cpp-executable", label: "C++ executable (CMake)" },
+  { value: "cpp-library", label: "C++ library (CMake)" },
+  { value: "empty", label: "Empty project" },
+];
+
+/** A CMake target name: spaces and punctuation become `_`. */
+export function cmakeTargetName(name: string): string {
+  return (
+    name
+      .trim()
+      .replace(/[^A-Za-z0-9_.+-]+/g, "_")
+      .replace(/^_+|_+$/g, "") || "app"
+  );
+}
+
+async function writeFile(path: string, content: string): Promise<void> {
+  await call(commands.fsCreateFileBytes(path, [...new TextEncoder().encode(content)]));
+}
+
+/** Writes the files of `template` into the freshly created `root`. */
+export async function writeProjectTemplate(root: string, name: string, template: ProjectTemplate): Promise<void> {
+  if (template === "empty") return;
+  const target = cmakeTargetName(name);
+  const executable = template === "cpp-executable";
+  const sources = executable
+    ? `add_executable(${target} src/main.cpp)\n`
+    : `add_library(${target} STATIC src/${target}.cpp)\n\ntarget_include_directories(${target} PUBLIC include)\n`;
+  await call(commands.fsCreateDir(`${root}/src`));
+  if (!executable) await call(commands.fsCreateDir(`${root}/include`));
+  await writeFile(
+    `${root}/CMakeLists.txt`,
+    [
+      "cmake_minimum_required(VERSION 3.20)",
+      `project(${target} LANGUAGES CXX)`,
+      "",
+      "set(CMAKE_CXX_STANDARD 20)",
+      "set(CMAKE_CXX_STANDARD_REQUIRED ON)",
+      "set(CMAKE_EXPORT_COMPILE_COMMANDS ON)",
+      "",
+      sources,
+    ].join("\n"),
+  );
+  if (executable) {
+    await writeFile(
+      `${root}/src/main.cpp`,
+      [
+        "#include <iostream>",
+        "",
+        "int main(int argc, char** argv) {",
+        `    std::cout << "Hello from ${target}!" << std::endl;`,
+        "    return 0;",
+        "}",
+        "",
+      ].join("\n"),
+    );
+  } else {
+    await writeFile(
+      `${root}/include/${target}.hpp`,
+      [
+        "#pragma once",
+        "",
+        "#include <string>",
+        "",
+        `namespace ${target} {`,
+        "",
+        "std::string greeting();",
+        "",
+        "}  // namespace " + target,
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      `${root}/src/${target}.cpp`,
+      [
+        `#include "${target}.hpp"`,
+        "",
+        `namespace ${target} {`,
+        "",
+        "std::string greeting() {",
+        `    return "Hello from ${target}!";`,
+        "}",
+        "",
+        "}  // namespace " + target,
+        "",
+      ].join("\n"),
+    );
+  }
+  await writeFile(`${root}/.gitignore`, "build/\ncmake-build-*/\n");
+  await writeFile(`${root}/README.md`, `# ${name}\n\nA CMake ${executable ? "executable" : "library"} project.\n`);
+}
+
 /** Default Project Directory, else the parent of the open project. */
 function initialLocation(): string {
   const preset = defaultProjectDirectory();
@@ -63,6 +158,7 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState("untitled");
   const [location, setLocation] = useState(initialLocation);
   const [git, setGit] = useState(true);
+  const [template, setTemplate] = useState<ProjectTemplate>("cpp-executable");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const txTemplate = useTxTemplate();
@@ -99,6 +195,7 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
     setError(null);
     try {
       await createProjectFolder(path, git);
+      await writeProjectTemplate(path, name.trim(), template);
     } catch (e) {
       setBusy(false);
       setError(errorText(e));
@@ -126,6 +223,12 @@ function NewProjectDialog({ onClose }: { onClose: () => void }) {
           void create();
         }}
       >
+        <div className={styles.newProjectRow}>
+          <span className={styles.newProjectLabel}>
+            <T>Template:</T>
+          </span>
+          <Select aria-label="Template" value={template} options={TEMPLATES} onChange={setTemplate} />
+        </div>
         <label className={styles.newProjectRow}>
           <span className={styles.newProjectLabel}>
             <T>Name:</T>

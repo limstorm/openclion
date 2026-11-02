@@ -2,7 +2,7 @@
 //!
 //! A plugin is a directory with a `plugin.toml` manifest ([`PluginManifest`])
 //! and, optionally, a WebAssembly component implementing the
-//! `openidea:plugin/plugin@0.1.0` world (`wit/plugin.wit`). Contribution-only
+//! `openidea:plugin/plugin@0.1.0` world (`wit/plugin.wit`; the name is ABI, not branding). Contribution-only
 //! plugins (themes, languages) need no code.
 //!
 //! Each plugin with code runs in its own wasmtime `Store` with WASI preview 2
@@ -11,7 +11,7 @@
 //! violation) drops the instance and marks the plugin `Failed` for the session;
 //! the IDE keeps running.
 //!
-//! Sources: `<plugins_dir>/<id>/` (installed) and `<project>/.openidea/plugins/*/`
+//! Sources: `<plugins_dir>/<id>/` (installed) and `<project>/.openclion/plugins/*/`
 //! (dev plugins, loaded by [`PluginHost::sync_project`]).
 
 mod manifest;
@@ -42,7 +42,7 @@ const STATE_FILE: &str = "state.json";
 const LICENSE_FILES: &[&str] =
     &["LICENSE", "LICENSE.md", "LICENSE.txt", "NOTICE", "NOTICE.md", "NOTICE.txt", "COPYING"];
 /// Dev plugins live here, relative to a project root.
-pub const DEV_PLUGINS_DIR: &str = ".openidea/plugins";
+pub const DEV_PLUGINS_DIR: &str = ".openclion/plugins";
 
 #[derive(Default, Serialize, Deserialize)]
 struct PersistedState {
@@ -162,7 +162,7 @@ impl PluginHost {
         *done
     }
 
-    /// Loads new dev plugins from `<root>/.openidea/plugins/` and unloads vanished ones.
+    /// Loads new dev plugins from `<root>/.openclion/plugins/` and unloads vanished ones.
     pub fn set_project_policy(&self, policy: ProjectPolicy) {
         *self.project_policy.write() = policy;
     }
@@ -329,7 +329,7 @@ impl PluginHost {
         let _guard = self.lifecycle.lock();
         let plugin = self.get(id)?;
         if plugin.source != PluginSource::Installed {
-            return Err(IdeError::invalid("dev plugins are removed by deleting them from .openidea/plugins"));
+            return Err(IdeError::invalid("dev plugins are removed by deleting them from .openclion/plugins"));
         }
         self.unload(id);
         std::fs::remove_dir_all(&plugin.dir)?;
@@ -748,7 +748,7 @@ fn placeholder_manifest(dir: &Path) -> PluginManifest {
         authors: Vec::new(),
         homepage: None,
         change_notes: None,
-        openidea_api: API_VERSION.into(),
+        openclion_api: API_VERSION.into(),
         wasm: None,
         permissions: Vec::new(),
         contributes: Contributions::default(),

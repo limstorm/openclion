@@ -34,7 +34,7 @@ import {
 import { TerminalFindBar } from "./FindBar";
 import styles from "./Terminal.module.css";
 
-const TAB_PREFIX = "openidea-terminal";
+const TAB_PREFIX = "openclion-terminal";
 
 /** Full title when the label is trimmed, then the working directory. */
 function tabTooltip(tab: TerminalTab, sessions: Parameters<typeof tabTitle>[1]): string | undefined {

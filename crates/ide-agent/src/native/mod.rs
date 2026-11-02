@@ -5,9 +5,9 @@
 //! A shim speaks ACP v1 as the agent side, plus:
 //! - `agentCapabilities.sessionCapabilities.fork` and `session/fork`
 //!   (`{ sessionId, cwd, mcpServers }` → a `session/new` result for the copy);
-//! - `agentCapabilities._meta.openidea.rollback` and `_openidea/rollback`
+//! - `agentCapabilities._meta.openclion.rollback` and `_openclion/rollback`
 //!   (`{ sessionId, turns }`: drops the last `turns` user turns from the session);
-//! - `agentCapabilities._meta.openidea.steer` and `_openidea/steer`
+//! - `agentCapabilities._meta.openclion.steer` and `_openclion/steer`
 //!   (`{ sessionId, prompt }`: adds ACP content blocks to the running turn; fails when
 //!   no turn runs).
 

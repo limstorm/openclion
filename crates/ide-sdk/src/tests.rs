@@ -438,6 +438,33 @@ fn the_godot_setting_applies_to_server_debugger_and_run_configurations() {
 }
 
 #[test]
+fn a_tool_path_setting_applies_to_any_bare_run_command() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut s = Settings::default();
+    s.tools.insert("cmake".into(), ide_core::settings::ToolSettings { path: "/opt/cmake/bin/cmake".into() });
+    let mut run = RunConfig {
+        id: "cmake:build".into(),
+        name: "CMake Build".into(),
+        kind: "cmake".into(),
+        command: "cmake".into(),
+        args: vec!["--build".into(), "build".into()],
+        cwd: None,
+        env: BTreeMap::new(),
+        detected: true,
+        is_test: false,
+        debug_adapter: None,
+        allow_parallel: false,
+        extras: Default::default(),
+    };
+    apply_to_run_configs(std::slice::from_mut(&mut run), tmp.path(), &s);
+    assert_eq!(run.command, "/opt/cmake/bin/cmake");
+    // An explicit path in the configuration wins over the setting.
+    let mut explicit = RunConfig { command: "/usr/local/bin/cmake".into(), ..run };
+    apply_to_run_configs(std::slice::from_mut(&mut explicit), tmp.path(), &s);
+    assert_eq!(explicit.command, "/usr/local/bin/cmake");
+}
+
+#[test]
 fn python_library_paths_are_parsed_and_deduplicated() {
     let tmp = tempfile::tempdir().unwrap();
     let stdlib = tmp.path().join("lib/python3.12");
@@ -774,24 +801,24 @@ fn angular_language_server_is_found_behind_version_manager_shims() {
     let package = install(&tmp.path().join("asdf/installs/nodejs/24/lib/node_modules"));
     std::fs::write(project.join(".tool-versions"), "nodejs 24\n").unwrap();
     // The only writer in this test binary.
-    ide_core::process::set_shell_env(vec![("OPENIDEA_TEST_SHELL".into(), "1".into())]);
+    ide_core::process::set_shell_env(vec![("OPENCLION_TEST_SHELL".into(), "1".into())]);
     let shims = tmp.path().join(".asdf/shims");
     // The manager's npm runs on the first Node on PATH (`#!/usr/bin/env node`).
     std::fs::write(
         npm_shim(&shims, "npm"),
         if cfg!(windows) {
-            "@if exist .tool-versions if \"%OPENIDEA_TEST_SHELL%\"==\"1\" call node\r\n"
+            "@if exist .tool-versions if \"%OPENCLION_TEST_SHELL%\"==\"1\" call node\r\n"
         } else {
-            "#!/bin/sh\n[ -f .tool-versions ] && [ \"$OPENIDEA_TEST_SHELL\" = 1 ] && exec node\n"
+            "#!/bin/sh\n[ -f .tool-versions ] && [ \"$OPENCLION_TEST_SHELL\" = 1 ] && exec node\n"
         },
     )
     .unwrap();
     std::fs::write(
         npm_shim(&shims, "node"),
         if cfg!(windows) {
-            "@echo %OPENIDEA_TEST_NPM_ROOT%\r\n"
+            "@echo %OPENCLION_TEST_NPM_ROOT%\r\n"
         } else {
-            "#!/bin/sh\necho \"$OPENIDEA_TEST_NPM_ROOT\"\n"
+            "#!/bin/sh\necho \"$OPENCLION_TEST_NPM_ROOT\"\n"
         },
     )
     .unwrap();
@@ -808,7 +835,7 @@ fn angular_language_server_is_found_behind_version_manager_shims() {
     let mut s = Settings::default();
     s.languages.node.interpreter = node.join("node").to_string_lossy().into_owned();
     let root = root_of(&package);
-    let env = [("OPENIDEA_TEST_NPM_ROOT", root.as_str())];
+    let env = [("OPENCLION_TEST_NPM_ROOT", root.as_str())];
     assert_eq!(probes(&npm_shim(&shims, "ngserver"), &s, &env), with_project(&package));
     // Not without the manager's own npm, nor for an executable elsewhere: the npm
     // on PATH may be another installation's.

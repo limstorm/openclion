@@ -93,7 +93,7 @@ it("drains an in-flight update and sends pending removals before startup", async
 it("flushes persisted breakpoints immediately after project loading", async () => {
   ipc.debugSetBreakpoints.mockResolvedValue({ status: "ok", data: [] });
   localStorage.setItem(
-    "openidea.debugger.breakpoints:/p",
+    "openclion.debugger.breakpoints:/p",
     JSON.stringify({ files: { "/p/Main.java": [{ line: 4 }] } }),
   );
   loadBreakpoints("/p");

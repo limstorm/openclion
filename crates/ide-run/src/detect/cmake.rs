@@ -1,20 +1,11 @@
-//! CMake targets come from the File API codemodel, including evaluated subdirectories.
+//! CMake targets come from the shared CMake project model (`ide-cmake`), which
+//! reads the File API codemodel including evaluated subdirectories.
 
 use super::{ConfigExt, config};
 use crate::{BeforeLaunchTask, RunConfig};
 use ide_core::settings::CMakeProfile;
-use serde_json::Value;
 use std::fs;
-use std::path::{Path, PathBuf};
-
-fn json(path: &Path) -> Option<Value> {
-    serde_json::from_slice(&fs::read(path).ok()?).ok()
-}
-
-fn reply_file(reply: &Path, name: &str) -> Option<Value> {
-    // File API references are file names, never paths outside the reply directory.
-    (Path::new(name).components().count() == 1).then(|| json(&reply.join(name))).flatten()
-}
+use std::path::Path;
 
 fn before(config: &mut RunConfig, id: &str) {
     config.extras.before_launch.push(BeforeLaunchTask { kind: "run".into(), target: id.into() });
@@ -149,90 +140,42 @@ fn targets(
     profile: Option<&CMakeProfile>,
     out: &mut Vec<RunConfig>,
 ) {
-    let reply = build.join(".cmake/api/v1/reply");
-    let Some(index_path) = fs::read_dir(&reply).ok().and_then(|entries| {
-        entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| {
-                let name = p.file_name().unwrap_or_default().to_string_lossy();
-                name.starts_with("index-") && name.ends_with(".json")
-            })
-            .max()
-    }) else {
-        return;
-    };
-    let Some(index) = json(&index_path) else { return };
-    let Some(reference) = index["objects"]
-        .as_array()
-        .and_then(|a| a.iter().find(|o| o["kind"] == "codemodel" && o["version"]["major"] == 2))
-    else {
-        return;
-    };
-    let Some(model) = reference["jsonFile"].as_str().and_then(|n| reply_file(&reply, n)) else { return };
-    let Some(configurations) = model["configurations"].as_array() else { return };
-    let source_root = model["paths"]["source"].as_str().map(PathBuf::from).unwrap_or_else(|| root.into());
-    if source_root.canonicalize().ok() != root.canonicalize().ok() {
-        return;
-    }
-    let source_root = dunce::canonicalize(&source_root).unwrap_or(source_root);
-    for configuration in configurations {
-        let name = configuration["name"].as_str().unwrap_or("");
-        if profile.is_some_and(|p| !name.is_empty() && name != p.build_type) {
+    // A profile selects the codemodel configuration; legacy discovery takes the first.
+    let configuration = profile.map(|p| p.build_type.as_str()).filter(|c| !c.is_empty());
+    for target in ide_cmake::targets_for(build, root, configuration) {
+        if !target.kind.is_executable() {
             continue;
         }
-        let Some(targets) = configuration["targets"].as_array() else { continue };
-        for target in targets {
-            let Some(target) = target["jsonFile"].as_str().and_then(|n| reply_file(&reply, n)) else { continue };
-            if target["type"] != "EXECUTABLE" {
-                continue;
-            }
-            let (Some(target_name), Some(artifact)) =
-                (target["name"].as_str(), target["artifacts"][0]["path"].as_str())
-            else {
-                continue;
-            };
-            let id = format!("{prefix}:{name}:{target_name}");
-            let target_build_id = format!("{id}:build");
-            let mut args = vec!["--build", dir, "--target", target_name];
-            if !name.is_empty() {
-                args.extend(["--config", name]);
-            }
-            let mut build_config =
-                config(&target_build_id, format!("Build {target_name} ({dir} {name})"), "cmake", "cmake", &args);
-            if let Some(profile) = profile {
-                if name.is_empty() {
-                    build_config.args.extend(["--config".into(), profile.build_type.clone()]);
-                }
-                build_config.args.extend_from_slice(&profile.build_args);
-                if !build.join("CMakeCache.txt").is_file() {
-                    before(&mut build_config, &format!("{prefix}:configure"));
-                }
-            }
-            out.push(build_config);
-            let binary = build.join(artifact);
-            let mut run =
-                config(&id, format!("{target_name} ({dir} {name})"), "native", &binary.to_string_lossy(), &[])
-                    .debug("lldb-dap");
-            before(&mut run, &target_build_id);
-            let sources: Vec<String> = target["sources"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|s| {
-                    let p = source_root.join(s["path"].as_str()?);
-                    Some(p.to_string_lossy().replace('\\', "/"))
-                })
-                .collect();
-            run.extras.params.insert("cmakeSources".into(), sources.join("\n"));
-            if let Some(recorded) = model["paths"]["source"].as_str() {
-                run.extras.params.insert("cmakeSourceRoot".into(), recorded.into());
-                run.extras
-                    .params
-                    .insert("cmakeCanonicalSourceRoot".into(), source_root.to_string_lossy().replace('\\', "/"));
-            }
-            out.push(run);
+        let Some(artifact) = target.artifact else { continue };
+        let target_name = target.name.as_str();
+        let name = target.configuration.unwrap_or_default();
+        let id = format!("{prefix}:{name}:{target_name}");
+        let target_build_id = format!("{id}:build");
+        let mut args = vec!["--build", dir, "--target", target_name];
+        if !name.is_empty() {
+            args.extend(["--config", name.as_str()]);
         }
+        let mut build_config =
+            config(&target_build_id, format!("Build {target_name} ({dir} {name})"), "cmake", "cmake", &args);
+        if let Some(profile) = profile {
+            if name.is_empty() {
+                build_config.args.extend(["--config".into(), profile.build_type.clone()]);
+            }
+            build_config.args.extend_from_slice(&profile.build_args);
+            if !build.join("CMakeCache.txt").is_file() {
+                before(&mut build_config, &format!("{prefix}:configure"));
+            }
+        }
+        out.push(build_config);
+        let mut run = config(&id, format!("{target_name} ({dir} {name})"), "native", &artifact, &[]).debug("lldb-dap");
+        before(&mut run, &target_build_id);
+        run.extras.params.insert("cmakeSources".into(), target.sources.join("\n"));
+        // lldb-dap reports paths as CMake configured them; translate to the real tree.
+        let recorded = ide_cmake::codemodel_source(build).unwrap_or_else(|| root.to_string_lossy().into_owned());
+        let canonical = dunce::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+        run.extras.params.insert("cmakeSourceRoot".into(), recorded.replace('\\', "/"));
+        run.extras.params.insert("cmakeCanonicalSourceRoot".into(), canonical.to_string_lossy().replace('\\', "/"));
+        out.push(run);
     }
 }
 
@@ -255,9 +198,7 @@ pub(crate) fn prepare(config: &RunConfig, cwd: &Path) -> crate::IdeResult<()> {
                 fs::remove_dir_all(files)?;
             }
         }
-        let query = build.join(".cmake/api/v1/query/client-openidea");
-        fs::create_dir_all(&query)?;
-        fs::write(query.join("codemodel-v2"), "")?;
+        ide_cmake::request(&build)?;
     }
     Ok(())
 }
@@ -265,6 +206,7 @@ pub(crate) fn prepare(config: &RunConfig, cwd: &Path) -> crate::IdeResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn profiles_select_file_api_configuration_and_apply_target_options() {
@@ -335,6 +277,6 @@ mod tests {
         assert!(!build.join("CMakeCache.txt").exists());
         assert!(!build.join("CMakeFiles").exists());
         assert!(build.join("keep.txt").exists());
-        assert!(build.join(".cmake/api/v1/query/client-openidea/codemodel-v2").exists());
+        assert!(build.join(".cmake/api/v1/query/client-openclion/codemodel-v2").exists());
     }
 }

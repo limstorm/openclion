@@ -594,7 +594,7 @@ export const commands = {
 	args: string[],
 	cwd: IpcPath | null,
 	env: { [key in string]: string },
-	/**  Detected configs are regenerated; user configs persist in `.openidea/run.toml`. */
+	/**  Detected configs are regenerated; user configs persist in `.openclion/run.toml`. */
 	detected: boolean,
 	/**  Test runner configs render results in the test tree. */
 	isTest: boolean,
@@ -613,6 +613,8 @@ export const commands = {
 	runTestReports: (module: string | null, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_reports", { module, sinceMs })),
 	/**  Maven and Gradle projects of the window's project, from the build files plus the last sync. */
 	buildModel: () => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_model")),
+	/**  Build directories, codemodel targets and presets of the window's CMake project. */
+	cmakeModel: () => typedError<CmakeModel_Serialize, IdeError>(__TAURI_INVOKE("cmake_model")),
 	/**
 	 *  Runs Maven (`help:effective-pom dependency:tree`) or Gradle (`tasks --all`) in the
 	 *  background, reporting progress on `on_progress`; cancellable with `cancel_request(request)`.
@@ -844,7 +846,7 @@ export const commands = {
 	pluginSubscribe: (onEvent: Channel<PluginEvent>) => __TAURI_INVOKE<void>("plugin_subscribe", { onEvent }),
 	/**
 	 *  Installed plugins plus the dev plugins of this window's project
-	 *  (`<project>/.openidea/plugins/*`, rescanned on every call).
+	 *  (`<project>/.openclion/plugins/*`, rescanned on every call).
 	 */
 	pluginList: () => typedError<PluginsSnapshot, IdeError>(__TAURI_INVOKE("plugin_list")),
 	pluginSetEnabled: (id: string, enabled: boolean) => typedError<null, IdeError>(__TAURI_INVOKE("plugin_set_enabled", { id, enabled })),
@@ -1587,7 +1589,7 @@ export type BuildEvent =
 
 export type BuildInfo = {
 	version: string,
-	/**  Build id from CI (`OPENIDEA_BUILD` at compile time), else `dev`. */
+	/**  Build id from CI (`OPENCLION_BUILD` at compile time), else `dev`. */
 	build: string,
 	profile: string,
 	os: string,
@@ -1631,7 +1633,7 @@ export type BuildResult = {
 	messages: BuildMessage[],
 };
 
-export type BuildSystem = "maven" | "gradle" | "cargo" | "go" | "typescript";
+export type BuildSystem = "maven" | "gradle" | "cmake" | "cargo" | "go" | "typescript";
 
 export type BuildTool = "maven" | "gradle";
 
@@ -1785,6 +1787,127 @@ export type CloseContext = {
 	quitting: boolean,
 	/**  Number of open project windows (settings windows excluded), including the caller. */
 	windows: number,
+};
+
+/**  One configured (or configure-able) build directory. */
+export type CmakeBuild = CmakeBuild_Serialize | CmakeBuild_Deserialize;
+
+/**  One configured (or configure-able) build directory. */
+export type CmakeBuild_Deserialize = {
+	/**  Directory relative to the project root, with `/` separators (`build`, `out/Debug`). */
+	dir: string,
+	/**  Absolute source directory CMake recorded, when configured. */
+	sourceDir?: string | null,
+	/**  A `CMakeCache.txt` exists: configure already ran. */
+	configured: boolean,
+	generator?: string | null,
+	/**  `CMAKE_BUILD_TYPE` of a single-config generator, or the CMake profile's build type. */
+	buildType?: string | null,
+	/**  `CMAKE_CONFIGURATION_TYPES` of a multi-config generator (empty for single-config). */
+	configurationTypes: string[],
+	/**  The compile database clangd reads, when the configure exported one. */
+	compileCommands?: string | null,
+	/**  Name of the CMake profile that owns the directory, when it has one. */
+	profile?: string | null,
+	targets: CmakeTarget_Deserialize[],
+};
+
+/**  One configured (or configure-able) build directory. */
+export type CmakeBuild_Serialize = {
+	/**  Directory relative to the project root, with `/` separators (`build`, `out/Debug`). */
+	dir: string,
+	/**  Absolute source directory CMake recorded, when configured. */
+	sourceDir?: string | null,
+	/**  A `CMakeCache.txt` exists: configure already ran. */
+	configured: boolean,
+	generator?: string | null,
+	/**  `CMAKE_BUILD_TYPE` of a single-config generator, or the CMake profile's build type. */
+	buildType?: string | null,
+	/**  `CMAKE_CONFIGURATION_TYPES` of a multi-config generator (empty for single-config). */
+	configurationTypes: string[],
+	/**  The compile database clangd reads, when the configure exported one. */
+	compileCommands?: string | null,
+	/**  Name of the CMake profile that owns the directory, when it has one. */
+	profile?: string | null,
+	targets: CmakeTarget_Serialize[],
+};
+
+export type CmakeModel = CmakeModel_Serialize | CmakeModel_Deserialize;
+
+export type CmakeModel_Deserialize = {
+	sourceDir: string,
+	/**  A `CMakeLists.txt` sits in the project root. */
+	hasProject: boolean,
+	/**  A `CMakePresets.json` sits in the project root. */
+	hasPresets: boolean,
+	presets: CmakePreset_Deserialize[],
+	builds: CmakeBuild_Deserialize[],
+};
+
+export type CmakeModel_Serialize = {
+	sourceDir: string,
+	/**  A `CMakeLists.txt` sits in the project root. */
+	hasProject: boolean,
+	/**  A `CMakePresets.json` sits in the project root. */
+	hasPresets: boolean,
+	presets: CmakePreset_Serialize[],
+	builds: CmakeBuild_Serialize[],
+};
+
+/**  A `CMakePresets.json` entry the tool window lists next to the profiles. */
+export type CmakePreset = CmakePreset_Serialize | CmakePreset_Deserialize;
+
+/**  A `CMakePresets.json` entry the tool window lists next to the profiles. */
+export type CmakePreset_Deserialize = {
+	name: string,
+	/**  `configure` or `build`. */
+	kind: string,
+	generator?: string | null,
+	/**  Build directory the preset configures into, relative to the project root. */
+	binaryDir?: string | null,
+	buildType?: string | null,
+};
+
+/**  A `CMakePresets.json` entry the tool window lists next to the profiles. */
+export type CmakePreset_Serialize = {
+	name: string,
+	/**  `configure` or `build`. */
+	kind: string,
+	generator?: string | null,
+	/**  Build directory the preset configures into, relative to the project root. */
+	binaryDir?: string | null,
+	buildType?: string | null,
+};
+
+export type CmakeTarget = CmakeTarget_Serialize | CmakeTarget_Deserialize;
+
+/**  The kind of a target, as far as the CMake tool window cares. */
+export type CmakeTargetKind = "executable" | "staticLibrary" | "sharedLibrary" | "moduleLibrary" | "objectLibrary" | "interfaceLibrary" | "utility" | "unknown";
+
+export type CmakeTarget_Deserialize = {
+	name: string,
+	kind: CmakeTargetKind,
+	/**  Absolute path of the linked artifact, when CMake reported one. */
+	artifact?: string | null,
+	/**  Absolute source files of the target, sorted, deduplicated. */
+	sources: string[],
+	/**  The IDE folder CMake assigned (`set_target_properties(... FOLDER ...)`). */
+	folder?: string | null,
+	/**  The codemodel configuration the target was read from (`Debug`, `Release`). */
+	configuration?: string | null,
+};
+
+export type CmakeTarget_Serialize = {
+	name: string,
+	kind: CmakeTargetKind,
+	/**  Absolute path of the linked artifact, when CMake reported one. */
+	artifact?: string | null,
+	/**  Absolute source files of the target, sorted, deduplicated. */
+	sources: string[],
+	/**  The IDE folder CMake assigned (`set_target_properties(... FOLDER ...)`). */
+	folder?: string | null,
+	/**  The codemodel configuration the target was read from (`Debug`, `Release`). */
+	configuration?: string | null,
 };
 
 export type CodeAction = {
@@ -4706,7 +4829,7 @@ export type PluginLanguage = {
 export type PluginSource = 
 /**  Installed under `<app-data>/plugins/<id>/`. */
 "installed" | 
-/**  Loaded from `<project>/.openidea/plugins/<dir>/` while that project is open. */
+/**  Loaded from `<project>/.openclion/plugins/<dir>/` while that project is open. */
 "dev";
 
 export type PluginStatus = 
@@ -5320,7 +5443,7 @@ export type RunConfig_Deserialize = {
 	args: string[],
 	cwd: IpcPath | null,
 	env: { [key in string]: string },
-	/**  Detected configs are regenerated; user configs persist in `.openidea/run.toml`. */
+	/**  Detected configs are regenerated; user configs persist in `.openclion/run.toml`. */
 	detected: boolean,
 	/**  Test runner configs render results in the test tree. */
 	isTest: boolean,
@@ -5340,7 +5463,7 @@ export type RunConfig_Serialize = {
 	args: string[],
 	cwd: IpcPath | null,
 	env: { [key in string]: string },
-	/**  Detected configs are regenerated; user configs persist in `.openidea/run.toml`. */
+	/**  Detected configs are regenerated; user configs persist in `.openclion/run.toml`. */
 	detected: boolean,
 	/**  Test runner configs render results in the test tree. */
 	isTest: boolean,
@@ -5359,7 +5482,7 @@ export type RunExtras_Deserialize = {
 	params?: { [key in string]: string },
 	/**  Folder in the Run/Debug Configurations tree. */
 	folder?: string | null,
-	/**  Stored in the workspace (`.openidea/run.local.toml`, not shared) instead of `run.toml`. */
+	/**  Stored in the workspace (`.openclion/run.local.toml`, not shared) instead of `run.toml`. */
 	local?: boolean,
 	/**  Off: the process gets only the configured variables. */
 	includeSystemEnv?: boolean,
@@ -5398,7 +5521,7 @@ export type RunExtras_Serialize = {
 	params?: { [key in string]: string },
 	/**  Folder in the Run/Debug Configurations tree. */
 	folder?: string | null,
-	/**  Stored in the workspace (`.openidea/run.local.toml`, not shared) instead of `run.toml`. */
+	/**  Stored in the workspace (`.openclion/run.local.toml`, not shared) instead of `run.toml`. */
 	local?: boolean,
 	/**  Off: the process gets only the configured variables. */
 	includeSystemEnv?: boolean,

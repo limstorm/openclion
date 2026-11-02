@@ -30,7 +30,7 @@ export interface ImageViewerHandle {
   fit(): void;
 }
 
-const CHESSBOARD_KEY = "openidea.imageViewer.chessboard";
+const CHESSBOARD_KEY = "openclion.imageViewer.chessboard";
 
 function storedChessboard(): boolean {
   try {

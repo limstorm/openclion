@@ -7,7 +7,7 @@ version = "0.1.33"
 edition = "2024"
 rust-version = "1.96"
 license = "Apache-2.0"
-authors = ["OpenIDEA contributors"]
+authors = ["OpenCLion contributors"]
 
 [workspace.dependencies]
 # internal
@@ -27,6 +27,7 @@ ide-run = { path = "crates/ide-run" }
 ide-workspace = { path = "crates/ide-workspace" }
 ide-sdk = { path = "crates/ide-sdk" }
 ide-build = { path = "crates/ide-build" }
+ide-cmake = { path = "crates/ide-cmake" }
 ide-analysis = { path = "crates/ide-analysis" }
 ide-coverage = { path = "crates/ide-coverage" }
 ide-profiler = { path = "crates/ide-profiler" }

@@ -102,7 +102,7 @@ struct Manifest {
     source: Option<String>,
 }
 
-const MANIFEST: &str = ".openidea-tool.json";
+const MANIFEST: &str = ".openclion-tool.json";
 
 /// `typescript@6` → `typescript`, `@vue/language-server` unchanged.
 fn npm_name(spec: &str) -> &str {
@@ -148,7 +148,11 @@ fn managed_bin_dir(root: &Path, spec: &ToolSpec, platform: Platform) -> Option<P
         Method::PipVenv { .. } => {
             Some(root.join(spec.name).join("venv").join(if platform.os == Os::Windows { "Scripts" } else { "bin" }))
         }
-        Method::Bundled { .. } | Method::Rustup { .. } | Method::PipUser { .. } | Method::PipTarget { .. } => None,
+        Method::Bundled { .. }
+        | Method::Rustup { .. }
+        | Method::PipUser { .. }
+        | Method::PipTarget { .. }
+        | Method::Manual { .. } => None,
     }
 }
 
@@ -578,6 +582,8 @@ impl Tools {
                 }
                 need(self.which("curl").is_some(), "curl is required to download tools")
             }
+            // Toolchain-provided tools cannot be installed by the IDE: report the hint.
+            Method::Manual { hint } => Some(hint.to_owned()),
         }
     }
 
@@ -816,6 +822,8 @@ impl Tools {
                 Method::Release { source, assets, locate } => {
                     self.install_release(spec, source, assets, locate, cancel, emit)?
                 }
+                // Refused by `unavailable_reason` before an install slot is taken.
+                Method::Manual { hint } => return Err(IdeError::unavailable(hint)),
             }
             let info = self.info(name, langs)?;
             if info.status == ToolStatus::Missing {
@@ -849,7 +857,7 @@ impl Tools {
     fn ensure_package_json(&self) -> IdeResult<()> {
         let pj = self.root.join("package.json");
         if !pj.exists() {
-            std::fs::write(pj, "{\n  \"name\": \"openidea-tools\",\n  \"private\": true\n}\n")?;
+            std::fs::write(pj, "{\n  \"name\": \"openclion-tools\",\n  \"private\": true\n}\n")?;
         }
         Ok(())
     }
@@ -1209,6 +1217,8 @@ impl Tools {
         match self.install_method(spec) {
             // App-owned resources remain available for every project/window.
             Method::Bundled { .. } => {}
+            // Toolchain-provided tools are not files the IDE owns.
+            Method::Manual { .. } => {}
             Method::Rustup { component } => {
                 let rustup = self.which("rustup").ok_or_else(|| IdeError::unavailable("rustup not found"))?;
                 let mut c = self.command(rustup);

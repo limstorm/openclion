@@ -90,13 +90,42 @@ impl Launcher for ProcessLauncher {
             );
         }
         let binary = binary.ok_or(LaunchError::Missing)?;
-        Peer::spawn(&binary.to_string_lossy(), &config.args, root, &env, handler, on_stderr)
+        let args = expand_args(&config.args, root);
+        Peer::spawn(&binary.to_string_lossy(), &args, root, &env, handler, on_stderr)
             .map_err(|e| LaunchError::Failed(format!("failed to start {}: {e}", binary.display())))
     }
 
     fn available(&self, config: &LanguageServerConfig, root: &Path) -> bool {
         ide_core::tool_path::find_command(&config.command, &server_search_path(config), root).is_some()
     }
+}
+
+/// Expands the variables `languages/*.toml` may use in `args`:
+///
+/// * `${root}` — the workspace root the server serves.
+/// * `${compileCommands}` — the directory of the project's `compile_commands.json`.
+///   CMake and Meson write it into the build directory, where no language server
+///   looks on its own (`clangd` gets it as `--compile-commands-dir`); without a
+///   database this is the root, so servers fall back to searching the tree.
+pub fn expand_args(args: &[String], root: &Path) -> Vec<String> {
+    let compile_commands = compile_commands_dir(root);
+    let root = root.to_string_lossy();
+    let compile_commands = compile_commands.to_string_lossy();
+    args.iter().map(|arg| arg.replace("${root}", &root).replace("${compileCommands}", &compile_commands)).collect()
+}
+
+/// The directory holding the project's compile database: the first configured
+/// build directory of the root (`build`, `out`, `cmake-build-*`, …), else the root.
+fn compile_commands_dir(root: &Path) -> PathBuf {
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(root)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir() && p.join("compile_commands.json").is_file())
+        .collect();
+    dirs.sort();
+    dirs.into_iter().next().unwrap_or_else(|| root.to_path_buf())
 }
 
 /// A configured `PATH` (e.g. a selected toolchain prepended) also resolves the binary.
@@ -172,7 +201,7 @@ mod tests {
 
     #[test]
     fn root_detection() {
-        let tmp = std::env::temp_dir().join(format!("openidea-lsp-root-{}", std::process::id()));
+        let tmp = std::env::temp_dir().join(format!("openclion-lsp-root-{}", std::process::id()));
         let member = tmp.join("crates/a/src");
         std::fs::create_dir_all(&member).unwrap();
         std::fs::write(tmp.join("crates/a/Cargo.toml"), "").unwrap();
@@ -198,6 +227,27 @@ mod tests {
         std::fs::create_dir_all(root.join("apps/web/node_modules/@angular/core")).unwrap();
         assert_eq!(marked_root(root, &file, &markers), Some(root.join("apps/web")));
         assert_eq!(marked_root(root, &root.join("apps/api/main.ts"), &markers), None);
+    }
+
+    #[test]
+    fn arguments_expand_root_and_compile_commands() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let args = ["--background-index", "--compile-commands-dir=${compileCommands}", "--log=${root}/clangd.log"]
+            .map(str::to_owned);
+        // No database yet: the root, so the server still searches the tree.
+        let expanded = expand_args(&args, root);
+        assert_eq!(expanded[1], format!("--compile-commands-dir={}", root.display()));
+        assert_eq!(expanded[2], format!("--log={}/clangd.log", root.display()));
+        // A CMake build directory wins over the root and is picked deterministically.
+        for dir in ["cmake-build-release", "cmake-build-debug"] {
+            std::fs::create_dir_all(root.join(dir)).unwrap();
+            std::fs::write(root.join(dir).join("compile_commands.json"), "[]").unwrap();
+        }
+        assert_eq!(
+            expand_args(&args, root)[1],
+            format!("--compile-commands-dir={}", root.join("cmake-build-debug").display())
+        );
     }
 
     #[test]

@@ -1,7 +1,7 @@
 //! Shared scenarios, replayed from transcripts recorded with real agents.
 //!
 //! Record (spends a few cheap turns; the agent must be installed and signed in):
-//! `OPENIDEA_RECORD=claude-acp@v2 cargo test -p ide-agent replay_tests::record -- --ignored`
+//! `OPENCLION_RECORD=claude-acp@v2 cargo test -p ide-agent replay_tests::record -- --ignored`
 //! writes `tests/fixtures/acp/<agent>[@<variant>]/<scenario>.jsonl`; the variant only
 //! names the setup (`claude-acp@v1` ran with `CLAUDE_AGENT_ACP_EXPERIMENTAL_V2=0`). Every fixture found is replayed
 //! by `recorded_scenarios`.
@@ -150,7 +150,7 @@ async fn run(scenario: &str, provider: &str, dir: &Path, connector: Connector, s
         }
         "permission_allow" | "permission_decline" => {
             let id =
-                create(&mgr, provider, "Use your shell tool to run exactly this command: echo openidea-replay").await;
+                create(&mgr, provider, "Use your shell tool to run exactly this command: echo openclion-replay").await;
             let kind = if scenario == "permission_allow" { "allow" } else { "reject" };
             assert_eq!(answer_all(&mgr, &id, kind, secs).await, AgentStatus::Ready);
             let entries = mgr.entries(&id, None).unwrap();
@@ -209,11 +209,11 @@ async fn recorded_scenarios() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-#[ignore = "runs a real agent: OPENIDEA_RECORD=<provider id> [OPENIDEA_SCENARIO=<name>]"]
+#[ignore = "runs a real agent: OPENCLION_RECORD=<provider id> [OPENCLION_SCENARIO=<name>]"]
 async fn record() {
-    let name = std::env::var("OPENIDEA_RECORD").expect("OPENIDEA_RECORD=<provider id>[@<variant>]");
+    let name = std::env::var("OPENCLION_RECORD").expect("OPENCLION_RECORD=<provider id>[@<variant>]");
     let provider = name.split('@').next().unwrap_or_default().to_owned();
-    let only = std::env::var("OPENIDEA_SCENARIO").ok();
+    let only = std::env::var("OPENCLION_SCENARIO").ok();
     for scenario in SCENARIOS.iter().filter(|s| only.as_deref().is_none_or(|o| o == **s)) {
         let tmp = tempfile::tempdir().unwrap();
         let out = fixtures().join(&name).join(format!("{scenario}.jsonl"));

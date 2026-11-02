@@ -1,5 +1,5 @@
 //! Build tool models for the Maven and Gradle tool windows, and Build › Build
-//! Project ([`compile`]) for Maven, Gradle, Cargo, Go and TypeScript projects.
+//! Project ([`compile`]) for Maven, Gradle, CMake, Cargo, Go and TypeScript projects.
 //!
 //! [`load`] reads the project's build files (instant, no build tool involved)
 //! and merges what the last sync ([`sync_maven`] / [`sync_gradle`], which run

@@ -1,5 +1,6 @@
 //! Root detection from build files, per module directory (multi-module Maven /
-//! Gradle builds, Cargo workspaces and monorepos are found by a bounded walk).
+//! Gradle builds, Cargo workspaces, CMake projects and monorepos are found by a
+//! bounded walk).
 
 use super::{RootKind, SourceFolder, gradle, maven};
 use std::collections::VecDeque;
@@ -26,6 +27,8 @@ const BUILD_FILES: &[&str] = &[
     "settings.gradle.kts",
     "Cargo.toml",
     "go.mod",
+    "CMakeLists.txt",
+    "CMakePresets.json",
     "pyproject.toml",
     "setup.py",
     "setup.cfg",
@@ -34,9 +37,16 @@ const BUILD_FILES: &[&str] = &[
     "package.json",
 ];
 
+/// Whether a directory is build output / dependencies, never walked into.
+fn skip_dir(name: &str) -> bool {
+    // CLion configures each configuration into its own `cmake-build-<profile>/` directory.
+    SKIP_DIRS.contains(&name) || name.starts_with("cmake-build-")
+}
+
 /// Folder names that are (or contain) conventional roots.
 const ROOT_NAMES: &[&str] = &[
     "src",
+    "include",
     "main",
     "test",
     "tests",
@@ -62,7 +72,11 @@ const ROOT_NAMES: &[&str] = &[
 pub fn affects_roots(rel: &Path) -> bool {
     let mut names = rel.iter().rev().filter_map(|c| c.to_str());
     let Some(name) = names.next() else { return false };
-    BUILD_FILES.contains(&name) || ROOT_NAMES.contains(&name) || names.next() == Some("src")
+    let parent = names.next();
+    BUILD_FILES.contains(&name)
+        || ROOT_NAMES.contains(&name)
+        || name.starts_with("cmake-build-")
+        || parent == Some("src")
 }
 
 /// Detects roots below `root`; paths in the result are unique and sorted.
@@ -96,7 +110,7 @@ pub fn detect(root: &Path) -> Vec<SourceFolder> {
         }
         let found: Vec<String> = out[before..].iter().map(|r| r.path.clone()).collect();
         for name in dirs {
-            if name.starts_with('.') || SKIP_DIRS.contains(&name.as_str()) {
+            if name.starts_with('.') || skip_dir(&name) {
                 continue;
             }
             let child = join(&rel, &name);
@@ -160,6 +174,32 @@ fn module_roots(root: &Path, rel: &str, files: &[String], out: &mut Vec<SourceFo
         }
         add("build", RootKind::Excluded, file);
         add(".gradle", RootKind::Excluded, file);
+    }
+
+    if has("CMakeLists.txt") {
+        // CMake prescribes no source layout: a flat project keeps its sources in the
+        // root, while a `src/` + `include/` split is the common library layout.
+        if dir.join("src").is_dir() || dir.join("include").is_dir() {
+            add("src", RootKind::Source, "CMakeLists.txt");
+            add("include", RootKind::Source, "CMakeLists.txt");
+            for t in ["tests", "test"] {
+                add(t, RootKind::Test, "CMakeLists.txt");
+            }
+        } else {
+            add("", RootKind::Source, "CMakeLists.txt");
+        }
+        // Build trees are generated, never sources. `build` is skipped by name and
+        // CLion-style `cmake-build-*` directories by [`skip_dir`]; both are marked as
+        // excluded roots so the index and search stay out of them too.
+        add("build", RootKind::Excluded, "CMakeLists.txt");
+        if let Ok(entries) = std::fs::read_dir(&dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with("cmake-build-") {
+                    add(&name, RootKind::Excluded, "CMakeLists.txt");
+                }
+            }
+        }
     }
 
     if has("Cargo.toml") {
@@ -377,6 +417,41 @@ mod tests {
     }
 
     #[test]
+    fn cmake_flat_project_and_clion_build_dirs() {
+        let dir = tree(&["CMakeLists.txt", "CMakePresets.json", "main.cpp", "cmake-build-debug/CMakeCache.txt"]);
+        assert_eq!(
+            summary(&detect(dir.path())),
+            vec!["=Source@CMakeLists.txt", "cmake-build-debug=Excluded@CMakeLists.txt"]
+        );
+    }
+
+    #[test]
+    fn cmake_src_include_layout_and_tests() {
+        let dir = tree(&[
+            "CMakeLists.txt",
+            "CMakePresets.json",
+            "src/main.cpp",
+            "include/app/app.h",
+            "tests/CMakeLists.txt",
+            "tests/main_test.cpp",
+            "test/",
+            "build/CMakeCache.txt",
+            "cmake-build-release/CMakeCache.txt",
+        ]);
+        assert_eq!(
+            summary(&detect(dir.path())),
+            vec![
+                "build=Excluded@CMakeLists.txt",
+                "cmake-build-release=Excluded@CMakeLists.txt",
+                "include=Source@CMakeLists.txt",
+                "src=Source@CMakeLists.txt",
+                "test=Test@CMakeLists.txt",
+                "tests=Test@CMakeLists.txt",
+            ]
+        );
+    }
+
+    #[test]
     fn plain_folders_have_no_roots() {
         let dir = tree(&["src/a.txt", "test/", "build/"]);
         assert!(detect(dir.path()).is_empty());
@@ -392,10 +467,14 @@ mod tests {
             "x/src/main",
             "target",
             "web/package.json",
+            "CMakeLists.txt",
+            "cpp/CMakePresets.json",
+            "cmake-build-debug",
+            "include",
         ] {
             assert!(affects_roots(Path::new(p)), "{p}");
         }
-        for p in ["src/main/java/A.java", "README.md", "docs/guide"] {
+        for p in ["src/main/java/A.java", "README.md", "docs/guide", "cmake-build-debug/CMakeCache.txt"] {
             assert!(!affects_roots(Path::new(p)), "{p}");
         }
     }

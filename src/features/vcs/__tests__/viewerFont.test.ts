@@ -23,14 +23,14 @@ describe("viewer font", () => {
     });
     views.push(view);
     const style = () => view.dom.style;
-    expect(style().getPropertyValue("--openidea-editor-font")).toContain("Fira Code");
-    expect(style().getPropertyValue("--openidea-editor-font-size")).toBe("16px");
-    expect(style().getPropertyValue("--openidea-editor-line-height")).toBe("22px");
-    expect(view.dom.classList.contains("cm-openidea-ligatures")).toBe(false);
+    expect(style().getPropertyValue("--openclion-editor-font")).toContain("Fira Code");
+    expect(style().getPropertyValue("--openclion-editor-font-size")).toBe("16px");
+    expect(style().getPropertyValue("--openclion-editor-line-height")).toBe("22px");
+    expect(view.dom.classList.contains("cm-openclion-ligatures")).toBe(false);
 
     setEditor({ fontSize: 11, ligatures: true });
-    expect(style().getPropertyValue("--openidea-editor-font")).toBe("");
-    expect(style().getPropertyValue("--openidea-editor-font-size")).toBe("11px");
-    expect(view.dom.classList.contains("cm-openidea-ligatures")).toBe(true);
+    expect(style().getPropertyValue("--openclion-editor-font")).toBe("");
+    expect(style().getPropertyValue("--openclion-editor-font-size")).toBe("11px");
+    expect(view.dom.classList.contains("cm-openclion-ligatures")).toBe(true);
   });
 });

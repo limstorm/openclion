@@ -32,10 +32,10 @@ const metrics: AppMetrics = {
 describe("perf views", () => {
   it("renders memory details", () => {
     render(<MemoryDetails metrics={metrics} />);
-    const openidea = screen.getByRole("group", { name: "OpenIDEA" });
-    expect(openidea.textContent).toContain("360 MB");
-    expect(openidea.textContent).toContain("Web content");
-    expect(openidea.textContent).toContain("300 MB");
+    const openclion = screen.getByRole("group", { name: "OpenCLion" });
+    expect(openclion.textContent).toContain("360 MB");
+    expect(openclion.textContent).toContain("Web content");
+    expect(openclion.textContent).toContain("300 MB");
     const servers = screen.getByRole("group", { name: "Language servers" });
     expect(servers.textContent).toContain("jdtls");
     expect(servers.textContent).toContain("idea");

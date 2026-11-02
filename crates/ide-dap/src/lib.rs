@@ -639,7 +639,11 @@ impl DebugManager {
             arguments["project"] = json!(real);
         }
         if config.adapter == "codelldb" && arguments.get("sourceLanguages").is_none() {
-            arguments["sourceLanguages"] = json!(["rust"]);
+            // CodeLLDB drives LLDB, which debugs the whole C-family: C, C++,
+            // Objective-C and Swift as well as Rust. Listing only `rust` makes it parse
+            // every other frame with Rust syntax; the adapter uses this to pick source
+            // syntax only, the target language itself comes from the debug info.
+            arguments["sourceLanguages"] = json!(["cpp", "c", "rust", "objective-c", "swift"]);
         }
         let port = debug_server.map(|s| s.port);
         self.start_session(id, owner, config.name, config.adapter, None, config.request, arguments, spec, port).await
@@ -758,8 +762,8 @@ impl DebugManager {
             .request_timeout(
                 "initialize",
                 json!({
-                    "clientID": "openidea",
-                    "clientName": "OpenIDEA",
+                    "clientID": "openclion",
+                    "clientName": "OpenCLion",
                     "adapterID": s.adapter,
                     "locale": "en",
                     "linesStartAt1": true,

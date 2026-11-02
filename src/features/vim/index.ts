@@ -45,7 +45,7 @@ export function activate(): () => void {
     rcApplied = true;
     for (const p of problems) console.warn(`vimrc: ${p}`);
     if (!quiet)
-      showStatusInfo(rc.commands.length ? "Vim: rc file reloaded" : "Vim: no ~/.openideavimrc or ~/.ideavimrc");
+      showStatusInfo(rc.commands.length ? "Vim: rc file reloaded" : "Vim: no ~/.openclionvimrc or ~/.ideavimrc");
   };
 
   const apply = async (enabled: boolean) => {
@@ -99,7 +99,7 @@ export function activate(): () => void {
         id: "vim.reloadRc",
         title: "Reload .ideavimrc",
         category: "Tools",
-        keywords: ["vim", "vimrc", "openideavimrc"],
+        keywords: ["vim", "vimrc", "openclionvimrc"],
         when: "vimMode",
         run: () => reloadRc(false),
       },

@@ -55,7 +55,7 @@ async function settings(page: Page) {
 
 for (const palette of palettes) {
   test(`${palette.label}: settings, editor, terminal, popup and reload`, async ({ workbench: page }, info) => {
-    const editor = await openFromTree(page, "build.gradle.kts");
+    const editor = await openFromTree(page, "CMakeLists.txt");
     await page.keyboard.press("Alt+F12");
     await expect(page.locator(".xterm")).toBeVisible();
     // Use only synthetic ANSI output; no shell, network or native PTY is involved.
@@ -114,8 +114,8 @@ for (const palette of palettes) {
     await expect(editor.locator(".cm-selectionBackground").first()).toBeVisible();
     await page.keyboard.press("ArrowRight");
     await page.keyboard.press("Meta+f");
-    await page.getByRole("textbox", { name: "Find", exact: true }).fill("Order");
-    await expect(editor.locator(".cm-openidea-findMatch").first()).toBeVisible();
+    await page.getByRole("textbox", { name: "Find", exact: true }).fill("acme");
+    await expect(editor.locator(".cm-openclion-findMatch").first()).toBeVisible();
     await page.screenshot({ path: info.outputPath(`${palette.id}-workbench.png`), animations: "disabled" });
     await page.keyboard.press("Escape");
     await settings(page);
@@ -127,13 +127,13 @@ for (const palette of palettes) {
     await page.reload();
     await expect(page.getByRole("tree", { name: "Project" })).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-color-theme", palette.id);
-    const cached = await page.evaluate(() => JSON.parse(localStorage.getItem("openidea.theme")!));
+    const cached = await page.evaluate(() => JSON.parse(localStorage.getItem("openclion.theme")!));
     expect(cached).toMatchObject({ theme: palette.kind, colorTheme: palette.id });
   });
 }
 
 test("same-kind switching, legacy themes, system mode and explicit editor schemes", async ({ workbench: page }) => {
-  await openFromTree(page, "build.gradle.kts");
+  await openFromTree(page, "CMakeLists.txt");
   const dialog = await settings(page);
   for (const label of [
     "Solarized Light",

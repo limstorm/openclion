@@ -203,34 +203,26 @@ export class MemoryFs implements ProjectFs {
   }
 }
 
-/** Sample project for plain-browser development (matches the design mock). */
+/** Sample project for plain-browser development (matches the design mock): a small CMake C++ project. */
 export function sampleFs(root: string): MemoryFs {
   const f = (rel: string, content: string | null = "") => [joinPath(root, rel), content] as const;
   const fs = new MemoryFs(
     Object.fromEntries([
-      f("src/main/kotlin/com/acme/orders/model/Order.kt"),
-      f("src/main/kotlin/com/acme/orders/model/OrderStatus.kt"),
-      f("src/main/kotlin/com/acme/orders/service/OrderService.kt"),
-      f("src/main/kotlin/com/acme/orders/OrderController.kt"),
-      f("src/main/kotlin/com/acme/orders/OrderDto.kt"),
-      f("src/main/kotlin/com/acme/orders/PageRequest.kt"),
-      f("src/main/kotlin/com/acme/orders/OrderApplication.kt"),
-      f("src/main/resources/application.yml"),
-      f("src/main/resources/logo.png"),
-      f("src/test/kotlin/com/acme/orders/OrderControllerTest.kt"),
-      f("build", null),
-      f("build/classes/Main.class"),
-      f(".git/HEAD"),
-      f(".gitignore"),
-      f("build.gradle.kts"),
-      f("settings.gradle.kts"),
+      f("CMakeLists.txt"),
       f("README.md"),
-      ...Array.from({ length: 10_000 }, (_, i) => f(`generated/item${i + 1}.json`)),
+      f(".gitignore"),
+      f(".git/HEAD"),
+      f("include/greeter.h"),
+      f("src/main.cpp"),
+      f("src/greeter.cpp"),
+      f("src/util/string_utils.cpp"),
+      f("tests/test_greeter.cpp"),
+      f("build", null),
+      f("build/CMakeCache.txt"),
     ]),
     root,
   );
   fs.ignored.add(joinPath(root, "build"));
-  fs.ignored.add(joinPath(root, "generated"));
   return fs;
 }
 

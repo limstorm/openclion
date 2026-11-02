@@ -6,6 +6,7 @@ pub mod agent;
 pub mod analysis;
 pub mod build;
 pub mod bytes;
+pub mod cmake;
 pub mod coverage;
 pub mod debug;
 pub mod dependencies;
@@ -74,6 +75,7 @@ pub fn register_all(d: &mut crate::rpc::Dispatcher) {
     history::register(d);
     coverage::register(d);
     build::register(d);
+    cmake::register(d);
     tools::register(d);
     sdk::register(d);
     java::register(d);

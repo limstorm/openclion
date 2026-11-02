@@ -3,6 +3,7 @@
  * Stepping), Python Debugger and Run/Debug. Consumed by the run and debugger
  * features (and `ide-run` for encoding / termination timeout).
  */
+import { CppToolchain } from "@/features/cmake/ToolchainSettings";
 import { CMakeProfiles } from "./cmake";
 import { WORKFLOW_LIMITS } from "@/platform/workflowSettings";
 import type { SelectOption } from "@/ui";
@@ -91,6 +92,16 @@ function TooltipDelayRow() {
 }
 
 export const EXECUTION_PAGES: PageSpec[] = [
+  {
+    id: "build.toolchains",
+    title: "Toolchains",
+    group: BUILD_GROUP,
+    order: 356,
+    projectScope: true,
+    defaultScope: "global",
+    keywords: ["CMake", "Ninja", "Make", "clangd", "clang-tidy", "lldb-dap", "debugger", "C", "C++", "compiler"],
+    component: CppToolchain,
+  },
   {
     id: "build.cmake",
     title: "CMake",

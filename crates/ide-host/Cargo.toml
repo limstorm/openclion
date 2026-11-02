@@ -6,7 +6,7 @@ edition.workspace = true
 license.workspace = true
 
 [[bin]]
-name = "openidea-server"
+name = "openclion-server"
 path = "src/bin/server.rs"
 
 [dependencies]
@@ -23,6 +23,7 @@ ide-lsp.workspace = true
 ide-vcs.workspace = true
 ide-dap.workspace = true
 ide-build.workspace = true
+ide-cmake.workspace = true
 ide-analysis.workspace = true
 ide-coverage.workspace = true
 ide-spell.workspace = true

@@ -224,6 +224,87 @@ export const BUILTIN_FILE_TEMPLATES: readonly FileTemplate[] = [
     ],
   },
   {
+    // The file template format writes one file, so the class and its header are
+    // separate templates ("C++ Header File") rather than a generated pair.
+    id: "cpp-class",
+    name: "C++ Class",
+    icon: "file-cpp",
+    extension: "cpp",
+    nameStyle: "pascal",
+    kinds: [
+      {
+        id: "class",
+        label: "Class",
+        body: "class $NAME$ {\npublic:\n    $NAME$() = default;\n    ~$NAME$() = default;\n\n    $END$\n};\n",
+      },
+      { id: "struct", label: "Struct", body: "struct $NAME$ {\n    $END$\n};\n" },
+      {
+        id: "interface",
+        label: "Interface",
+        body: "class $NAME$ {\npublic:\n    virtual ~$NAME$() = default;\n\n    virtual void run() = 0;\n    $END$\n};\n",
+      },
+    ],
+  },
+  {
+    id: "cpp",
+    name: "C++ Source File",
+    icon: "file-cpp",
+    extension: "cpp",
+    nameStyle: "snake",
+    kinds: [
+      {
+        id: "main",
+        label: "Main",
+        body: "#include <iostream>\n\nint main() {\n    $END$\n    return 0;\n}\n",
+      },
+      { id: "file", label: "Empty file", body: "$END$\n" },
+    ],
+  },
+  {
+    id: "cpp-header",
+    name: "C++ Header File",
+    icon: "file-h",
+    extension: "h",
+    nameStyle: "pascal",
+    kinds: [
+      {
+        id: "class",
+        label: "Class",
+        body: "#pragma once\n\nclass $NAME$ {\npublic:\n    $NAME$() = default;\n    ~$NAME$() = default;\n\n    $END$\n};\n",
+      },
+    ],
+  },
+  {
+    id: "c",
+    name: "C Source File",
+    icon: "file-c",
+    extension: "c",
+    nameStyle: "snake",
+    kinds: [
+      {
+        id: "main",
+        label: "Main",
+        body: "#include <stdio.h>\n\nint main(void) {\n    $END$\n    return 0;\n}\n",
+      },
+      { id: "file", label: "Empty file", body: "$END$\n" },
+    ],
+  },
+  {
+    id: "cmake",
+    name: "CMakeLists.txt",
+    icon: "file-cmake",
+    extension: "",
+    nameStyle: "asis",
+    defaultName: "CMakeLists.txt",
+    kinds: [
+      {
+        id: "project",
+        label: "CMake project",
+        body: "cmake_minimum_required(VERSION 3.20)\n\nproject($PROJECT_NAME$ LANGUAGES CXX)\n\nset(CMAKE_CXX_STANDARD 20)\nset(CMAKE_CXX_STANDARD_REQUIRED ON)\n\nadd_executable($PROJECT_NAME$ $END$)\n",
+      },
+    ],
+  },
+  {
     id: "html",
     name: "HTML File",
     icon: "file-html",

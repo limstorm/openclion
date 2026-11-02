@@ -22,6 +22,8 @@ pub(crate) enum Format {
     Tsc,
     /// `go build`: `./a.go:12:5: msg`.
     Go,
+    /// GCC/Clang (behind `cmake --build`): `A.cpp:12:5: error: msg` (column optional).
+    GccClang,
 }
 
 /// What a printed column counts.
@@ -232,6 +234,29 @@ fn javac_header(line: &str) -> Option<RawMessage> {
     Some(RawMessage::new(severity, msg.trim(), ColUnit::Char).at(path, ln, col))
 }
 
+/// GCC/Clang: `A.cpp:12:5: error: msg`, `A.c:3: warning: msg`, `A.h:7:5: note: msg`.
+/// CMake only forwards the compiler's output, so these are the diagnostics of a
+/// `cmake --build`; `fatal error:` is a regular error.
+fn gcc_line(line: &str) -> Option<RawMessage> {
+    let (path, ln, col, rest) = path_line_col(line)?;
+    if !looks_like_source_path(path) {
+        return None;
+    }
+    let rest = rest.strip_prefix(':')?.trim_start();
+    let (severity, msg) = if let Some(m) = rest.strip_prefix("fatal error:") {
+        (Severity::Error, m)
+    } else if let Some(m) = rest.strip_prefix("error:") {
+        (Severity::Error, m)
+    } else if let Some(m) = rest.strip_prefix("warning:") {
+        (Severity::Warning, m)
+    } else {
+        let m = rest.strip_prefix("note:")?;
+        (Severity::Info, m)
+    };
+    let msg = msg.trim();
+    (!msg.is_empty()).then(|| RawMessage::new(severity, msg, ColUnit::Byte).at(path, ln, col))
+}
+
 /// Maven: `[ERROR] /p/A.java:[12,5] msg`, `[WARNING] …`, and Kotlin / javac forms after the level.
 fn maven_line(line: &str) -> Option<RawMessage> {
     let (severity, rest) = if let Some(r) = line.strip_prefix("[ERROR] ") {
@@ -410,6 +435,7 @@ impl OutputParser {
             Format::Gradle => javac_header(&line).or_else(|| kotlin_line(&line)),
             Format::Tsc => tsc_line(&line),
             Format::Go => go_line(&line),
+            Format::GccClang => gcc_line(&line),
             Format::Cargo => None,
         };
         if let Some(msg) = parsed {
@@ -577,6 +603,29 @@ mod tests {
         assert_eq!(out[0].text, "undefined: foo");
         assert_eq!(out[1].unit, ColUnit::Byte);
         assert_eq!(pos(&out[1]), (Severity::Error, "pkg/util.go", 3, Some(2)));
+    }
+
+    #[test]
+    fn gcc_and_clang_messages() {
+        let out = parse(
+            Format::GccClang,
+            "[ 25%] Building CXX object CMakeFiles/app.dir/src/a.cpp.o\n\
+             /p/src/a.cpp:12:5: error: 'x' was not declared in this scope\n\
+             /p/src/a.cpp:20: warning: unused variable 'y' [-Wunused-variable]\n\
+             /p/src/a.h:3:9: note: declared here\n\
+             /p/src/b.c:7:3: fatal error: missing.h: No such file or directory\n\
+             In file included from /p/src/a.h:2,\n\
+             make[2]: *** [CMakeFiles/app.dir/build.make:76: CMakeFiles/app.dir/src/a.cpp.o] Error 1\n",
+        );
+        assert_eq!(out.len(), 4, "{out:?}");
+        assert_eq!(pos(&out[0]), (Severity::Error, "/p/src/a.cpp", 12, Some(5)));
+        assert_eq!(out[0].text, "'x' was not declared in this scope");
+        assert_eq!(out[0].unit, ColUnit::Byte);
+        assert_eq!(pos(&out[1]), (Severity::Warning, "/p/src/a.cpp", 20, None));
+        assert_eq!(out[1].text, "unused variable 'y' [-Wunused-variable]");
+        assert_eq!(pos(&out[2]), (Severity::Info, "/p/src/a.h", 3, Some(9)));
+        assert_eq!(pos(&out[3]), (Severity::Error, "/p/src/b.c", 7, Some(3)));
+        assert_eq!(out[3].text, "missing.h: No such file or directory");
     }
 
     #[test]

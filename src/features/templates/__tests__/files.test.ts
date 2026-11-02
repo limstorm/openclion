@@ -84,9 +84,32 @@ describe("file naming", () => {
 
   it("offers IDEA's common file kinds", () => {
     const ids = BUILTIN_FILE_TEMPLATES.map((t) => t.id);
-    for (const id of ["stylesheet", "dockerfile", "editorconfig", "json", "yaml", "toml", "shell", "gitignore"])
+    for (const id of [
+      "stylesheet",
+      "dockerfile",
+      "editorconfig",
+      "json",
+      "yaml",
+      "toml",
+      "shell",
+      "gitignore",
+      "cpp-class",
+      "cpp",
+      "cpp-header",
+      "c",
+      "cmake",
+    ])
       expect(ids).toContain(id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("names C/C++ and CMake files", () => {
+    expect(planFile(tpl("cpp-class"), "/p/src", "order service")?.path).toBe("/p/src/OrderService.cpp");
+    expect(planFile(tpl("cpp"), "/p/src", "main")?.path).toBe("/p/src/main.cpp");
+    expect(planFile(tpl("cpp-header"), "/p/include", "Greeter.h")?.path).toBe("/p/include/Greeter.h");
+    expect(planFile(tpl("c"), "/p/src", "util")?.path).toBe("/p/src/util.c");
+    expect(tpl("cmake").defaultName).toBe("CMakeLists.txt");
+    expect(planFile(tpl("cmake"), "/p", "CMakeLists.txt")?.path).toBe("/p/CMakeLists.txt");
   });
 });
 
@@ -107,6 +130,34 @@ describe("rendering", () => {
   it("caret defaults to the end and $$ is a dollar", () => {
     const r = renderFileTemplate("a$$b $YEAR$", { name: "", fileName: "", now: new Date(2030, 1, 1) });
     expect(r).toEqual({ text: "a$b 2030", caret: 8 });
+  });
+
+  it("renders the C/C++ and CMake templates", () => {
+    const cpp = renderFileTemplate(tpl("cpp-class").kinds[0]!.body, { name: "Greeter", fileName: "Greeter.cpp" });
+    expect(cpp.text).toContain("class Greeter {");
+    expect(cpp.text).toContain("Greeter() = default;");
+
+    const main = renderFileTemplate(tpl("cpp").kinds[0]!.body, { name: "main", fileName: "main.cpp" });
+    expect(main.text).toContain("int main() {");
+
+    const header = renderFileTemplate(tpl("cpp-header").kinds[0]!.body, {
+      name: "Greeter",
+      fileName: "Greeter.h",
+    });
+    expect(header.text.startsWith("#pragma once\n")).toBe(true);
+    expect(header.text).toContain("class Greeter {");
+
+    const c = renderFileTemplate(tpl("c").kinds[0]!.body, { name: "util", fileName: "util.c" });
+    expect(c.text).toContain("int main(void) {");
+
+    const cmake = renderFileTemplate(tpl("cmake").kinds[0]!.body, {
+      name: "CMakeLists.txt",
+      fileName: "CMakeLists.txt",
+      projectName: "acme-api",
+    });
+    expect(cmake.text).toContain("cmake_minimum_required(VERSION 3.20)");
+    expect(cmake.text).toContain("project(acme-api LANGUAGES CXX)");
+    expect(cmake.text).toContain("add_executable(acme-api ");
   });
 });
 

@@ -56,7 +56,7 @@ fn bundled_lombok_replaces_legacy_installs_on_every_platform_without_downloads()
             let info = tools.info("lombok", &[]).unwrap();
             let path = managed_bundle(env.root.parent().unwrap(), "lombok").unwrap();
             assert_eq!(info.status, ToolStatus::Installed);
-            assert_eq!(info.version.as_deref(), Some("1.18.48-openidea.1"));
+            assert_eq!(info.version.as_deref(), Some("1.18.48-openclion.1"));
             assert_eq!(info.path, Some(path.clone().into()));
             assert_eq!(path.file_name().unwrap(), "lombok-1.18.48-openidea.1.jar");
             assert!(!info.can_install && !info.can_uninstall);
@@ -139,6 +139,13 @@ fn everything_missing_on_an_empty_system() {
     assert_eq!(hls.install_method, None);
     assert!(!hls.can_install);
     assert_eq!(hls.status, ToolStatus::Missing);
+    // A toolchain-provided adapter is listed with its hint, but never downloaded.
+    let lldb = find(&list, "lldb-dap");
+    assert_eq!(lldb.status, ToolStatus::Missing);
+    assert!(!lldb.can_install);
+    assert_eq!(lldb.install_method.as_deref(), Some("manual install"));
+    assert!(lldb.unavailable_reason.as_deref().unwrap().contains("LLVM"));
+    assert!(lldb.languages.iter().any(|l| l == "C++"), "{:?}", lldb.languages);
     // Gem tools need Ruby.
     assert!(find(&list, "solargraph").unavailable_reason.as_deref().unwrap().contains("Ruby"));
     // Shared npm package: each server is its own row.
@@ -242,6 +249,10 @@ fn unknown_or_manual_tools_cannot_be_installed() {
     assert_eq!(err.kind, ErrorKind::Unavailable);
     assert!(err.message.contains("cannot be installed automatically"));
     assert_eq!(tools.info("nope", &langs()).unwrap_err().kind, ErrorKind::NotFound);
+    // A known tool that ships with a toolchain is refused with its own hint.
+    let err = tools.install("lldb-dap", &langs(), &CancellationToken::new(), &|_| {}).unwrap_err();
+    assert_eq!(err.kind, ErrorKind::Unavailable);
+    assert!(err.message.contains("LLVM"), "{}", err.message);
 }
 
 #[test]

@@ -30,8 +30,8 @@ test("Search Everywhere finds a file and opens it", async ({ workbench: page }) 
   test.fixme(true, "Search Everywhere has no in-memory file source in browser mode");
   await doubleShift(page);
   const dialog = page.getByRole("dialog", { name: "Search Everywhere" });
-  await dialog.getByRole("combobox").fill("OrderService");
-  await expect(dialog.getByRole("option", { name: /OrderService\.kt/ })).toBeVisible();
+  await dialog.getByRole("combobox").fill("greeter");
+  await expect(dialog.getByRole("option", { name: /greeter\.h/ })).toBeVisible();
   await page.keyboard.press("Enter");
-  await expect(page.getByRole("tab", { name: "OrderService.kt" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "greeter.h" })).toBeVisible();
 });

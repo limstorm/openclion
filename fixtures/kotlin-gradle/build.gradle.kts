@@ -25,6 +25,6 @@ application {
 
 tasks.test {
     useJUnitPlatform()
-    // `gradle test -PopenideaFail` runs the intentionally failing test.
-    systemProperty("openidea.fail", project.hasProperty("openideaFail").toString())
+    // `gradle test -PopenclionFail` runs the intentionally failing test.
+    systemProperty("openclion.fail", project.hasProperty("openclionFail").toString())
 }

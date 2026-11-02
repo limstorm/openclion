@@ -10,7 +10,7 @@ vi.mock("@/platform/ipc", async (orig) => {
       ...real.commands,
       runGradleJvmArgsScript: (jvmArgs: string[]) => {
         scripts.push(jvmArgs);
-        return Promise.resolve({ status: "ok", data: "/tmp/openidea-gradle/jvm-args-1.init.gradle" });
+        return Promise.resolve({ status: "ok", data: "/tmp/openclion-gradle/jvm-args-1.init.gradle" });
       },
     },
   };
@@ -228,12 +228,12 @@ describe("Maven / Gradle: VM options of the forked JVM", () => {
     expect(c.args).toEqual(["bootRun"]);
     const launched = await gradle().prepareLaunch!(c);
     expect(scripts).toEqual([gradleJvmArgs(params)]);
-    expect(launched.args).toEqual(["--init-script", "/tmp/openidea-gradle/jvm-args-1.init.gradle", "bootRun"]);
+    expect(launched.args).toEqual(["--init-script", "/tmp/openclion-gradle/jvm-args-1.init.gradle", "bootRun"]);
     // Debugging keeps them: `--debug-jvm` is added before the launch is prepared.
     const debug = await gradle().prepareLaunch!(jdwpLaunch(c)!);
     expect(debug.args).toEqual([
       "--init-script",
-      "/tmp/openidea-gradle/jvm-args-1.init.gradle",
+      "/tmp/openclion-gradle/jvm-args-1.init.gradle",
       "bootRun",
       "--debug-jvm",
     ]);

@@ -54,6 +54,9 @@ pub enum Method {
     DotnetTool { package: &'static str },
     /// Platform archive download into `<tools>/<name>/`.
     Release { source: ReleaseSource, assets: &'static [AssetRule], locate: &'static [&'static str] },
+    /// Ships with a toolchain or the system package manager: the IDE only shows the
+    /// install hint and detects the executable, it never downloads the tool.
+    Manual { hint: &'static str },
 }
 
 impl Method {
@@ -73,6 +76,7 @@ impl Method {
             Method::Release { source: ReleaseSource::OpenVsx { .. }, .. } => "Open VSX",
             Method::Release { source: ReleaseSource::MavenCentral { .. }, .. } => "Maven Central",
             Method::Release { .. } => "GitHub release",
+            Method::Manual { .. } => "manual install",
         }
     }
 }
@@ -530,6 +534,21 @@ pub static TOOLS: &[ToolSpec] = &[
         needs: &[],
     },
     ToolSpec {
+        name: "lldb-dap",
+        display: "LLDB DAP",
+        kind: Debugger,
+        commands: &["lldb-dap"],
+        // Ships with LLVM (or the Swift / Xcode toolchain); LLVM publishes no
+        // standalone `lldb-dap` archive to download, so there is no installer.
+        method: Method::Manual {
+            hint: "Install LLVM's lldb-dap (brew install llvm; on macOS also `xcrun -f lldb-dap`)",
+        },
+        fallback: None,
+        version: ver("lldb-dap"),
+        homepage: "https://lldb.llvm.org",
+        needs: &[],
+    },
+    ToolSpec {
         name: "js-debug",
         display: "JavaScript Debugger (vscode-js-debug)",
         kind: Debugger,
@@ -598,7 +617,7 @@ pub static TOOLS: &[ToolSpec] = &[
         // Source commit, build instructions and checksum: plugins/lombok/README.md.
         method: Method::Bundled {
             filename: "lombok-1.18.48-openidea.1.jar",
-            version: "1.18.48-openidea.1",
+            version: "1.18.48-openclion.1",
             bytes: include_bytes!("../../../plugins/lombok/lombok-1.18.48-openidea.1.jar"),
         },
         fallback: None,

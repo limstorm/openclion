@@ -6,7 +6,7 @@ authors = ["OpenIDEA contributors"]
 change-notes = """
 0.1.0 — first release: Insert Date and Word Count of Active File commands.
 """
-openidea-api = "0.1"
+openclion-api = "0.1"
 wasm = "dist/plugin.wasm"
 permissions = ["project-read", "editor-read", "editor-write"]
 

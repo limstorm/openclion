@@ -321,7 +321,7 @@ describe("overwrite mode", () => {
   it("replaces the characters after the caret, never the line break", () => {
     const v = make("ab|cd\nx", overwriteField);
     toggleOverwrite(v);
-    expect(v.dom.classList.contains("cm-openidea-blockCaret")).toBe(true);
+    expect(v.dom.classList.contains("cm-openclion-blockCaret")).toBe(true);
     const type = (text: string) =>
       v.state
         .facet(EditorView.inputHandler)
@@ -339,8 +339,8 @@ describe("smooth caret", () => {
       "ab|c",
       caret({ smoothCaretBlinking: true, smoothCaretMovement: true, caretMovementStyle: "gliding" }),
     );
-    expect(v.dom.classList.contains("cm-openidea-smoothCaretBlink")).toBe(true);
-    expect(v.dom.classList.contains("cm-openidea-caretMotion-gliding")).toBe(true);
+    expect(v.dom.classList.contains("cm-openclion-smoothCaretBlink")).toBe(true);
+    expect(v.dom.classList.contains("cm-openclion-caretMotion-gliding")).toBe(true);
     const plain = make("ab|c", caret({ smoothCaretBlinking: false, smoothCaretMovement: false }));
     expect(plain.dom.className).not.toMatch(/smoothCaretBlink|caretMotion/);
   });
@@ -354,8 +354,8 @@ describe("smooth caret", () => {
     v.scrollDOM.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100);
     v.dispatch({ selection: { anchor: 1 } });
     flush();
-    expect(layer.classList.contains("cm-openidea-caretGlide")).toBe(true);
+    expect(layer.classList.contains("cm-openclion-caretGlide")).toBe(true);
     v.dispatch({ changes: { from: 1, insert: "x" }, selection: { anchor: 2 } });
-    expect(layer.classList.contains("cm-openidea-caretGlide")).toBe(false);
+    expect(layer.classList.contains("cm-openclion-caretGlide")).toBe(false);
   });
 });

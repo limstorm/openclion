@@ -4098,6 +4098,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ide-cmake"
+version = "0.1.33"
+dependencies = [
+ "ide-core",
+ "serde",
+ "serde_json",
+ "specta",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "ide-core"
 version = "0.1.33"
 dependencies = [
@@ -4217,6 +4229,7 @@ dependencies = [
  "ide-agent",
  "ide-analysis",
  "ide-build",
+ "ide-cmake",
  "ide-core",
  "ide-coverage",
  "ide-dap",
@@ -4468,6 +4481,7 @@ dependencies = [
  "dunce",
  "encoding_rs",
  "ide-build",
+ "ide-cmake",
  "ide-core",
  "libc",
  "parking_lot",
@@ -6146,7 +6160,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "openidea"
+name = "openclion"
 version = "0.1.33"
 dependencies = [
  "blake3",
@@ -6157,6 +6171,7 @@ dependencies = [
  "ide-analysis",
  "ide-build",
  "ide-clipboard",
+ "ide-cmake",
  "ide-core",
  "ide-coverage",
  "ide-dap",

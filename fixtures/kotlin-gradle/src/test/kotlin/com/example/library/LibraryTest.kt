@@ -38,7 +38,7 @@ class LibraryTest {
 
     @Test
     fun `intentionally failing`() {
-        assumeTrue(System.getProperty("openidea.fail") == "true", "run with -PopenideaFail")
+        assumeTrue(System.getProperty("openclion.fail") == "true", "run with -PopenclionFail")
         // FIXME: wrong on purpose (QA: failing test in the test tree)
         assertEquals(3, library().size)
     }

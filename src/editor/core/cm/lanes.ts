@@ -8,7 +8,7 @@ import { EditorView, ViewPlugin, gutter, type ViewUpdate } from "@codemirror/vie
 import { gutterLaneMarkers, scrollbarMarks, type ScrollbarMark } from "@/editor/api";
 
 export const changeLane: Extension = gutter({
-  class: "cm-openidea-lane",
+  class: "cm-openclion-lane",
   markers: (view) => view.state.facet(gutterLaneMarkers),
 });
 
@@ -44,7 +44,7 @@ class OverviewLane {
 
   constructor(private view: EditorView) {
     this.dom = document.createElement("div");
-    this.dom.className = "cm-openidea-overview";
+    this.dom.className = "cm-openclion-overview";
     this.dom.setAttribute("aria-hidden", "true");
     this.dom.addEventListener("mousedown", this.onMouseDown);
     view.dom.appendChild(this.dom);
@@ -114,8 +114,8 @@ class OverviewLane {
           const el = document.createElement("div");
           el.className =
             r.mark.kind === "thin"
-              ? "cm-openidea-overviewMark cm-openidea-overviewMark-thin"
-              : "cm-openidea-overviewMark";
+              ? "cm-openclion-overviewMark cm-openclion-overviewMark-thin"
+              : "cm-openclion-overviewMark";
           el.style.top = `${r.top}${unit}`;
           el.style.height = `${r.height}${unit}`;
           el.style.background = r.mark.color;
@@ -124,7 +124,7 @@ class OverviewLane {
           frag.appendChild(el);
         }
         const c = document.createElement("div");
-        c.className = "cm-openidea-overviewCaret";
+        c.className = "cm-openclion-overviewCaret";
         c.style.top = `${caret}${unit}`;
         frag.appendChild(c);
         this.dom.replaceChildren(frag);
@@ -134,7 +134,7 @@ class OverviewLane {
 
   private onMouseDown = (e: MouseEvent) => {
     if (e.button !== 0) return;
-    const marks = [...this.dom.querySelectorAll<HTMLElement>(".cm-openidea-overviewMark")].map((el) => {
+    const marks = [...this.dom.querySelectorAll<HTMLElement>(".cm-openclion-overviewMark")].map((el) => {
       const r = el.getBoundingClientRect();
       return { top: r.top, bottom: r.bottom, pos: Number(el.dataset.pos) };
     });

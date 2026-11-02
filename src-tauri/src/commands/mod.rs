@@ -13,6 +13,7 @@ pub mod build;
 pub mod bytes;
 pub mod caches;
 pub mod clipboard;
+pub mod cmake;
 pub mod coverage;
 pub mod db;
 pub mod debug;
@@ -326,6 +327,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         run::run_tomcat_update,
         run::run_test_reports,
         build::build_model,
+        cmake::cmake_model,
         build::build_sync,
         build::maven_dependency_declaration,
         build::maven_exclude_dependency,

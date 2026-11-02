@@ -123,10 +123,10 @@ describe("editor highlighting", () => {
     const fixme = doc.indexOf("FIXME");
     ranges.sort((a, b) => a[0] - b[0] || a[2].localeCompare(b[2]));
     expect(ranges).toEqual([
-      [line2, line2 + "TODO: refactor".length, "cm-openidea-todo"],
-      [line2, line2 + 4, "cm-openidea-todo-keyword"],
-      [fixme, fixme + "FIXME now".length, "cm-openidea-todo"],
-      [fixme, fixme + 5, "cm-openidea-todo-keyword"],
+      [line2, line2 + "TODO: refactor".length, "cm-openclion-todo"],
+      [line2, line2 + 4, "cm-openclion-todo-keyword"],
+      [fixme, fixme + "FIXME now".length, "cm-openclion-todo"],
+      [fixme, fixme + 5, "cm-openclion-todo-keyword"],
     ]);
     view.destroy();
   });

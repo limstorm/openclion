@@ -84,7 +84,7 @@ class LensWidget extends WidgetType {
 
   override toDOM(view: EditorView): HTMLElement {
     const dom = document.createElement("div");
-    dom.className = "cm-openidea-lens";
+    dom.className = "cm-openclion-lens";
     this.fill(dom, view);
     return dom;
   }
@@ -102,13 +102,13 @@ class LensWidget extends WidgetType {
     this.lenses.forEach((lens, i) => {
       if (i > 0) {
         const sep = document.createElement("span");
-        sep.className = "cm-openidea-lensSep";
+        sep.className = "cm-openclion-lensSep";
         sep.textContent = "|";
         sep.setAttribute("aria-hidden", "true");
         dom.appendChild(sep);
       }
       const el = document.createElement(lens.run ? "button" : "span");
-      el.className = lens.run ? "cm-openidea-lensItem cm-openidea-lensAction" : "cm-openidea-lensItem";
+      el.className = lens.run ? "cm-openclion-lensItem cm-openclion-lensAction" : "cm-openclion-lensItem";
       if (lens.tooltip) el.title = lens.tooltip;
       if (lens.icon && ICONS[lens.icon]) {
         const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -116,7 +116,7 @@ class LensWidget extends WidgetType {
         svg.setAttribute("width", "10");
         svg.setAttribute("height", "10");
         svg.setAttribute("aria-hidden", "true");
-        svg.classList.add(`cm-openidea-lensIcon-${lens.icon}`);
+        svg.classList.add(`cm-openclion-lensIcon-${lens.icon}`);
         const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
         path.setAttribute("d", ICONS[lens.icon]!);
         path.setAttribute("fill", "currentColor");
@@ -161,7 +161,7 @@ function buildDecorations(state: EditorState): DecorationSet {
 }
 
 const lensTheme = EditorView.theme({
-  ".cm-openidea-lens": {
+  ".cm-openclion-lens": {
     display: "flex",
     alignItems: "center",
     gap: "6px",
@@ -174,7 +174,7 @@ const lensTheme = EditorView.theme({
     whiteSpace: "nowrap",
     overflow: "hidden",
   },
-  ".cm-openidea-lensItem": {
+  ".cm-openclion-lensItem": {
     display: "inline-flex",
     alignItems: "center",
     gap: "3px",
@@ -184,10 +184,10 @@ const lensTheme = EditorView.theme({
     font: "inherit",
     color: "inherit",
   },
-  ".cm-openidea-lensAction": { cursor: "pointer" },
-  ".cm-openidea-lensAction:hover": { color: "var(--accent)", textDecoration: "underline" },
-  ".cm-openidea-lensSep": { color: "var(--fg-faint)" },
-  ".cm-openidea-lensIcon-run": { color: "var(--success)" },
+  ".cm-openclion-lensAction": { cursor: "pointer" },
+  ".cm-openclion-lensAction:hover": { color: "var(--accent)", textDecoration: "underline" },
+  ".cm-openclion-lensSep": { color: "var(--fg-faint)" },
+  ".cm-openclion-lensIcon-run": { color: "var(--success)" },
 });
 
 /** Base extension (always installed): no cost until a provider contributes lenses. */

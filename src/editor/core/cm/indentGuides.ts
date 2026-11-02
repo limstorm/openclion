@@ -14,8 +14,8 @@ function guideDeco(levels: number, step: number) {
   if (!d) {
     d = Decoration.line({
       attributes: {
-        class: "cm-openidea-guides",
-        style: `--openidea-guide-levels: ${levels}; --openidea-guide-step: ${step}`,
+        class: "cm-openclion-guides",
+        style: `--openclion-guide-levels: ${levels}; --openclion-guide-step: ${step}`,
       },
     });
     cache.set(key, d);

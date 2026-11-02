@@ -37,6 +37,8 @@ pub enum BuildKind {
 pub enum BuildSystem {
     Maven,
     Gradle,
+    #[serde(rename = "cmake")]
+    CMake,
     Cargo,
     Go,
     #[serde(rename = "typescript")]
@@ -146,6 +148,10 @@ fn detect_dir(dir: &Path, model: &BuildModel, root: &Path) -> Option<BuildSystem
         Some(BuildSystem::Maven)
     } else if has(dir, &["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]) {
         Some(BuildSystem::Gradle)
+    } else if dir == root && has(dir, &["CMakeLists.txt"]) {
+        // Only the project root is a CMake build: subdirectory `CMakeLists.txt` files
+        // are part of the parent project through `add_subdirectory`, not standalone builds.
+        Some(BuildSystem::CMake)
     } else if has(dir, &["Cargo.toml"]) {
         Some(BuildSystem::Cargo)
     } else if has(dir, &["go.mod"]) {
@@ -187,7 +193,9 @@ pub fn plan(root: &Path, model: &BuildModel, kind: BuildKind, file: Option<&Path
     let dir = module_dir.clone().unwrap_or_else(|| root.to_path_buf());
     let system = detect_dir(&dir, model, root)
         .or_else(|| if model.gradle.is_some() { Some(BuildSystem::Gradle) } else { None })
-        .ok_or_else(|| IdeError::not_found("no supported build system (Maven, Gradle, Cargo, Go, TypeScript) found"))?;
+        .ok_or_else(|| {
+            IdeError::not_found("no supported build system (Maven, Gradle, CMake, Cargo, Go, TypeScript) found")
+        })?;
     let module = module_dir.as_deref().filter(|d| *d != root);
     let title = match module {
         Some(d) => format!(
@@ -200,6 +208,7 @@ pub fn plan(root: &Path, model: &BuildModel, kind: BuildKind, file: Option<&Path
     let steps = match system {
         BuildSystem::Maven => maven_steps(root, model, kind, module_dir.as_deref())?,
         BuildSystem::Gradle => gradle_steps(root, model, kind, module_dir.as_deref())?,
+        BuildSystem::CMake => cmake_steps(&dir, kind),
         BuildSystem::Cargo => cargo_steps(&dir, kind),
         // Go builds the file's package (a module holds many).
         BuildSystem::Go => go_steps(file.and_then(Path::parent).unwrap_or(&dir), kind),
@@ -277,6 +286,49 @@ fn gradle_steps(root: &Path, model: &BuildModel, kind: BuildKind, module: Option
     s.args.extend(tasks);
     s.env = g.env.clone();
     Ok(vec![s])
+}
+
+/// CMake build directories: every direct child holding a `CMakeCache.txt` (CLion's
+/// `cmake-build-*`, a manually configured `build/`, …), else the conventional `build/`.
+fn cmake_build_dirs(dir: &Path) -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() && path.join("CMakeCache.txt").is_file() {
+                dirs.push(path);
+            }
+        }
+    }
+    if dirs.is_empty() {
+        dirs.push(dir.join("build"));
+    }
+    dirs.sort();
+    dirs
+}
+
+fn cmake_steps(dir: &Path, kind: BuildKind) -> Vec<BuildStep> {
+    let mut steps = Vec::new();
+    for build in cmake_build_dirs(dir) {
+        // Paths relative to the project root, so the console and the build tree show
+        // the same short command lines a CMake project uses by hand.
+        let rel = rel_str(dir, &build);
+        let build_arg = if rel.is_empty() { "." } else { rel.as_str() };
+        if !build.join("CMakeCache.txt").is_file() {
+            steps.push(BuildStep::new(
+                "cmake",
+                &["-S", ".", "-B", build_arg, "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"],
+                dir,
+                Format::GccClang,
+            ));
+        }
+        let mut args = vec!["--build", build_arg];
+        if kind == BuildKind::Rebuild {
+            args.push("--clean-first");
+        }
+        steps.push(BuildStep::new("cmake", &args, dir, Format::GccClang));
+    }
+    steps
 }
 
 fn cargo_steps(dir: &Path, kind: BuildKind) -> Vec<BuildStep> {
@@ -817,6 +869,33 @@ mod tests {
         let none = tmp.path().join("none");
         std::fs::create_dir_all(&none).unwrap();
         assert!(plan(&none, &BuildModel::default(), BuildKind::Build, None).is_err());
+    }
+
+    #[test]
+    fn cmake_configure_and_build_steps() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("cm");
+        write(&root, "CMakeLists.txt", "project(demo)\n");
+        write(&root, "src/main.cpp", "int main() {}\n");
+        let model = BuildModel::default();
+        let p = plan(&root, &model, BuildKind::Build, Some(&root.join("src/main.cpp"))).unwrap();
+        assert_eq!(p.system, BuildSystem::CMake);
+        assert_eq!(p.title, "cm");
+        assert_eq!(p.steps.len(), 2);
+        assert_eq!(p.steps[0].program, "cmake");
+        assert_eq!(p.steps[0].args, ["-S", ".", "-B", "build", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]);
+        assert_eq!(p.steps[0].cwd, root);
+        assert_eq!(p.steps[1].args, ["--build", "build"]);
+        assert_eq!(
+            plan(&root, &model, BuildKind::Rebuild, None).unwrap().steps[1].args,
+            ["--build", "build", "--clean-first"]
+        );
+
+        // A configured build tree is used as is: no configure step runs for it.
+        write(&root, "cmake-build-debug/CMakeCache.txt", "");
+        let p = plan(&root, &model, BuildKind::Build, None).unwrap();
+        assert_eq!(p.steps.len(), 1);
+        assert_eq!(p.steps[0].args, ["--build", "cmake-build-debug"]);
     }
 
     #[test]

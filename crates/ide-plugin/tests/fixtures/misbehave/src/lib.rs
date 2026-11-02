@@ -5,7 +5,7 @@ wit_bindgen::generate!({
     path: "../../../../../wit",
 });
 
-use openidea::plugin::host;
+use openclion::plugin::host;
 
 struct Misbehave;
 

@@ -1,0 +1,39 @@
+/**
+ * The CMake tool window in plain-browser mode: the sample project is a CMake
+ * C++ tree, so the window registers itself like it does for a real project and
+ * shows the model the backend would return.
+ */
+import type { Page } from "@playwright/test";
+import { expect, openFromTree, test } from "./fixtures";
+
+async function openCmakeWindow(page: Page) {
+  const stripe = page.getByRole("toolbar", { name: "Right tool windows" });
+  await stripe.getByRole("button", { name: "CMake", exact: true }).click();
+  const window = page.getByRole("region", { name: "CMake" });
+  await expect(window).toBeVisible();
+  return window;
+}
+
+test("lists build directories, targets and the compile database", async ({ workbench: page }) => {
+  const window = await openCmakeWindow(page);
+  const tree = window.getByRole("tree", { name: "CMake" });
+  await expect(tree.getByRole("treeitem", { name: /^acme-api$/ })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /^Debug/ })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /^Targets$/ })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /^acme$/ })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /^acme_tests$/ })).toBeVisible();
+  // Non-executable targets carry their kind as IDEA-style detail text.
+  await expect(tree.getByRole("treeitem", { name: /^greeter static library$/ })).toBeVisible();
+  await expect(tree.getByRole("treeitem", { name: /^compile_commands\.json$/ })).toBeVisible();
+});
+
+test("keeps the workbench version and the CMake tool window", async ({ workbench: page }, info) => {
+  await openFromTree(page, "src/main.cpp");
+  await openCmakeWindow(page);
+  await expect(page.locator(".cm-editor").first().locator(".cm-content")).toContainText("main");
+  await page.screenshot({ path: "docs/media/openclion-cmake.png", animations: "disabled" });
+  await info.attach("workbench", {
+    body: await page.screenshot({ animations: "disabled" }),
+    contentType: "image/png",
+  });
+});

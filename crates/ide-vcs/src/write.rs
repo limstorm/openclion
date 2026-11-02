@@ -389,7 +389,7 @@ fn commit_partial(
     partial: &[crate::PartialCommitFile],
     encoding: &dyn Fn(&Path) -> IdeResult<TextEncoding>,
 ) -> IdeResult<()> {
-    let tmp = TempIndex(r.git_dir.join("openidea-partial-index"));
+    let tmp = TempIndex(r.git_dir.join("openclion-partial-index"));
     let index = r.git_dir.join("index");
     if index.exists() {
         std::fs::copy(&index, &tmp.0)?;
