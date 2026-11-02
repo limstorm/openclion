@@ -12,14 +12,15 @@ import { caretAnchor, openPopup } from "@/editor/lsp/popupStore";
 import { dedupeLocations, locationItems, navigateTo } from "@/editor/lsp/navigation";
 import { showHint } from "@/editor/lsp/hint";
 import { registerActions, executeAction, type Action } from "@/platform/actions";
-import { call, commands, isCancelled, type Location, type OutlineItem, type Pos } from "@/platform/ipc";
+import { call, commands, isCancelled, isTauri, type Location, type OutlineItem, type Pos } from "@/platform/ipc";
 import { basename, useProject } from "@/platform/project";
 import { currentRoots } from "@/platform/projectRoots";
 import { isVirtualUri } from "@/platform/virtualDocs";
-import { editorService } from "@/workbench/contributions";
+import { editorService, notifications } from "@/workbench/contributions";
 import { fileIconName } from "@/ui";
 import { gotoTestOrSubject, type TestNavDeps } from "./gotoTest";
 import { baseName, memberAt, methodStop, superMethods } from "./structureNav";
+import { switchToRelated } from "./relatedSymbol";
 import { tx } from "@/platform/i18n";
 
 const EDITOR_WHEN = "textEditorActive && (editorFocus || popupOpen || !toolWindowFocus)";
@@ -165,6 +166,28 @@ async function gotoTest(view: EditorView) {
   }
 }
 
+/**
+ * CLion's "Go to Related Symbol": the header of a C/C++ source (and the source
+ * of a header). The backend resolves the conventional `src/` ↔ `include/`
+ * layout and falls back to the project index.
+ */
+async function relatedSymbol() {
+  const path = editorService().activePath();
+  if (!path || isVirtualUri(path) || !isTauri()) return;
+  await switchToRelated(path, {
+    related: (p) => call(commands.cppRelatedFiles(p)),
+    open: (p) => editorService().openFile(p, { focus: true }),
+    hint: (message) =>
+      notifications().notify({
+        group: "navigation",
+        level: "info",
+        title: "No related file",
+        body: message,
+        key: "related-symbol-none",
+      }),
+  });
+}
+
 function editorAction(
   id: string,
   title: string,
@@ -192,6 +215,10 @@ export function registerNavigationActions(): () => void {
     }),
     editorAction("navigate.nextMethod", "Next Method", (v) => gotoMethod(v, 1)),
     editorAction("navigate.previousMethod", "Previous Method", (v) => gotoMethod(v, -1)),
+    editorAction("navigate.relatedSymbol", "Related Symbol", () => relatedSymbol(), {
+      description: "Switches between a C/C++ source and its header",
+      keywords: ["header", "source", "switch", "cpp", "hpp", "include"],
+    }),
   ]);
 }
 

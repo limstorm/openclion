@@ -823,6 +823,8 @@ export const commands = {
 	debugListenForJvm: (request: RequestId, host: string, port: number) => typedError<number, IdeError>(__TAURI_INVOKE("debug_listen_for_jvm", { request, host, port })),
 	/**  HotSwap (Reload Changed Classes) in a java-debug session. */
 	debugRedefineClasses: (session: DebugSessionId) => typedError<HotSwapResult, IdeError>(__TAURI_INVOKE("debug_redefine_classes", { session })),
+	/**  Headers related to a C/C++ source (or sources related to a header), best first. */
+	cppRelatedFiles: (path: string) => typedError<IpcPath[], IdeError>(__TAURI_INVOKE("cpp_related_files", { path })),
 	/**
 	 *  How to run `config` with coverage: the command to launch and where its report will be,
 	 *  or which tool is missing.

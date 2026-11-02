@@ -5539,5 +5539,9 @@
   "Quote arguments containing spaces. Build arguments go to cmake --build; use -- before native build tool options. Compilers become -DCMAKE_C_COMPILER / -DCMAKE_CXX_COMPILER; a toolchain file replaces them for cross-compilation. Empty fields keep CMake's default (the detected compiler).": "包含空格的参数请加引号。构建参数传给 cmake --build；本地构建工具的参数放在 -- 之后。编译器会变成 -DCMAKE_C_COMPILER / -DCMAKE_CXX_COMPILER；交叉编译时可用工具链文件替代。留空则使用 CMake 的默认值（检测到的编译器）。",
   "C compiler": "C 编译器",
   "C++ compiler": "C++ 编译器",
-  "Toolchain file": "工具链文件"
+  "Toolchain file": "工具链文件",
+  "No related file": "没有相关文件",
+  "Switches between a C/C++ source and its header": "在 C/C++ 源文件与对应头文件之间切换",
+  "No header or source with the same name was found for {path}.": "未找到与 {path} 同名的头文件或源文件。",
+  "Related Symbol": "相关符号"
 }

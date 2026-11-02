@@ -60,6 +60,8 @@ export const intellijWindows: Record<string, string[]> = {
   "navigate.previousMethod": ["Alt+Up"],
   "navigate.nextOccurrence": ["Ctrl+Alt+Down"],
   "navigate.prevOccurrence": ["Ctrl+Alt+Up"],
+  // CLion: switch between a source and its header (either direction).
+  "navigate.relatedSymbol": ["Ctrl+Alt+Shift+U"],
 
   // Find
   "find.inFile": ["Ctrl+F"],

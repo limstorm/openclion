@@ -197,8 +197,10 @@ Ordered by how much they would be missed by a CLion user:
    `src/features/debugger`.
 2. **CMakePresets as profiles** — presets are listed read-only; CLion lets you
    select a preset and drive configure/build from it.
-3. **C++ editor features** — header/source switch, generate definitions, include
-   fixer, "Extract function" for C++, and clang-format as a first-class formatter.
+3. **C++ editor features** — the source ↔ header switch is in (`Go to Related
+   Symbol`, `navigate.relatedSymbol`, `ide_host::ops::cpp`); still missing are
+   generate definitions, the include fixer, "Extract function" for C++ and
+   clang-format as a first-class formatter.
 4. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
    no counterpart here yet.
 5. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the

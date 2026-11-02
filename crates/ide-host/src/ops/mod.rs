@@ -8,6 +8,7 @@ pub mod build;
 pub mod bytes;
 pub mod cmake;
 pub mod coverage;
+pub mod cpp;
 pub mod debug;
 pub mod dependencies;
 pub mod deploy;
@@ -73,6 +74,7 @@ pub fn register_all(d: &mut crate::rpc::Dispatcher) {
     spell::register(d);
     dependencies::register(d);
     history::register(d);
+    cpp::register(d);
     coverage::register(d);
     build::register(d);
     cmake::register(d);

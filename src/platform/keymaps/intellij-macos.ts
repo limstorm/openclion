@@ -59,6 +59,8 @@ export const intellijMacos: Record<string, string[]> = {
   "navigate.previousMethod": ["Ctrl+Shift+Up"],
   "navigate.nextOccurrence": ["Meta+Alt+Down"],
   "navigate.prevOccurrence": ["Meta+Alt+Up"],
+  // CLion: switch between a source and its header (either direction).
+  "navigate.relatedSymbol": ["Meta+Ctrl+Up", "Meta+Ctrl+Down"],
 
   // Find
   "find.inFile": ["Meta+F"],
