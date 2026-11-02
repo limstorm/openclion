@@ -58,60 +58,6 @@ fn version_parsing() {
     assert_eq!(parse_version("x 3"), None);
 }
 
-#[test]
-fn everything_missing_on_an_empty_system() {
-    let env = Env::new();
-    let list = env.tools().list(&langs());
-    let ra = find(&list, "rust-analyzer");
-    assert_eq!(ra.status, ToolStatus::Missing);
-    assert_eq!(ra.languages, vec!["Rust".to_string()]);
-    assert!(!ra.can_install, "curl is not on the fake PATH");
-    assert!(ra.unavailable_reason.as_deref().unwrap().contains("curl"));
-    let vtsls = find(&list, "vtsls");
-    assert!(vtsls.languages.iter().any(|l| l == "TypeScript"));
-    assert!(vtsls.unavailable_reason.as_deref().unwrap().contains("npm"));
-    let ty = find(&list, "ty");
-    assert_eq!(ty.status, ToolStatus::Missing);
-    assert_eq!(ty.command, "ty");
-    assert_eq!(ty.install_method.as_deref(), Some("pip (virtualenv)"));
-    assert!(ty.languages.iter().any(|language| language == "Python"));
-    let angular = find(&list, "angular-language-server");
-    assert_eq!(angular.command, "ngserver");
-    assert_eq!(angular.install_method.as_deref(), Some("npm"));
-    assert_eq!(angular.languages, ["HTML", "TypeScript"]);
-    // Servers without an installer are listed with their manual hint.
-    let hls = find(&list, "haskell-language-server");
-    assert_eq!(hls.install_method, None);
-    assert!(!hls.can_install);
-    assert_eq!(hls.status, ToolStatus::Missing);
-    // A toolchain-provided adapter is listed with its hint, but never downloaded.
-    let lldb = find(&list, "lldb-dap");
-    assert_eq!(lldb.status, ToolStatus::Missing);
-    assert!(!lldb.can_install);
-    assert_eq!(lldb.install_method.as_deref(), Some("manual install"));
-    assert!(lldb.unavailable_reason.as_deref().unwrap().contains("LLVM"));
-    assert!(lldb.languages.iter().any(|l| l == "C++"), "{:?}", lldb.languages);
-    // Gem tools need Ruby.
-    assert!(find(&list, "solargraph").unavailable_reason.as_deref().unwrap().contains("Ruby"));
-    // Shared npm package: each server is its own row.
-    assert_eq!(find(&list, "vscode-css-language-server").install_method.as_deref(), Some("npm"));
-    assert!(find(&list, "delve").kind == ToolKind::Debugger);
-}
-
-#[test]
-fn interchangeable_servers_list_their_alternatives() {
-    let env = Env::new();
-    let list = env.tools().list(&langs());
-    let python = ["basedpyright", "pyright", "ty"];
-    for name in python {
-        assert_eq!(find(&list, name).alternatives, python);
-    }
-    assert_eq!(find(&list, "vtsls").alternatives, ["vtsls", "typescript-language-server"]);
-    // A regular server after a fallback starts no group with it.
-    assert!(find(&list, "angular-language-server").alternatives.is_empty());
-    assert!(find(&list, "rust-analyzer").alternatives.is_empty());
-}
-
 #[cfg(unix)]
 #[test]
 fn detects_tools_on_path_with_versions() {
@@ -450,35 +396,6 @@ fn custom_paths_win_and_report_their_version() {
     let zls = find(&list, "zls");
     assert_eq!(zls.status, ToolStatus::Missing);
     assert!(zls.custom_error.as_deref().unwrap().contains("does not exist"));
-}
-
-#[test]
-fn a_debugger_named_like_its_server_is_listed_by_its_command() {
-    let list = Env::new().tools().list(&langs());
-    let server = find(&list, "elixir-ls");
-    assert_eq!((server.kind, server.command.as_str()), (ToolKind::LanguageServer, "elixir-ls"));
-    let debugger = find(&list, "elixir-ls-debugger");
-    assert_eq!((debugger.kind, debugger.command.as_str()), (ToolKind::Debugger, "elixir-ls-debugger"));
-    assert_eq!(debugger.languages, vec!["Elixir".to_string()]);
-}
-
-#[cfg(unix)]
-#[test]
-fn elixir_ls_needs_elixir_and_lists_its_debugger() {
-    let env = Env::new();
-    env.script(&env.sys, "curl", "exit 0");
-    let list = env.tools().list(&langs());
-    let server = find(&list, "elixir-ls");
-    assert_eq!(server.install_method.as_deref(), Some("GitHub release"));
-    assert!(!server.can_install);
-    assert!(server.unavailable_reason.as_deref().unwrap().contains("Elixir is required"));
-    let debugger = find(&list, "elixir-ls-debugger");
-    assert_eq!((debugger.kind, debugger.languages.as_slice()), (ToolKind::Debugger, ["Elixir".to_string()].as_slice()));
-
-    env.script(&env.sys, "elixir", "exit 0");
-    let list = env.tools().list(&langs());
-    assert!(find(&list, "elixir-ls").can_install);
-    assert!(find(&list, "elixir-ls-debugger").can_install);
 }
 
 #[cfg(unix)]

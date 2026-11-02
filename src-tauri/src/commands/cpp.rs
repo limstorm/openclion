@@ -25,3 +25,29 @@ pub async fn cpp_generate_definition(
 ) -> IdeResult<ide_host::ops::cpp::GeneratedDefinition> {
     ide_host::ops::cpp::generate_definition(&state.host, window.label(), doc, pos, request).await
 }
+
+/// The base-class virtual members the C/C++ class at `pos` can override, for
+/// the chooser: name, signature, and where the base class is declared.
+#[tauri::command]
+#[specta::specta]
+pub async fn cpp_members(
+    window: Window,
+    state: State<'_, AppState>,
+    doc: DocId,
+    pos: Pos,
+) -> IdeResult<Vec<ide_host::ops::cpp::GeneratableMember>> {
+    ide_host::ops::cpp::members_to_generate(&state.host, window.label(), doc, pos).await
+}
+
+/// Inserts a stub for every base-class virtual member the C/C++ class at `pos`
+/// does not override yet, and returns the file and line of the first stub.
+#[tauri::command]
+#[specta::specta]
+pub async fn cpp_generate_members(
+    window: Window,
+    state: State<'_, AppState>,
+    doc: DocId,
+    pos: Pos,
+) -> IdeResult<ide_host::ops::cpp::GeneratedDefinition> {
+    ide_host::ops::cpp::generate_members(&state.host, window.label(), doc, pos).await
+}

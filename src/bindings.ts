@@ -647,6 +647,7 @@ export const commands = {
 	debugVariables: (session: DebugSessionId, reference: number) => typedError<Variable[], IdeError>(__TAURI_INVOKE("debug_variables", { session, reference })),
 	debugEvaluate: (session: DebugSessionId, frameId: number | null, expression: string) => typedError<Variable, IdeError>(__TAURI_INVOKE("debug_evaluate", { session, frameId, expression })),
 	debugReadMemory: (session: DebugSessionId, memoryReference: string, offset: number, count: number) => typedError<MemoryBytes, IdeError>(__TAURI_INVOKE("debug_read_memory", { session, memoryReference, offset, count })),
+	debugDisassemble: (session: DebugSessionId, memoryReference: string, instructionOffset: number, count: number) => typedError<DisassembledInstruction[], IdeError>(__TAURI_INVOKE("debug_disassemble", { session, memoryReference, instructionOffset, count })),
 	debugResume: (session: DebugSessionId, threadId: number) => typedError<null, IdeError>(__TAURI_INVOKE("debug_resume", { session, threadId })),
 	debugPause: (session: DebugSessionId, threadId: number) => typedError<null, IdeError>(__TAURI_INVOKE("debug_pause", { session, threadId })),
 	debugStep: (session: DebugSessionId, threadId: number, kind: StepKind) => typedError<null, IdeError>(__TAURI_INVOKE("debug_step", { session, threadId, kind })),
@@ -813,6 +814,16 @@ export const commands = {
 	 *  matching source file, and returns where it was written.
 	 */
 	cppGenerateDefinition: (doc: DocId, pos: Pos, request: number | null) => typedError<GeneratedDefinition, IdeError>(__TAURI_INVOKE("cpp_generate_definition", { doc, pos, request })),
+	/**
+	 *  The base-class virtual members the C/C++ class at `pos` can override, for
+	 *  the chooser: name, signature, and where the base class is declared.
+	 */
+	cppMembers: (doc: DocId, pos: Pos) => typedError<GeneratableMember[], IdeError>(__TAURI_INVOKE("cpp_members", { doc, pos })),
+	/**
+	 *  Inserts a stub for every base-class virtual member the C/C++ class at `pos`
+	 *  does not override yet, and returns the file and line of the first stub.
+	 */
+	cppGenerateMembers: (doc: DocId, pos: Pos) => typedError<GeneratedDefinition, IdeError>(__TAURI_INVOKE("cpp_generate_members", { doc, pos })),
 	/**
 	 *  How to run `config` with coverage: the command to launch and where its report will be,
 	 *  or which tool is missing.
@@ -2576,6 +2587,8 @@ export type DebugCapabilities = {
 	logPoints: boolean,
 	/**  The Memory view can read the debuggee's memory (`readMemory`). */
 	readMemory: boolean,
+	/**  The Disassembly view can disassemble (`disassemble`). */
+	disassemble: boolean,
 };
 
 export type DebugEvent = 
@@ -2729,6 +2742,19 @@ export type DirectoryHistory = {
 	entries: HistoryEntry[],
 	/**  Files with history that no longer exist on disk. */
 	deleted: IpcPath[],
+};
+
+/**  One machine instruction of the Disassembly view. */
+export type DisassembledInstruction = {
+	/**  Address as text (`0x00005555555551a0`), the adapter's formatting. */
+	address: string,
+	/**  Mnemonic plus operands, as the adapter printed it. */
+	instruction: string,
+	symbol: string | null,
+	/**  Source location the instruction was built from, when debug info says. */
+	file: IpcPath | null,
+	/**  0-based line in `file`. */
+	line: number | null,
 };
 
 /**  Checking out remote `origin/x` while local `x` has commits `origin/x` lacks. */
@@ -3438,6 +3464,22 @@ export type GeneralSettings = {
 	powerSaveMode?: boolean,
 	/**  File › Rename Project… (project layer): the name shown for the project; empty = its folder name. */
 	projectName?: string,
+};
+
+/**
+ *  One base-class virtual member "Generate Override/Implement Methods" can add
+ *  to a class, as the chooser lists it.
+ */
+export type GeneratableMember = {
+	name: string,
+	/**  The base declaration, e.g. `virtual void speak() const = 0`. */
+	signature: string,
+	/**  The base class, as written in the derived class's base list. */
+	class: string,
+	/**  Where the base class is declared. */
+	file: IpcPath,
+	/**  1-based line of the base class declaration. */
+	line: number,
 };
 
 /**  Where "Generate definition" put the stub. */
@@ -5592,6 +5634,8 @@ export type Scope = {
 	name: string,
 	variablesReference: number,
 	expensive: boolean,
+	/**  `arguments` | `locals` | `registers` | `globals`; the Registers view uses it. */
+	presentationHint: string | null,
 };
 
 /**  One installed interpreter / toolchain. */
@@ -5982,6 +6026,11 @@ export type StackFrame = {
 	column: number,
 	/**  `subtle` frames (library/generated) are collapsed in the UI. */
 	presentationHint: string | null,
+	/**
+	 *  Address of the frame's current instruction (`instructionPointerReference`), for
+	 *  the Disassembly view; `None` for adapters that do not report one.
+	 */
+	instructionPointer: string | null,
 };
 
 export type StartupMetrics = {

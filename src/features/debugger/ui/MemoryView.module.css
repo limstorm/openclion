@@ -99,3 +99,47 @@
   border-left: 1px solid var(--border-subtle, #ebecf0);
   text-align: left;
 }
+
+.headerRow {
+  position: sticky;
+  top: 0;
+  background: var(--bg-panel, inherit);
+}
+
+.currentInstruction {
+  background: var(--bg-selected, rgba(53, 116, 210, 0.14));
+}
+
+.changedValue {
+  color: var(--text-changed, #c77d00);
+}
+
+.instructionCell {
+  flex: 1 1 auto;
+  text-align: left;
+  padding-left: 6px;
+}
+
+.symbolCell {
+  flex: 0 0 14em;
+  text-align: left;
+  color: var(--text-muted, #6c707e);
+}
+
+.locationCell {
+  flex: 0 0 12em;
+  text-align: left;
+}
+
+.locationLink {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--link-color, #3574d2);
+  cursor: pointer;
+  font: inherit;
+}
+
+.locationLink:hover {
+  text-decoration: underline;
+}

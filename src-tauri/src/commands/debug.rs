@@ -74,6 +74,18 @@ pub async fn debug_evaluate(
 
 #[tauri::command]
 #[specta::specta]
+pub async fn debug_disassemble(
+    state: State<'_, AppState>,
+    session: DebugSessionId,
+    memory_reference: String,
+    instruction_offset: i64,
+    count: u32,
+) -> IdeResult<Vec<ide_dap::DisassembledInstruction>> {
+    ide_host::ops::debug::debug_disassemble(&state.host, "", session, memory_reference, instruction_offset, count).await
+}
+
+#[tauri::command]
+#[specta::specta]
 pub async fn debug_read_memory(
     state: State<'_, AppState>,
     session: DebugSessionId,

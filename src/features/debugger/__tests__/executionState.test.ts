@@ -36,6 +36,7 @@ const frame = (line: number, id = 100): StackFrame => ({
   line,
   column: 0,
   presentationHint: null,
+  instructionPointer: null,
 });
 const stopped = (threadId = 5, allThreadsStopped = false) =>
   handleDebugEvent(1, { kind: "stopped", threadId, allThreadsStopped, reason: "step", description: null });

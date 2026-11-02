@@ -298,6 +298,43 @@ export async function applyKindSilently(view: EditorView, kind: string): Promise
 }
 
 /**
+ * Applies every enabled action of `kind` that `predicate` accepts, re-querying
+ * the server after each one (the document changed under the previous edits).
+ * Used by "Fix Missing Includes", where clangd reports one quick fix per symbol.
+ */
+export async function applyAllKind(
+  view: EditorView,
+  kind: string,
+  predicate: (action: CodeAction) => boolean,
+  max = 10,
+): Promise<number> {
+  let applied = 0;
+  for (let i = 0; i < max; i++) {
+    const doc = docOf(view);
+    if (!doc || doc.readOnly) break;
+    let actions: CodeAction[];
+    try {
+      actions = (await fetchActions(view, [kind], true)).filter(
+        (a) => a.kind?.startsWith(kind) && !a.disabledReason && predicate(a),
+      );
+    } catch {
+      break;
+    }
+    const action = actions[0];
+    if (!action) break;
+    const before = view.state.doc;
+    try {
+      await lspRequest(() => commands.lspApplyCodeAction(doc.doc, action));
+    } catch {
+      break;
+    }
+    applied++;
+    for (let wait = 0; wait < 25 && view.state.doc === before; wait++) await new Promise((r) => setTimeout(r, 20));
+  }
+  return applied;
+}
+
+/**
  * Sorted, one action per title: servers can report the same action under two
  * kinds (jdtls: "Generate toString()" as quickassist and source.generate).
  */

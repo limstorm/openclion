@@ -451,6 +451,8 @@ pub fn spec(os: Os) -> Vec<Entry> {
             act("code.showIntentions", "Show Context Actions"),
             act("code.generate", "Generate…"),
             act("cpp.generateDefinition", "Generate Definition"),
+            act("cpp.generateMembers", "Generate Override/Implement Methods"),
+            act("cpp.fixIncludes", "Fix Missing Includes"),
             act("code.overrideMethods", "Override Methods…"),
             act("code.implementMethods", "Implement Methods…"),
             SEP,

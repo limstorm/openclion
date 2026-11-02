@@ -83,6 +83,18 @@ pub async fn debug_variables(
     host.debugger.variables(session, reference).await
 }
 
+/// Instructions around `memory_reference` for the Disassembly view (DAP `disassemble`).
+pub async fn debug_disassemble(
+    host: &Host,
+    _window: &str,
+    session: DebugSessionId,
+    memory_reference: String,
+    instruction_offset: i64,
+    count: u32,
+) -> IdeResult<Vec<ide_dap::DisassembledInstruction>> {
+    host.debugger.disassemble(session, memory_reference, instruction_offset, count).await
+}
+
 /// Bytes at `memory_reference` for the Memory view (DAP `readMemory`).
 pub async fn debug_read_memory(
     host: &Host,
@@ -281,6 +293,17 @@ pub(crate) fn register(d: &mut Dispatcher) {
     });
     d.add("debug_evaluate", |c| async move {
         debug_evaluate(&c.host, &c.window, c.arg("session")?, c.arg("frameId")?, c.arg("expression")?).await
+    });
+    d.add("debug_disassemble", |c| async move {
+        debug_disassemble(
+            &c.host,
+            &c.window,
+            c.arg("session")?,
+            c.arg("memoryReference")?,
+            c.arg("instructionOffset")?,
+            c.arg("count")?,
+        )
+        .await
     });
     d.add("debug_read_memory", |c| async move {
         debug_read_memory(

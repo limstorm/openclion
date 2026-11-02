@@ -78,6 +78,7 @@ async fn fake_adapter<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(stream
                     "supportsStepInTargetsRequest": true,
                     "supportsRestartFrame": true,
                     "supportsReadMemoryRequest": true,
+                    "supportsDisassembleRequest": true,
                     "exceptionBreakpointFilters": [
                         {"filter": "raised", "label": "Raised"},
                         {"filter": "uncaught", "label": "Uncaught", "default": true, "description": "Uncaught exceptions"},
@@ -169,6 +170,14 @@ async fn fake_adapter<S: AsyncRead + AsyncWrite + Unpin + Send + 'static>(stream
                 ]})
             ),
             "evaluate" => ok!(msg, json!({"result": "42", "type": "int", "variablesReference": 0})),
+            "disassemble" => ok!(
+                msg,
+                json!({"instructions": [
+                    {"address": "0x1000", "instruction": "push rbp", "symbol": "main",
+                     "location": {"path": "/p/src/main.cpp", "line": 5}},
+                    {"address": "0x1001", "instruction": "mov rbp, rsp"}
+                ]})
+            ),
             "readMemory" => ok!(
                 msg,
                 json!({
@@ -821,6 +830,27 @@ async fn memory_reads_decode_the_adapter_payload() {
     // The request names the reference, the offset inside it and the byte count.
     assert_eq!(h.request("readMemory")["arguments"], json!({"memoryReference": "&buf", "offset": 16, "count": 32}));
     assert!(h.manager.capabilities(id).unwrap().read_memory);
+    h.manager.stop(id).await.unwrap();
+}
+
+#[tokio::test]
+async fn disassembly_reads_instructions_around_a_reference() {
+    let h = harness(Script::default());
+    let id = h.start(config()).await.unwrap();
+    h.wait_event(|e| matches!(e, DebugEvent::Stopped { .. })).await;
+
+    let instructions = h.manager.disassemble(id, "0x1000".into(), -2, 3).await.unwrap();
+    assert_eq!(instructions.len(), 2);
+    assert_eq!(instructions[0].address, "0x1000");
+    assert_eq!(instructions[0].instruction, "push rbp");
+    assert_eq!(instructions[0].symbol.as_deref(), Some("main"));
+    assert_eq!(instructions[0].line, Some(4));
+    assert_eq!(instructions[1].line, None);
+    assert_eq!(
+        h.request("disassemble")["arguments"],
+        json!({"memoryReference": "0x1000", "instructionOffset": -2, "instructionCount": 3, "resolveSymbols": true})
+    );
+    assert!(h.manager.capabilities(id).unwrap().disassemble);
     h.manager.stop(id).await.unwrap();
 }
 

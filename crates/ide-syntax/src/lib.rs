@@ -30,7 +30,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub use cpp::CppDeclaration;
+pub use cpp::{CppClass, CppDeclaration, CppMember, class_in_text};
 pub use jvm::{JvmPresentation, JvmTypeKind};
 pub use types::*;
 
@@ -180,6 +180,26 @@ impl StructureService {
         let cpp = LanguageId::new("cpp");
         let as_cpp = Snapshot::text(&cpp, snap.text);
         self.run(&as_cpp, cancel, |cx| cpp::declaration_at(cx, pos))
+    }
+
+    /// The C/C++ class the caret sits in, for "Generate Override/Implement
+    /// Methods": its base classes and its member functions. `None` when the
+    /// caret is not inside a `class` / `struct` body.
+    pub fn cpp_class_at(
+        &self,
+        snap: &Snapshot,
+        pos: Pos,
+        cancel: &CancellationToken,
+    ) -> StructureResult<Option<CppClass>> {
+        let found = self.run(snap, cancel, |cx| cpp::class_at(cx, pos))?;
+        // `.h` headers are C and C++ at once: when the C grammar finds no
+        // class, C++ classes and methods are the likely reading.
+        if found.is_some() || snap.language.as_str() != "c" {
+            return Ok(found);
+        }
+        let cpp = LanguageId::new("cpp");
+        let as_cpp = Snapshot::text(&cpp, snap.text);
+        self.run(&as_cpp, cancel, |cx| cpp::class_at(cx, pos))
     }
 
     /// The expression a selection denotes (exact or minimally enclosing), its

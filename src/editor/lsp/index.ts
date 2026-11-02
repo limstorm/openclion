@@ -32,7 +32,7 @@ import { DocumentationWindow, LspPopups, UsagesStatus } from "./Popups";
 import { DOCUMENTATION_WINDOW } from "./docs";
 import { prefetchMarkdown } from "./markdown";
 import { implementationGutter, registerNavigationActions } from "@/editor/navigation";
-import { registerCppActions } from "@/editor/cpp";
+import { registerCppActions, registerCppMemberActions, registerIncludeFixer } from "@/editor/cpp";
 
 export function lspExtensions(ctx: EditorDocContext): Extension[] {
   return [
@@ -83,6 +83,8 @@ export function activate(): () => void {
     registerInlineCompletionActions(),
     registerNavigationActions(),
     registerCppActions(),
+    registerCppMemberActions(),
+    registerIncludeFixer(),
     registerFormatOnSave(),
     registerActionsOnSave(),
   ];

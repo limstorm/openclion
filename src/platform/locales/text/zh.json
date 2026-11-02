@@ -5479,6 +5479,8 @@
   "Selected presets drive configure, build and CTest through cmake --preset; the profiles below are ignored while presets are in use.": "选中的预设通过 cmake --preset 驱动配置、构建与 CTest；使用预设时下方的配置文件会被忽略。",
   "Generate Definition": "生成定义",
   "Creates the definition of a C/C++ declaration in the matching source file": "在对应源文件中为 C/C++ 声明创建定义",
+  "Generate Override/Implement Methods": "生成重写/实现方法",
+  "Creates stubs for the base-class virtual methods a C/C++ class does not override": "为 C/C++ 类未重写的基类虚方法创建存根",
   "Run with Valgrind Memcheck": "使用 Valgrind Memcheck 运行",
   "Run with Sanitizers": "启用 Sanitizer 运行",
   "Runs the selected configuration under Valgrind and reports its findings": "在 Valgrind 下运行所选配置并报告发现的问题",
@@ -5495,5 +5497,17 @@
   "No Valgrind report for '{name}'": "“{name}”没有 Valgrind 报告",
   "The run did not produce a report. Is valgrind installed and on PATH?": "本次运行没有生成报告。valgrind 是否已安装并在 PATH 中？",
   "Open Problems to see where the findings are.": "在 Problems 中查看问题所在位置。",
-  "{what} (in {function})": "{what}（位于 {function}）"
+  "{what} (in {function})": "{what}（位于 {function}）",
+  "Disassembly is not available for this debugger": "此调试器不支持反汇编",
+  "Disassembly is shown while the debugger is stopped.": "调试器暂停时才显示反汇编。",
+  "No program counter for this frame": "该栈帧没有程序计数器",
+  "Program counter": "程序计数器",
+  "Registers are not available for this debugger": "此调试器不支持寄存器视图",
+  "Registers are shown while the debugger is stopped.": "调试器暂停时才显示寄存器。",
+  "This debugger does not report registers": "此调试器不上报寄存器",
+  "Register": "寄存器",
+  "Added {applied} include(s).": "已添加 {applied} 个 include。",
+  "No missing include was reported here.": "此处没有报告缺失的 include。",
+  "Fix Missing Includes": "修复缺失的 include",
+  "Adds the includes clangd reports as missing in this file": "添加 clangd 在本文件中报告为缺失的 include"
 }

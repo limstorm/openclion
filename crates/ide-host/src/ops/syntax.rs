@@ -85,6 +85,18 @@ pub async fn syntax_cpp_declaration(
     on_doc(host, window, doc, request, move |s, snap, c| s.cpp_declaration_at(snap, pos, c)).await
 }
 
+/// The C/C++ class at `pos` ("Generate Override/Implement Methods"): its base
+/// classes and the member functions declared in its body.
+pub async fn syntax_cpp_class(
+    host: &Host,
+    window: &str,
+    doc: DocId,
+    pos: Pos,
+    request: Option<RequestId>,
+) -> IdeResult<Option<ide_syntax::CppClass>> {
+    on_doc(host, window, doc, request, move |s, snap, c| s.cpp_class_at(snap, pos, c)).await
+}
+
 /// `ERROR` / `MISSING` nodes (e.g. a missing `;`) in document order.
 pub async fn syntax_errors(
     host: &Host,

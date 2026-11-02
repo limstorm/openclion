@@ -34,7 +34,17 @@ const session: DebugSession = {
   stopDescription: null,
   threads: [{ id: 1, name: "MainThread" }],
   selectedThread: 1,
-  frames: [{ id: 7, name: "main", path: "/p/app/main.py", line: 11, column: 0, presentationHint: null }],
+  frames: [
+    {
+      id: 7,
+      name: "main",
+      path: "/p/app/main.py",
+      line: 11,
+      column: 0,
+      presentationHint: null,
+      instructionPointer: null,
+    },
+  ],
   selectedFrame: 7,
   hits: 1,
   exitCode: null,

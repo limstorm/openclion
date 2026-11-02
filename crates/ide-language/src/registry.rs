@@ -536,45 +536,23 @@ mod tests {
         assert_eq!(detect(&reg, "README"), "plaintext");
         assert_eq!(detect(&reg, "unknown.zzz"), "plaintext");
         assert_eq!(reg.get(&LanguageId::new("bat")).unwrap().line_comment.as_deref(), Some("@REM"));
+        // Only the C/C++ family (and CMake) keep language servers now.
         let rust = reg.get(&LanguageId::new("rust")).unwrap();
-        assert_eq!(rust.language_servers[0].name, "rust-analyzer");
+        assert!(rust.language_servers.is_empty() && rust.debugger.is_none());
+        assert_eq!(rust.tree_sitter.as_deref(), Some("rust"), "syntax highlighting stays");
     }
 
     #[test]
-    fn alternative_servers_are_fallbacks() {
+    fn only_the_c_family_keeps_language_servers_and_debuggers() {
         let reg = reg();
-        for (lang, servers) in [
-            ("python", vec!["basedpyright", "pyright", "ty"]),
-            ("typescript", vec!["vtsls", "typescript-language-server"]),
-        ] {
-            let cfg = reg.get(&LanguageId::new(lang)).unwrap();
-            let got: Vec<(&str, bool)> = cfg
-                .language_servers
-                .iter()
-                .filter(|s| !s.require_root_marker)
-                .map(|s| (s.name.as_str(), s.fallback))
-                .collect();
-            let expected: Vec<(&str, bool)> = servers.iter().enumerate().map(|(i, name)| (*name, i > 0)).collect();
-            assert_eq!(got, expected);
+        let mut with_servers = Vec::new();
+        for lang in reg.all() {
+            if !lang.language_servers.is_empty() || lang.debugger.is_some() {
+                with_servers.push(lang.id.as_str().to_owned());
+            }
         }
-    }
-
-    #[test]
-    fn angular_server_joins_typescript_and_html_in_angular_projects() {
-        let reg = reg();
-        let names = |lang: &str| -> Vec<String> {
-            reg.get(&LanguageId::new(lang)).unwrap().language_servers.iter().map(|s| s.name.clone()).collect()
-        };
-        // After the TypeScript fallback (an available server before it would hide
-        // it); before the HTML server (hover, rename and symbols take the first).
-        assert_eq!(names("typescript"), ["vtsls", "typescript-language-server", "angular-language-server"]);
-        assert_eq!(names("html"), ["angular-language-server", "vscode-html-language-server"]);
-        for lang in ["typescript", "html"] {
-            let cfg = reg.get(&LanguageId::new(lang)).unwrap();
-            let angular = cfg.language_servers.iter().find(|s| s.name == "angular-language-server").unwrap();
-            assert!(angular.require_root_marker && !angular.fallback, "{lang}");
-            assert_eq!(angular.root_markers, ["angular.json", "node_modules/@angular/core"], "{lang}");
-        }
+        with_servers.sort();
+        assert_eq!(with_servers, ["c", "cmake", "cpp", "objective-c", "objective-cpp"]);
     }
 
     #[test]
@@ -795,17 +773,8 @@ mod tests {
         let indent = gd.indent.unwrap();
         assert!(!indent.insert_spaces, "Godot indents with tabs");
         assert_eq!(gd.tree_sitter.as_deref(), Some("gdscript"));
-        let ls = &gd.language_servers[0];
-        assert_eq!((ls.name.as_str(), ls.command.as_str()), ("godot", "godot"));
-        assert_eq!(ls.connect.as_deref(), Some("127.0.0.1:6005"));
-        assert_eq!(ls.root_markers, ["project.godot"]);
-        assert!(ls.args.iter().any(|a| a == "${port}") && ls.args.iter().any(|a| a == "${root}"));
-        let dbg = gd.debugger.as_ref().unwrap();
-        assert_eq!((dbg.adapter.as_str(), dbg.transport.as_str()), ("godot", "tcp"));
-        assert_eq!(dbg.connect.as_deref(), Some("127.0.0.1:6006"));
-        assert!(dbg.args.iter().any(|a| a == "--dap-port"));
-        let res = reg.get(&LanguageId::new("godot-resource")).unwrap();
-        assert_eq!(res.line_comment.as_deref(), Some(";"));
+        // Syntax stays; the Godot editor connection and debugger are gone.
+        assert!(gd.language_servers.is_empty() && gd.debugger.is_none());
     }
 
     #[test]

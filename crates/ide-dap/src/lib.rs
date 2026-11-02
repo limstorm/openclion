@@ -120,6 +120,8 @@ pub struct DebugCapabilities {
     pub log_points: bool,
     /// The Memory view can read the debuggee's memory (`readMemory`).
     pub read_memory: bool,
+    /// The Disassembly view can disassemble (`disassemble`).
+    pub disassemble: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
@@ -146,6 +148,9 @@ pub struct StackFrame {
     pub column: u32,
     /// `subtle` frames (library/generated) are collapsed in the UI.
     pub presentation_hint: Option<String>,
+    /// Address of the frame's current instruction (`instructionPointerReference`), for
+    /// the Disassembly view; `None` for adapters that do not report one.
+    pub instruction_pointer: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -154,6 +159,8 @@ pub struct Scope {
     pub name: String,
     pub variables_reference: i64,
     pub expensive: bool,
+    /// `arguments` | `locals` | `registers` | `globals`; the Registers view uses it.
+    pub presentation_hint: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, Type)]
@@ -165,6 +172,21 @@ pub struct Variable {
     /// > 0 when expandable.
     pub variables_reference: i64,
     pub evaluate_name: Option<String>,
+}
+
+/// One machine instruction of the Disassembly view.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct DisassembledInstruction {
+    /// Address as text (`0x00005555555551a0`), the adapter's formatting.
+    pub address: String,
+    /// Mnemonic plus operands, as the adapter printed it.
+    pub instruction: String,
+    pub symbol: Option<String>,
+    /// Source location the instruction was built from, when debug info says.
+    pub file: Option<ide_core::IpcPath>,
+    /// 0-based line in `file`.
+    pub line: Option<u32>,
 }
 
 /// A page of debuggee memory for the Memory view (DAP `readMemory`).
@@ -371,6 +393,7 @@ pub(crate) fn frame_from(f: &Value) -> StackFrame {
         line: (f.get("line").and_then(Value::as_u64).unwrap_or(0) as u32).saturating_sub(1),
         column: (f.get("column").and_then(Value::as_u64).unwrap_or(0) as u32).saturating_sub(1),
         presentation_hint: hint,
+        instruction_pointer: f.get("instructionPointerReference").and_then(Value::as_str).map(str::to_owned),
     }
 }
 
@@ -441,6 +464,7 @@ pub(crate) fn capabilities_from(caps: &Value) -> DebugCapabilities {
         hit_conditional_breakpoints: has("supportsHitConditionalBreakpoints"),
         log_points: has("supportsLogPoints"),
         read_memory: has("supportsReadMemoryRequest"),
+        disassemble: has("supportsDisassembleRequest"),
     }
 }
 
@@ -1004,6 +1028,7 @@ impl DebugManager {
                         name: sc.get("name").and_then(Value::as_str).unwrap_or_default().to_owned(),
                         variables_reference: sc.get("variablesReference").and_then(Value::as_i64).unwrap_or(0),
                         expensive: sc.get("expensive").and_then(Value::as_bool).unwrap_or(false),
+                        presentation_hint: sc.get("presentationHint").and_then(Value::as_str).map(str::to_owned),
                     })
                     .collect()
             })
@@ -1055,6 +1080,56 @@ impl DebugManager {
             data,
             unreadable_bytes: body.get("unreadableBytes").and_then(Value::as_u64).unwrap_or(0) as u32,
         })
+    }
+
+    /// `count` instructions at `memory_reference` (DAP `disassemble`), starting
+    /// `instruction_offset` instructions before it — the Disassembly view.
+    pub async fn disassemble(
+        &self,
+        s: DebugSessionId,
+        memory_reference: String,
+        instruction_offset: i64,
+        count: u32,
+    ) -> IdeResult<Vec<DisassembledInstruction>> {
+        const MAX_INSTRUCTIONS: u32 = 2000;
+        let session = self.session(s)?;
+        if !session.supports("supportsDisassembleRequest") {
+            return Err(IdeError::unavailable(format!("{} doesn't support disassembly", session.name)));
+        }
+        let count = count.clamp(1, MAX_INSTRUCTIONS);
+        let body = session
+            .conn
+            .request_timeout(
+                "disassemble",
+                json!({
+                    "memoryReference": memory_reference,
+                    "instructionOffset": instruction_offset,
+                    "instructionCount": count,
+                    "resolveSymbols": true
+                }),
+                REQUEST_TIMEOUT,
+            )
+            .await?;
+        let instruction = |i: &Value| {
+            let address = i.get("address").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let text = i.get("instruction").and_then(Value::as_str).unwrap_or_default().to_owned();
+            let location = i.get("location");
+            let file = location.and_then(|l| l.get("path")).and_then(Value::as_str).map(ide_core::IpcPath::from);
+            let line =
+                location.and_then(|l| l.get("line")).and_then(Value::as_u64).map(|l| (l as u32).saturating_sub(1));
+            DisassembledInstruction {
+                address,
+                instruction: text,
+                symbol: i.get("symbol").and_then(Value::as_str).map(str::to_owned),
+                file,
+                line,
+            }
+        };
+        Ok(body
+            .get("instructions")
+            .and_then(Value::as_array)
+            .map(|list| list.iter().map(instruction).collect())
+            .unwrap_or_default())
     }
 
     /// Evaluates in the `repl` context.

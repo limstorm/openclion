@@ -36,7 +36,9 @@ import {
   type DebugSession,
 } from "../state";
 import { DebugConsole } from "./DebugConsole";
+import { DebugDisassembly } from "./DisassemblyView";
 import { DebugMemory } from "./MemoryView";
+import { DebugRegisters } from "./RegisterView";
 import { VariablesView, type VarRoot } from "./VariablesView";
 import { sortVariables } from "../values";
 import { workflowSettings } from "@/platform/workflowSettings";
@@ -100,7 +102,7 @@ function MoreActions() {
   );
 }
 
-type Tab = "variables" | "memory" | "console";
+type Tab = "variables" | "memory" | "registers" | "disassembly" | "console";
 
 function statusText(s: DebugSession): string {
   if (s.status === "terminated") return s.exitCode != null ? `Finished · exit code ${s.exitCode}` : "Finished";
@@ -170,6 +172,8 @@ export function DebugToolWindow() {
             [
               ["variables", "Threads & Variables"],
               ["memory", "Memory"],
+              ["registers", "Registers"],
+              ["disassembly", "Disassembly"],
               ["console", "Console"],
             ] as const
           ).map(([id, label]) => (
@@ -221,6 +225,10 @@ export function DebugToolWindow() {
           <ThreadsAndVariables session={active} />
         ) : tab === "memory" ? (
           <DebugMemory session={active} />
+        ) : tab === "registers" ? (
+          <DebugRegisters session={active} />
+        ) : tab === "disassembly" ? (
+          <DebugDisassembly session={active} />
         ) : (
           <DebugConsole key={active.id} session={active} />
         )}

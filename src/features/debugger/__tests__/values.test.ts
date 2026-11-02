@@ -67,6 +67,7 @@ const frame = (id: number, path: string | null, hint: string | null = null, line
   line,
   column: 0,
   presentationHint: hint,
+  instructionPointer: null,
 });
 
 describe("frames", () => {
