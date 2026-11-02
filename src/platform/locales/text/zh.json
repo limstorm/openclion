@@ -5543,5 +5543,11 @@
   "No related file": "没有相关文件",
   "Switches between a C/C++ source and its header": "在 C/C++ 源文件与对应头文件之间切换",
   "No header or source with the same name was found for {path}.": "未找到与 {path} 同名的头文件或源文件。",
-  "Related Symbol": "相关符号"
+  "Related Symbol": "相关符号",
+  "CMake presets": "CMake 预设",
+  "Use CMakePresets.json": "使用 CMakePresets.json",
+  "Configure and build with presets instead of profiles": "使用预设而不是配置文件进行配置和构建",
+  "Configure presets": "配置预设",
+  "No configure preset was found in this project's CMakePresets.json.": "该项目的 CMakePresets.json 中没有配置预设。",
+  "Selected presets drive configure, build and CTest through cmake --preset; the profiles below are ignored while presets are in use.": "选中的预设通过 cmake --preset 驱动配置、构建与 CTest；使用预设时下方的配置文件会被忽略。"
 }

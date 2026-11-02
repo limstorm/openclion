@@ -216,3 +216,10 @@
 .toolsLayout .alignedRow {
   grid-template-columns: 130px minmax(0, 1fr);
 }
+
+.presetList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0 4px;
+}

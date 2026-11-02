@@ -616,6 +616,8 @@ export const commands = {
 	buildModel: () => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_model")),
 	/**  Build directories, codemodel targets and presets of the window's CMake project. */
 	cmakeModel: () => typedError<CmakeModel_Serialize, IdeError>(__TAURI_INVOKE("cmake_model")),
+	/**  Configure and build presets of the project's `CMakePresets.json`. */
+	cmakePresets: () => typedError<CmakePreset_Serialize[], IdeError>(__TAURI_INVOKE("cmake_presets")),
 	/**
 	 *  Runs Maven (`help:effective-pom dependency:tree`) or Gradle (`tasks --all`) in the
 	 *  background, reporting progress on `on_progress`; cancellable with `cancel_request(request)`.
@@ -1672,11 +1674,21 @@ export type CMakeSettings = CMakeSettings_Serialize | CMakeSettings_Deserialize;
 /**  Absent profiles retain automatic discovery for existing projects. */
 export type CMakeSettings_Deserialize = {
 	profiles?: CMakeProfile[] | null,
+	/**
+	 *  Selected `CMakePresets.json` configure presets; when set they drive
+	 *  configure/build/tests instead of the profiles above.
+	 */
+	presets?: string[] | null,
 };
 
 /**  Absent profiles retain automatic discovery for existing projects. */
 export type CMakeSettings_Serialize = {
 	profiles?: CMakeProfile[] | null,
+	/**
+	 *  Selected `CMakePresets.json` configure presets; when set they drive
+	 *  configure/build/tests instead of the profiles above.
+	 */
+	presets?: string[] | null,
 };
 
 export type CallHierarchy = {
@@ -1877,6 +1889,8 @@ export type CmakePreset_Deserialize = {
 	/**  Build directory the preset configures into, relative to the project root. */
 	binaryDir?: string | null,
 	buildType?: string | null,
+	/**  Build presets: the configure preset they build. */
+	configurePreset?: string | null,
 };
 
 /**  A `CMakePresets.json` entry the tool window lists next to the profiles. */
@@ -1888,6 +1902,8 @@ export type CmakePreset_Serialize = {
 	/**  Build directory the preset configures into, relative to the project root. */
 	binaryDir?: string | null,
 	buildType?: string | null,
+	/**  Build presets: the configure preset they build. */
+	configurePreset?: string | null,
 };
 
 export type CmakeTarget = CmakeTarget_Serialize | CmakeTarget_Deserialize;

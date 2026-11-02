@@ -15,13 +15,18 @@ export const DEFAULT_CMAKE_PROFILE: CMakeProfileValid = {
   toolchainFile: "",
 };
 
-export function validateCMake(raw: unknown): { profiles?: CMakeProfileValid[] } {
-  const profiles = (raw as { profiles?: unknown } | undefined)?.profiles;
-  if (!Array.isArray(profiles)) return {};
+export function validateCMake(raw: unknown): { profiles?: CMakeProfileValid[]; presets?: string[] } {
+  const root = (raw ?? {}) as { profiles?: unknown; presets?: unknown };
+  const presets = Array.isArray(root.presets)
+    ? root.presets.filter((name): name is string => typeof name === "string" && !!name.trim())
+    : undefined;
+  const profiles = root.profiles;
+  if (!Array.isArray(profiles)) return presets ? { presets } : {};
   const string = (value: unknown, fallback = "") => (typeof value === "string" ? value : fallback);
   const args = (value: unknown): string[] =>
     Array.isArray(value) ? value.filter((arg): arg is string => typeof arg === "string") : [];
   return {
+    presets,
     profiles: profiles
       .filter((p) => p && typeof p === "object")
       .map((p) => ({

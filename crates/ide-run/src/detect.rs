@@ -25,6 +25,15 @@ pub(crate) fn detect_with_profiles(
     excluded_poms: &[PathBuf],
     profiles: Option<&[ide_core::settings::CMakeProfile]>,
 ) -> Vec<RunConfig> {
+    detect_with_cmake(root, excluded_poms, profiles, None)
+}
+
+pub(crate) fn detect_with_cmake(
+    root: &Path,
+    excluded_poms: &[PathBuf],
+    profiles: Option<&[ide_core::settings::CMakeProfile]>,
+    presets: Option<&[String]>,
+) -> Vec<RunConfig> {
     let mut out = Vec::new();
     detect_node(root, &mut out);
     detect_deno(root, &mut out);
@@ -33,7 +42,7 @@ pub(crate) fn detect_with_profiles(
     detect_maven(root, excluded_poms, &mut out);
     detect_go(root, &mut out);
     detect_python(root, &mut out);
-    cmake::detect(root, profiles, &mut out);
+    cmake::detect(root, profiles, presets, &mut out);
     dotnet::detect(root, &mut out);
     detect_make(root, &mut out);
     detect_just(root, &mut out);

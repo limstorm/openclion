@@ -1,14 +1,76 @@
 import { useEffect, useId, useState } from "react";
 import { DEFAULT_CMAKE_PROFILE, type CMakeProfileValid } from "@/platform/cmakeSettings";
+import { call, commands, isTauri, type CmakePreset } from "@/platform/ipc";
 import { kitCompilers, loadKits, useKits } from "@/features/cmake/kits";
 import { formatArgs, parseArgs } from "@/platform/commandLine";
 import { tx } from "@/platform/i18n";
-import { IconButton, Input, T } from "@/ui";
+import { Checkbox, IconButton, Input, T } from "@/ui";
 import { Row, Section } from "../components/Form";
 import { useSetting } from "../components/context";
 import { TableEditor } from "./workflowControls";
 import styles from "./Workflow.module.css";
 import own from "./CMake.module.css";
+
+/**
+ * `CMakePresets.json` presets can drive configure/build/tests instead of the
+ * profiles below (CLion's preset mode). The list comes from the open project.
+ */
+function CMakePresetSelection() {
+  const [presets, setPresets] = useSetting<string[] | null | undefined>("cmake.presets");
+  const [available, setAvailable] = useState<CmakePreset[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    let live = true;
+    void call(commands.cmakePresets())
+      .then((all) => live && setAvailable(all.filter((p) => p.kind === "configure")))
+      .catch((e) => live && setError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      live = false;
+    };
+  }, []);
+  const enabled = presets != null;
+  const selected = presets ?? [];
+  const configure = available ?? [];
+  return (
+    <Section title="CMake presets">
+      <Row label="Use CMakePresets.json">
+        <Checkbox
+          checked={enabled}
+          onChange={(on) => setPresets(on ? configure.slice(0, 1).map((p) => p.name) : null)}
+          label="Configure and build with presets instead of profiles"
+        />
+      </Row>
+      {enabled && (
+        <div role="group" aria-label={tx("Configure presets")} className={styles.presetList}>
+          {configure.length === 0 ? (
+            <div className={styles.note}>
+              <T>No configure preset was found in this project's CMakePresets.json.</T>
+            </div>
+          ) : (
+            configure.map((preset) => (
+              <Checkbox
+                key={preset.name}
+                checked={selected.includes(preset.name)}
+                onChange={(on) =>
+                  setPresets(on ? [...selected, preset.name] : selected.filter((name) => name !== preset.name))
+                }
+                label={preset.binaryDir ? `${preset.name} — ${preset.binaryDir}` : preset.name}
+              />
+            ))
+          )}
+        </div>
+      )}
+      {error && <div className={styles.note}>{error}</div>}
+      <div className={styles.note}>
+        <T>
+          Selected presets drive configure, build and CTest through cmake --preset; the profiles below are ignored while
+          presets are in use.
+        </T>
+      </div>
+    </Section>
+  );
+}
 
 function ArgumentsInput({ id, value, onChange }: { id: string; value: string[]; onChange: (args: string[]) => void }) {
   const [text, setText] = useState<string>();
@@ -52,6 +114,7 @@ export function CMakeProfiles() {
   ] as const;
   return (
     <div className={styles.toolsLayout}>
+      <CMakePresetSelection />
       <Section title="CMake profiles">
         <div className={styles.tableBox}>
           <div className={styles.toolbar} role="toolbar" aria-label={tx("CMake profile actions")}>

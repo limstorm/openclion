@@ -7,6 +7,15 @@ describe("CMake settings", () => {
     expect(validateSettings({}).cmake).toEqual({});
     expect(validateSettings({ cmake: { profiles: [] } }).cmake.profiles).toEqual([]);
   });
+  it("keeps the selected presets and drops blank or malformed names", () => {
+    expect(validateSettings({ cmake: { presets: ["debug", " ", 42, "release"] } }).cmake.presets).toEqual([
+      "debug",
+      "release",
+    ]);
+    // Absent means "profiles drive the build"; an empty selection is preserved.
+    expect(validateSettings({ cmake: { profiles: [] } }).cmake.presets).toBeUndefined();
+    expect(validateSettings({ cmake: { presets: [] } }).cmake.presets).toEqual([]);
+  });
   it("preserves argument arrays and drops malformed argument values", () => {
     const cmakeArgs = ["-DMESSAGE=two words", '-DQUOTE="hello"', ""];
     const buildArgs = ["-j", "8", "--", "LABEL=it's a build"];

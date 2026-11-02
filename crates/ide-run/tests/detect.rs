@@ -575,6 +575,52 @@ fn cmake_detection_is_read_only_and_preserves_existing_build_directories() {
 }
 
 #[test]
+fn cmake_presets_drive_configure_build_and_tests() {
+    let dir = project(&[
+        ("CMakeLists.txt", "project(app)"),
+        (
+            "CMakePresets.json",
+            r#"{"version":6,
+                "configurePresets":[
+                    {"name":"debug","generator":"Ninja","binaryDir":"${sourceDir}/out/debug",
+                     "cacheVariables":{"CMAKE_BUILD_TYPE":"Debug"}},
+                    {"name":"release","inherits":"debug","binaryDir":"${sourceDir}/out/release",
+                     "cacheVariables":{"CMAKE_BUILD_TYPE":"Release"}},
+                    {"name":"plain","inherits":"debug","binaryDir":"${sourceDir}/out/plain",
+                     "cacheVariables":{"CMAKE_BUILD_TYPE":"RelWithDebInfo"}}],
+                "buildPresets":[
+                    {"name":"build-debug","configurePreset":"debug"},
+                    {"name":"build-release","configurePreset":"release"}]}"#,
+        ),
+    ]);
+    let presets = vec!["debug".to_string(), "release".to_string()];
+    let configs = ide_run::detect_with_cmake(dir.path(), &[], None, Some(&presets));
+
+    let configure = find(&configs, "cmake:preset:0:configure");
+    assert_eq!(configure.args, ["--preset", "debug"]);
+    assert_eq!(configure.extras.params["buildDir"], "out/debug");
+    assert_eq!(configure.extras.params["preset"], "debug");
+    // The build preset that belongs to it, and configure first while unconfigured.
+    let build = find(&configs, "cmake:preset:0:build");
+    assert_eq!(build.args, ["--build", "--preset", "build-debug"]);
+    assert_eq!(build.extras.before_launch[0].target, configure.id);
+    let test = find(&configs, "cmake:preset:0:test");
+    assert!(test.is_test);
+    assert!(test.args.windows(2).any(|a| a == ["--test-dir", "out/debug"]));
+    // Multiple presets are told apart in the Run tool window.
+    assert!(find(&configs, "cmake:preset:1:configure").name.ends_with("[release]"));
+    assert_eq!(find(&configs, "cmake:preset:1:configure").extras.params["buildDir"], "out/release");
+    // Presets replace profiles and discovery for this project (2 presets × configure/build/ctest).
+    assert_eq!(configs.iter().filter(|c| c.kind == "cmake").count(), 6);
+    assert_eq!(ide_run::detect_with_cmake(dir.path(), &[], None, Some(&[])).len(), 0);
+
+    // A configure preset without a build preset falls back to `cmake --build <dir>`.
+    let only = vec!["plain".to_string()];
+    let fallback = ide_run::detect_with_cmake(dir.path(), &[], None, Some(&only));
+    assert_eq!(find(&fallback, "cmake:preset:0:build").args, ["--build", "out/plain", "--config", "RelWithDebInfo"]);
+}
+
+#[test]
 fn cmake_configures_before_the_first_build() {
     let dir = project(&[("CMakeLists.txt", "project(demo)")]);
     let configs = detect(dir.path());

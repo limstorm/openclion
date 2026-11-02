@@ -117,7 +117,7 @@ impl CmakeBuild {
 }
 
 /// A `CMakePresets.json` entry the tool window lists next to the profiles.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct CmakePreset {
     pub name: String,
@@ -133,6 +133,10 @@ pub struct CmakePreset {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[specta(optional)]
     pub build_type: Option<String>,
+    /// Build presets: the configure preset they build.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[specta(optional)]
+    pub configure_preset: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
@@ -154,9 +158,27 @@ impl CmakeModel {
     }
 }
 
-/// Build directories of the project: the settings profiles when there are any,
-/// else every directory holding a `CMakeCache.txt`, else `<root>/build`.
-fn build_dirs(root: &Path, profiles: Option<&[CMakeProfile]>) -> Vec<(String, Option<String>)> {
+/// Build directories of the project: the selected `CMakePresets.json` presets,
+/// else the settings profiles, else every directory holding a `CMakeCache.txt`,
+/// else `<root>/build`.
+fn build_dirs(
+    root: &Path,
+    profiles: Option<&[CMakeProfile]>,
+    preset_names: Option<&[String]>,
+) -> Vec<(String, Option<String>)> {
+    if let Some(names) = preset_names {
+        let available = presets(root);
+        return names
+            .iter()
+            .map(|name| {
+                let preset = available.iter().find(|p| p.kind == "configure" && &p.name == name);
+                match preset {
+                    Some(preset) => (preset_build_dir(root, preset), Some(name.clone())),
+                    None => (format!("cmake-build-{name}"), Some(name.clone())),
+                }
+            })
+            .collect();
+    }
     if let Some(profiles) = profiles {
         return profiles.iter().map(|p| (profile_dir(p), (!p.name.is_empty()).then(|| p.name.clone()))).collect();
     }
@@ -194,10 +216,15 @@ pub fn profile_dir(profile: &CMakeProfile) -> String {
 
 /// The model of the project at `root`, reading what the last configure wrote.
 pub fn load(root: &Path, profiles: Option<&[CMakeProfile]>) -> CmakeModel {
+    load_with(root, profiles, None)
+}
+
+/// The model with the project's CMake selection: presets win over profiles.
+pub fn load_with(root: &Path, profiles: Option<&[CMakeProfile]>, preset_names: Option<&[String]>) -> CmakeModel {
     let has_project = root.join("CMakeLists.txt").is_file();
     let mut builds = Vec::new();
     if has_project {
-        for (dir, profile) in build_dirs(root, profiles) {
+        for (dir, profile) in build_dirs(root, profiles, preset_names) {
             builds.push(load_build(root, &dir, profile));
         }
     }
@@ -381,19 +408,84 @@ pub fn presets(root: &Path) -> Vec<CmakePreset> {
             if preset["hidden"].as_bool().unwrap_or(false) || preset["hidden"].is_string() {
                 continue;
             }
-            let build_type = preset["cacheVariables"]["CMAKE_BUILD_TYPE"].as_str().unwrap_or_default();
-            let binary_dir = preset["binaryDir"].as_str().map(|d| expand(d, name, build_type));
-            let generator = preset["generator"].as_str().map(|g| expand(g, name, build_type));
+            // `inherits` chains are how real projects share a base preset.
+            let resolved = resolve_inherited(preset, &json, key, 0);
+            let build_type = resolved["cacheVariables"]["CMAKE_BUILD_TYPE"].as_str().unwrap_or_default();
+            let binary_dir = resolved["binaryDir"].as_str().map(|d| expand(d, name, build_type));
+            let generator = resolved["generator"].as_str().map(|g| expand(g, name, build_type));
             presets.push(CmakePreset {
                 name: name.to_owned(),
                 kind: kind.to_owned(),
                 generator,
                 binary_dir: binary_dir.map(|d| d.replace('\\', "/")),
                 build_type: (!build_type.is_empty()).then(|| build_type.to_owned()),
+                configure_preset: resolved["configurePreset"].as_str().map(str::to_owned),
             });
         }
     }
     presets
+}
+
+/// A preset with the fields of its `inherits` bases applied underneath it.
+fn resolve_inherited(
+    preset: &serde_json::Value,
+    json: &serde_json::Value,
+    key: &str,
+    depth: usize,
+) -> serde_json::Value {
+    let mut merged = serde_json::Map::new();
+    if depth < 10 {
+        let bases: Vec<&str> = match &preset["inherits"] {
+            serde_json::Value::String(s) => vec![s.as_str()],
+            serde_json::Value::Array(a) => a.iter().filter_map(|v| v.as_str()).collect(),
+            _ => Vec::new(),
+        };
+        for base in bases {
+            let Some(parent) = json[key].as_array().and_then(|a| a.iter().find(|p| p["name"] == base)) else {
+                continue;
+            };
+            let parent = resolve_inherited(parent, json, key, depth + 1);
+            merge_preset(&mut merged, &parent);
+        }
+    }
+    // The `name` and the kind-specific link always come from the preset itself.
+    merge_preset(&mut merged, preset);
+    serde_json::Value::Object(merged)
+}
+
+fn merge_preset(into: &mut serde_json::Map<String, serde_json::Value>, from: &serde_json::Value) {
+    for (key, value) in from.as_object().into_iter().flatten() {
+        if key == "inherits" || key == "hidden" || key == "name" {
+            continue;
+        }
+        if key == "cacheVariables" {
+            let target = into.entry(key).or_insert_with(|| serde_json::json!({}));
+            for (k, v) in value.as_object().into_iter().flatten() {
+                target[k] = v.clone();
+            }
+        } else {
+            into.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+/// The configure preset named `name`.
+pub fn configure_preset(root: &Path, name: &str) -> Option<CmakePreset> {
+    presets(root).into_iter().find(|p| p.kind == "configure" && p.name == name)
+}
+
+/// The first build preset that builds the configure preset `name`.
+pub fn build_preset_for(root: &Path, name: &str) -> Option<CmakePreset> {
+    presets(root).into_iter().find(|p| p.kind == "build" && p.configure_preset.as_deref() == Some(name))
+}
+
+/// Absolute build directory of a configure preset; `cmake-build-<name>` when the
+/// preset names none (CMake's own default would be `build`, but the IDE keeps
+/// the source tree clean like the CMake profiles do).
+pub fn preset_build_dir(root: &Path, preset: &CmakePreset) -> String {
+    let raw = preset.binary_dir.clone().unwrap_or_else(|| format!("cmake-build-{}", preset.name));
+    let path = Path::new(&raw);
+    if path.is_absolute() { path.strip_prefix(root).unwrap_or(path).to_string_lossy().replace('\\', "/") } else { raw }
 }
 
 /// Where CMake should drop the codemodel reply for `build`.
@@ -415,7 +507,7 @@ pub fn request(build: &Path) -> io::Result<()> {
 /// The compile database clangd should read: the first configured build directory
 /// that exported one, in profile order.
 pub fn compile_commands(root: &Path, profiles: Option<&[CMakeProfile]>) -> Option<PathBuf> {
-    for (dir, _) in build_dirs(root, profiles) {
+    for (dir, _) in build_dirs(root, profiles, None) {
         let file = root.join(dir).join("compile_commands.json");
         if file.is_file() {
             return Some(file);
@@ -534,6 +626,66 @@ mod tests {
         assert_eq!(configure.build_type.as_deref(), Some("Debug"));
         assert!(configure.binary_dir.as_deref().unwrap().ends_with("/build/debug"));
         assert_eq!(model.presets.iter().filter(|p| p.kind == "build").count(), 1);
+    }
+
+    #[test]
+    fn presets_inherit_bases_and_link_build_presets() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("CMakeLists.txt"), "project(app CXX)");
+        write(
+            &tmp.path().join("CMakePresets.json"),
+            json!({"version":6,
+                "configurePresets":[
+                    {"name":"base","hidden":true,"generator":"Ninja",
+                     "cacheVariables":{"CMAKE_BUILD_TYPE":"Debug","EXTRA":"1"}},
+                    {"name":"debug","inherits":"base","binaryDir":"${sourceDir}/out/debug"},
+                    {"name":"release","inherits":["base"],
+                     "cacheVariables":{"CMAKE_BUILD_TYPE":"Release"}}],
+                "buildPresets":[
+                    {"name":"debug-build","configurePreset":"debug"},
+                    {"name":"release-build","configurePreset":"release"}]})
+            .to_string(),
+        );
+        let presets = presets(tmp.path());
+        let debug = presets.iter().find(|p| p.kind == "configure" && p.name == "debug").unwrap();
+        // Inherited generator, own binaryDir, inherited build type.
+        assert_eq!(debug.generator.as_deref(), Some("Ninja"));
+        assert_eq!(debug.build_type.as_deref(), Some("Debug"));
+        assert!(debug.binary_dir.as_deref().unwrap().ends_with("/out/debug"));
+        let release = presets.iter().find(|p| p.name == "release").unwrap();
+        assert_eq!(release.build_type.as_deref(), Some("Release"));
+        // The base is hidden: it is available for inheritance, not as a profile.
+        assert!(!presets.iter().any(|p| p.name == "base"));
+        let build = presets.iter().find(|p| p.name == "debug-build").unwrap();
+        assert_eq!(build.configure_preset.as_deref(), Some("debug"));
+        assert_eq!(build_preset_for(tmp.path(), "debug").unwrap().name, "debug-build");
+        assert_eq!(configure_preset(tmp.path(), "release").unwrap().name, "release");
+        assert!(preset_build_dir(tmp.path(), debug).ends_with("out/debug"));
+        // A preset without binaryDir gets a build directory of its own.
+        let plain = CmakePreset { name: "plain".into(), kind: "configure".into(), ..Default::default() };
+        assert_eq!(preset_build_dir(tmp.path(), &plain), "cmake-build-plain");
+    }
+
+    #[test]
+    fn selected_presets_are_the_build_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("CMakeLists.txt"), "project(app CXX)");
+        write(
+            &tmp.path().join("CMakePresets.json"),
+            json!({"version":6,"configurePresets":[
+                {"name":"debug","binaryDir":"${sourceDir}/out/debug"},
+                {"name":"release","binaryDir":"${sourceDir}/out/release"}]})
+            .to_string(),
+        );
+        let names = ["release".to_string()];
+        let model = load_with(tmp.path(), None, Some(&names));
+        assert_eq!(model.builds.len(), 1);
+        assert_eq!(model.builds[0].dir, "out/release");
+        // The label is the preset's name, so the tree reads like CLion's.
+        assert_eq!(model.builds[0].profile.as_deref(), Some("release"));
+        // A selected preset the file no longer declares still gets a directory.
+        let gone = ["ghost".to_string()];
+        assert_eq!(load_with(tmp.path(), None, Some(&gone)).builds[0].dir, "cmake-build-ghost");
     }
 
     #[test]

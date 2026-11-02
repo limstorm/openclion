@@ -3,6 +3,7 @@
 
 use super::{ConfigExt, config};
 use crate::{BeforeLaunchTask, RunConfig};
+use ide_cmake::CmakePreset;
 use ide_core::settings::CMakeProfile;
 use std::fs;
 use std::path::Path;
@@ -11,8 +12,21 @@ fn before(config: &mut RunConfig, id: &str) {
     config.extras.before_launch.push(BeforeLaunchTask { kind: "run".into(), target: id.into() });
 }
 
-pub(super) fn detect(root: &Path, profiles: Option<&[CMakeProfile]>, out: &mut Vec<RunConfig>) {
+pub(super) fn detect(
+    root: &Path,
+    profiles: Option<&[CMakeProfile]>,
+    presets: Option<&[String]>,
+    out: &mut Vec<RunConfig>,
+) {
     if !root.join("CMakeLists.txt").is_file() {
+        return;
+    }
+    // Selected `CMakePresets.json` presets replace both profiles and discovery.
+    if let Some(presets) = presets {
+        let available = ide_cmake::presets(root);
+        for (index, name) in presets.iter().enumerate() {
+            detect_preset(root, name, index, presets.len() > 1, &available, out);
+        }
         return;
     }
     if let Some(profiles) = profiles {
@@ -80,7 +94,7 @@ pub(super) fn detect(root: &Path, profiles: Option<&[CMakeProfile]>, out: &mut V
         test.extras.params.insert("ctestReport".into(), report.clone());
         before(&mut test, &build_id);
         out.push(test);
-        targets(root, &build, &dir, &prefix, None, out);
+        targets(root, &build, &dir, &prefix, Some(&configuration), &[], out);
     }
 }
 
@@ -130,11 +144,79 @@ fn detect_profile(root: &Path, profile: &CMakeProfile, index: usize, multiple: b
     test.extras.params.insert("ctestReport".into(), report.clone());
     before(&mut test, &build_id);
     out.push(test);
-    targets(root, &build, &dir, &prefix, Some(profile), out);
+    targets(root, &build, &dir, &prefix, Some(&profile.build_type), &profile.build_args, out);
     for config in &mut out[start..] {
         config.env = profile.env.clone();
         if multiple {
             config.name = format!("{} [{}]", config.name, profile.name);
+        }
+    }
+}
+
+/// A selected `CMakePresets.json` preset: `cmake --preset <name>`, the build
+/// preset that goes with it (else `cmake --build <dir>`), CTest and the targets
+/// of the preset's build directory.
+fn detect_preset(
+    root: &Path,
+    name: &str,
+    index: usize,
+    multiple: bool,
+    presets: &[CmakePreset],
+    out: &mut Vec<RunConfig>,
+) {
+    let Some(preset) = presets.iter().find(|p| p.kind == "configure" && p.name == name) else {
+        return;
+    };
+    let dir = ide_cmake::preset_build_dir(root, preset);
+    let build = root.join(&dir);
+    let prefix = format!("cmake:preset:{index}");
+    let configure_id = format!("{prefix}:configure");
+    let build_id = format!("{prefix}:build");
+    let configuration = preset.build_type.clone().unwrap_or_else(|| "Debug".into());
+    let start = out.len();
+
+    let mut configure =
+        config(&configure_id, format!("CMake Configure ({name})"), "cmake", "cmake", &["--preset", name]);
+    configure.extras.params.insert("buildDir".into(), dir.clone());
+    configure.extras.params.insert("preset".into(), name.to_owned());
+    out.push(configure);
+
+    let build_preset = presets.iter().find(|p| p.kind == "build" && p.configure_preset.as_deref() == Some(name));
+    let mut all = match &build_preset {
+        Some(p) => {
+            config(&build_id, format!("CMake Build ({})", p.name), "cmake", "cmake", &["--build", "--preset", &p.name])
+        }
+        None => config(
+            &build_id,
+            format!("CMake Build ({dir} {configuration})"),
+            "cmake",
+            "cmake",
+            &["--build", &dir, "--config", &configuration],
+        ),
+    };
+    // `cmake --preset` regenerates by itself once the build directory is configured.
+    if !build.join("CMakeCache.txt").is_file() {
+        before(&mut all, &configure_id);
+    }
+    out.push(all);
+
+    let report = format!("{dir}/ctest-junit.xml");
+    let mut test = config(
+        format!("{prefix}:test"),
+        format!("CTest ({dir})"),
+        "cmake",
+        "ctest",
+        &["--test-dir", &dir, "-C", &configuration, "--output-junit", &report, "--output-on-failure"],
+    )
+    .test();
+    test.extras.params.insert("ctestReport".into(), report.clone());
+    before(&mut test, &build_id);
+    out.push(test);
+
+    targets(root, &build, &dir, &prefix, Some(&configuration), &[], out);
+    if multiple {
+        for config in &mut out[start..] {
+            config.name = format!("{} [{}]", config.name, name);
         }
     }
 }
@@ -144,11 +226,12 @@ fn targets(
     build: &Path,
     dir: &str,
     prefix: &str,
-    profile: Option<&CMakeProfile>,
+    configuration: Option<&str>,
+    build_args: &[String],
     out: &mut Vec<RunConfig>,
 ) {
-    // A profile selects the codemodel configuration; legacy discovery takes the first.
-    let configuration = profile.map(|p| p.build_type.as_str()).filter(|c| !c.is_empty());
+    // A profile or preset selects the codemodel configuration; discovery takes the first.
+    let configuration = configuration.filter(|c| !c.is_empty());
     for target in ide_cmake::targets_for(build, root, configuration) {
         if !target.kind.is_executable() {
             continue;
@@ -164,11 +247,11 @@ fn targets(
         }
         let mut build_config =
             config(&target_build_id, format!("Build {target_name} ({dir} {name})"), "cmake", "cmake", &args);
-        if let Some(profile) = profile {
+        if let Some(chosen) = configuration {
             if name.is_empty() {
-                build_config.args.extend(["--config".into(), profile.build_type.clone()]);
+                build_config.args.extend(["--config".into(), chosen.to_owned()]);
             }
-            build_config.args.extend_from_slice(&profile.build_args);
+            build_config.args.extend_from_slice(build_args);
             if !build.join("CMakeCache.txt").is_file() {
                 before(&mut build_config, &format!("{prefix}:configure"));
             }
@@ -248,7 +331,7 @@ mod tests {
             ..Default::default()
         };
         let mut configs = Vec::new();
-        detect(root.path(), Some(std::slice::from_ref(&profile)), &mut configs);
+        detect(root.path(), Some(std::slice::from_ref(&profile)), None, &mut configs);
         let run = configs.iter().find(|c| c.kind == "native").unwrap();
         assert!(run.command.ends_with("release/app"));
         assert_eq!(run.env, profile.env);
@@ -262,7 +345,7 @@ mod tests {
         assert_eq!(build.extras.before_launch[0].target, "cmake:profile:0:configure");
         fs::write(root.path().join("output/CMakeCache.txt"), "CMAKE_GENERATOR:INTERNAL=Ninja\n").unwrap();
         let mut configured = Vec::new();
-        detect(root.path(), Some(std::slice::from_ref(&profile)), &mut configured);
+        detect(root.path(), Some(std::slice::from_ref(&profile)), None, &mut configured);
         for id in ["cmake:profile:0:build", build.id.as_str()] {
             let build = configured.iter().find(|c| c.id == id).unwrap();
             assert!(build.extras.before_launch.is_empty(), "{id} should use CMake's automatic regeneration");
@@ -278,7 +361,12 @@ mod tests {
         fs::write(build.join("keep.txt"), "artifact").unwrap();
         fs::write(root.path().join("CMakeLists.txt"), "project(app)").unwrap();
         let mut configs = Vec::new();
-        detect(root.path(), Some(&[CMakeProfile { generator: "Ninja".into(), ..Default::default() }]), &mut configs);
+        detect(
+            root.path(),
+            Some(&[CMakeProfile { generator: "Ninja".into(), ..Default::default() }]),
+            None,
+            &mut configs,
+        );
         assert!(build.join("CMakeCache.txt").exists());
         prepare(&configs[0], root.path()).unwrap();
         assert!(!build.join("CMakeCache.txt").exists());

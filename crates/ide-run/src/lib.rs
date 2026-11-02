@@ -208,7 +208,18 @@ pub fn detect_with_profiles(
     excluded_poms: &[PathBuf],
     profiles: Option<&[ide_core::settings::CMakeProfile]>,
 ) -> Vec<RunConfig> {
-    detect::detect_with_profiles(root, excluded_poms, profiles)
+    detect_with_cmake(root, excluded_poms, profiles, None)
+}
+
+/// Run configurations with the project's CMake selection: `presets` (configure
+/// preset names from `CMakePresets.json`) take precedence over `profiles`.
+pub fn detect_with_cmake(
+    root: &Path,
+    excluded_poms: &[PathBuf],
+    profiles: Option<&[ide_core::settings::CMakeProfile]>,
+    presets: Option<&[String]>,
+) -> Vec<RunConfig> {
+    detect::detect_with_cmake(root, excluded_poms, profiles, presets)
 }
 
 /// Reads `<root>/.openclion/run.toml`; a missing file yields no configs.

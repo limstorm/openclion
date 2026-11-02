@@ -15,12 +15,22 @@ pub async fn model(host: &Host, window: &str) -> IdeResult<CmakeModel> {
     let project = host.project(window)?;
     let root = project.root.clone();
     // Profiles are project-scoped: a project may override the global CMake settings.
-    let profiles = project.settings.effective().cmake.profiles;
-    tokio::task::spawn_blocking(move || ide_cmake::load(&root, profiles.as_deref()))
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))
+    let cmake = project.settings.effective().cmake;
+    tokio::task::spawn_blocking(move || {
+        ide_cmake::load_with(&root, cmake.profiles.as_deref(), cmake.presets.as_deref())
+    })
+    .await
+    .map_err(|e| IdeError::internal(e.to_string()))
+}
+
+/// The configure and build presets `CMakePresets.json` declares (settings page).
+pub async fn presets(host: &Host, window: &str) -> IdeResult<Vec<ide_cmake::CmakePreset>> {
+    host.require_trust(window)?;
+    let root = host.project(window)?.root.clone();
+    tokio::task::spawn_blocking(move || ide_cmake::presets(&root)).await.map_err(|e| IdeError::internal(e.to_string()))
 }
 
 pub(crate) fn register(d: &mut Dispatcher) {
     d.add("cmake_model", |c| async move { model(&c.host, &c.window).await });
+    d.add("cmake_presets", |c| async move { presets(&c.host, &c.window).await });
 }

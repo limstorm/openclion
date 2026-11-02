@@ -330,6 +330,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         run::run_test_report_file,
         build::build_model,
         cmake::cmake_model,
+        cmake::cmake_presets,
         build::build_sync,
         build::maven_dependency_declaration,
         build::maven_exclude_dependency,

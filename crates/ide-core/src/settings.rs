@@ -68,6 +68,11 @@ pub struct CMakeSettings {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[specta(optional)]
     pub profiles: Option<Vec<CMakeProfile>>,
+    /// Selected `CMakePresets.json` configure presets; when set they drive
+    /// configure/build/tests instead of the profiles above.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[specta(optional)]
+    pub presets: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]

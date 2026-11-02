@@ -50,3 +50,18 @@ test("Toolchains settings lists the detected C/C++ toolchain", async ({ workbenc
   await expect(dialog.getByRole("checkbox", { name: "Report clang-tidy warnings in the editor" })).toBeChecked();
   await page.screenshot({ path: "docs/media/openclion-toolchains.png", animations: "disabled" });
 });
+
+test("CMake settings offer the preset mode", async ({ workbench: page }) => {
+  await page.keyboard.press("Meta+,");
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("textbox", { name: "Search settings" }).fill("CMake");
+  await dialog.getByRole("treeitem", { name: "CMake", exact: true }).first().click();
+  const presets = dialog.getByRole("region", { name: "CMake presets" });
+  await expect(
+    presets.getByRole("checkbox", { name: "Configure and build with presets instead of profiles" }),
+  ).toBeVisible();
+  // Turning preset mode on reveals the selection group (empty: the preview has no presets).
+  await presets.getByRole("checkbox", { name: "Configure and build with presets instead of profiles" }).click();
+  await expect(presets.getByRole("group", { name: "Configure presets" })).toBeVisible();
+  await page.screenshot({ path: "docs/media/openclion-cmake-presets.png", animations: "disabled" });
+});
