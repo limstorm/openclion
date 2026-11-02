@@ -205,8 +205,9 @@ Ordered by how much they would be missed by a CLion user:
    `src/features/debugger`.
 2. **C++ editor features** — the source ↔ header switch is in (`Go to Related
    Symbol`, `navigate.relatedSymbol`, `ide_host::ops::cpp`); still missing are
-   generate definitions, the include fixer, "Extract function" for C++ and
-   clang-format as a first-class formatter.
+   generate definitions and the include fixer. (Formatting already works:
+   with no external formatter configured, `Reformat Code` goes through clangd,
+   which runs clang-format and honours `.clang-format`.)
 3. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
    no counterpart here yet.
 4. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
