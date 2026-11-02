@@ -6,7 +6,6 @@
 mod parse;
 
 use crate::process::{self, Stream};
-use crate::{BuildModel, maven};
 use ide_core::{CancellationToken, Diagnostic, IdeError, IdeResult, Pos, Range, Severity};
 use parse::{ColUnit, Format, OutputParser, RawMessage};
 use serde::{Deserialize, Serialize};
@@ -139,9 +138,9 @@ fn has(dir: &Path, names: &[&str]) -> bool {
     names.iter().any(|n| dir.join(n).is_file())
 }
 
-fn detect_dir(dir: &Path, model: &BuildModel, root: &Path) -> Option<BuildSystem> {
-    let rel = rel_str(root, dir);
-    if model.maven.as_ref().is_some_and(|m| m.projects.iter().any(|p| p.dir == rel)) || has(dir, &["pom.xml"]) {
+fn detect_dir(dir: &Path, root: &Path) -> Option<BuildSystem> {
+    let _ = root;
+    if has(dir, &["pom.xml"]) {
         Some(BuildSystem::Maven)
     } else if has(dir, &["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]) {
         Some(BuildSystem::Gradle)
@@ -160,11 +159,6 @@ fn detect_dir(dir: &Path, model: &BuildModel, root: &Path) -> Option<BuildSystem
     }
 }
 
-/// `root/rel`, without a trailing separator for the root itself.
-fn subdir(root: &Path, rel: &str) -> PathBuf {
-    if rel.is_empty() { root.to_path_buf() } else { root.join(rel) }
-}
-
 fn rel_str(root: &Path, dir: &Path) -> String {
     dir.strip_prefix(root).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or_default()
 }
@@ -176,23 +170,21 @@ fn ancestors_within<'a>(root: &'a Path, file: &'a Path) -> impl Iterator<Item = 
 }
 
 /// The build of `root`, or of the module containing `file` (Build Module / Recompile).
-pub fn plan(root: &Path, model: &BuildModel, kind: BuildKind, file: Option<&Path>) -> IdeResult<BuildPlan> {
+pub fn plan(root: &Path, kind: BuildKind, file: Option<&Path>) -> IdeResult<BuildPlan> {
     let project_name = root.file_name().map_or_else(|| "project".to_owned(), |n| n.to_string_lossy().into_owned());
     let module_dir = match file {
         Some(f) => {
             let dir = ancestors_within(root, f)
-                .find(|d| detect_dir(d, model, root).is_some())
+                .find(|d| detect_dir(d, root).is_some())
                 .ok_or_else(|| IdeError::not_found(format!("{} is not in a module", f.display())))?;
             Some(dir.to_path_buf())
         }
         None => None,
     };
     let dir = module_dir.clone().unwrap_or_else(|| root.to_path_buf());
-    let system = detect_dir(&dir, model, root)
-        .or_else(|| if model.gradle.is_some() { Some(BuildSystem::Gradle) } else { None })
-        .ok_or_else(|| {
-            IdeError::not_found("no supported build system (Maven, Gradle, CMake, Cargo, Go, TypeScript) found")
-        })?;
+    let system = detect_dir(&dir, root).ok_or_else(|| {
+        IdeError::not_found("no supported build system (Maven, Gradle, CMake, Cargo, Go, TypeScript) found")
+    })?;
     let module = module_dir.as_deref().filter(|d| *d != root);
     let title = match module {
         Some(d) => format!(
@@ -203,8 +195,9 @@ pub fn plan(root: &Path, model: &BuildModel, kind: BuildKind, file: Option<&Path
         None => project_name,
     };
     let steps = match system {
-        BuildSystem::Maven => maven_steps(root, model, kind, module_dir.as_deref())?,
-        BuildSystem::Gradle => gradle_steps(root, model, kind, module_dir.as_deref())?,
+        BuildSystem::Maven | BuildSystem::Gradle => {
+            return Err(IdeError::unavailable("Maven and Gradle builds are not part of this IDE"));
+        }
         BuildSystem::CMake => cmake_steps(&dir, kind),
         BuildSystem::Cargo => cargo_steps(&dir, kind),
         // Go builds the file's package (a module holds many).
@@ -212,77 +205,6 @@ pub fn plan(root: &Path, model: &BuildModel, kind: BuildKind, file: Option<&Path
         BuildSystem::TypeScript => ts_steps(&dir, kind),
     };
     Ok(BuildPlan { system, title, steps })
-}
-
-fn maven_steps(root: &Path, model: &BuildModel, kind: BuildKind, module: Option<&Path>) -> IdeResult<Vec<BuildStep>> {
-    let fallback;
-    let m = match &model.maven {
-        Some(m) => m,
-        None => {
-            fallback = maven::load(root);
-            &fallback
-        }
-    };
-    let goals: &[&str] = match kind {
-        BuildKind::Build => &["test-compile"],
-        BuildKind::Rebuild => &["clean", "test-compile"],
-        BuildKind::Artifacts => &["package", "-DskipTests"],
-    };
-    let tops: Vec<&maven::MavenProject> = m.projects.iter().filter(|p| !p.aggregated).collect();
-    if tops.is_empty() {
-        return Err(IdeError::not_found("no Maven project found"));
-    }
-    let step = |p: &maven::MavenProject, extra: &[String]| {
-        let mut s = BuildStep::new(&p.command, &["-B", "-Dstyle.color=never"], &subdir(root, &p.dir), Format::Maven);
-        s.args.extend(p.options.iter().cloned());
-        s.args.extend(extra.iter().cloned());
-        s.args.extend(goals.iter().map(|g| (*g).to_owned()));
-        s.env = p.env.clone();
-        s
-    };
-    let Some(module) = module else { return Ok(tops.iter().map(|p| step(p, &[])).collect()) };
-    // The reactor root containing the module builds it with what it depends on (`-pl … -am`).
-    let rel = rel_str(root, module);
-    if !m.projects.iter().any(|p| p.dir == rel) {
-        return Err(IdeError::not_found("no linked Maven project found for module"));
-    }
-    let top = maven_reactor(m, &rel).ok_or_else(|| IdeError::not_found("no linked Maven project found for module"))?;
-    let top_dir = subdir(root, &top.dir);
-    if module == top_dir {
-        return Ok(vec![step(top, &[])]);
-    }
-    let pl = module.strip_prefix(&top_dir).map(|r| r.to_string_lossy().replace('\\', "/")).unwrap_or(rel);
-    Ok(vec![step(top, &["-pl".into(), pl, "-am".into()])])
-}
-
-fn gradle_steps(root: &Path, model: &BuildModel, kind: BuildKind, module: Option<&Path>) -> IdeResult<Vec<BuildStep>> {
-    let fallback;
-    let g = match &model.gradle {
-        Some(g) => g,
-        None => {
-            fallback = crate::gradle::load(root).ok_or_else(|| IdeError::not_found("no Gradle build found"))?;
-            &fallback
-        }
-    };
-    let prefix = module
-        .and_then(|m| {
-            let rel = rel_str(root, m);
-            g.projects.iter().filter(|p| p.dir == rel).map(|p| p.path.clone()).next()
-        })
-        .filter(|p| p != ":")
-        .map(|p| format!("{p}:"))
-        .unwrap_or_default();
-    let tasks: Vec<String> = match kind {
-        BuildKind::Build => vec![format!("{prefix}classes"), format!("{prefix}testClasses")],
-        BuildKind::Rebuild => {
-            vec![format!("{prefix}clean"), format!("{prefix}classes"), format!("{prefix}testClasses")]
-        }
-        BuildKind::Artifacts => vec![format!("{prefix}assemble")],
-    };
-    let mut s = BuildStep::new(&g.command, &["--console=plain"], &subdir(root, &g.dir), Format::Gradle);
-    s.args.extend(tasks);
-    s.env = g.env.clone();
-    Ok(vec![s])
 }
 
 /// CMake build directories: every direct child holding a `CMakeCache.txt` (CLion's
@@ -640,24 +562,6 @@ pub fn diagnostics(messages: &[BuildMessage]) -> BTreeMap<PathBuf, Vec<Diagnosti
     out
 }
 
-fn reactor_projects<'a>(m: &'a maven::MavenModel, top: &'a maven::MavenProject) -> Vec<&'a maven::MavenProject> {
-    let mut projects = Vec::new();
-    let mut pending = vec![top];
-    let mut seen = HashSet::new();
-    while let Some(p) = pending.pop() {
-        if !seen.insert(&p.pom) {
-            continue;
-        }
-        projects.push(p);
-        pending.extend(m.projects.iter().filter(|child| p.modules.contains(&child.pom)));
-    }
-    projects
-}
-
-fn maven_reactor<'a>(m: &'a maven::MavenModel, module: &str) -> Option<&'a maven::MavenProject> {
-    m.projects.iter().filter(|p| !p.aggregated).find(|top| reactor_projects(m, top).iter().any(|p| p.dir == module))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -669,77 +573,12 @@ mod tests {
     }
 
     #[test]
-    fn plans_per_build_system() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path().join("demo");
-        write(
-            &root,
-            "pom.xml",
-            "<project><artifactId>demo</artifactId><modules><module>core</module></modules></project>",
-        );
-        write(&root, "core/pom.xml", "<project><artifactId>core</artifactId></project>");
-        write(&root, "core/src/main/java/A.java", "class A {}");
-        let model = crate::load(&root, &tmp.path().join("cache"), None);
-        let p = plan(&root, &model, BuildKind::Build, None).unwrap();
-        assert_eq!(p.system, BuildSystem::Maven);
-        assert_eq!(p.title, "demo");
-        assert_eq!(p.steps.len(), 1);
-        assert_eq!(p.steps[0].args, ["-B", "-Dstyle.color=never", "test-compile"]);
-        let p = plan(&root, &model, BuildKind::Rebuild, Some(&root.join("core/src/main/java/A.java"))).unwrap();
-        assert_eq!(p.steps[0].args, ["-B", "-Dstyle.color=never", "-pl", "core", "-am", "clean", "test-compile"]);
-        assert_eq!(p.steps[0].cwd, root);
-        assert_eq!(p.title, "demo: build module 'core'");
-
-        let g = tmp.path().join("g");
-        write(&g, "settings.gradle", "include 'app'");
-        write(&g, "app/build.gradle", "apply plugin: 'java'");
-        let model = crate::load(&g, &tmp.path().join("cache2"), None);
-        let p = plan(&g, &model, BuildKind::Build, Some(&g.join("app/src/A.java"))).unwrap();
-        assert_eq!(p.system, BuildSystem::Gradle);
-        assert_eq!(p.steps[0].args, ["--console=plain", ":app:classes", ":app:testClasses"]);
-        assert_eq!(
-            plan(&g, &model, BuildKind::Artifacts, None).unwrap().steps[0].args,
-            ["--console=plain", "assemble"]
-        );
-
-        let c = tmp.path().join("c");
-        write(&c, "Cargo.toml", "[package]\nname='c'");
-        let p = plan(&c, &BuildModel::default(), BuildKind::Rebuild, None).unwrap();
-        assert_eq!(p.system, BuildSystem::Cargo);
-        assert_eq!(p.steps.len(), 2);
-        assert_eq!(p.steps[0].args[0], "clean");
-
-        let go = tmp.path().join("go");
-        write(&go, "go.mod", "module x");
-        let p = plan(&go, &BuildModel::default(), BuildKind::Build, Some(&go.join("pkg/a/a.go"))).unwrap();
-        assert_eq!(p.steps[0].args, ["build", "./pkg/a/..."]);
-        assert_eq!(p.steps[0].cwd, go);
-
-        let ts = tmp.path().join("ts");
-        write(&ts, "package.json", r#"{"scripts":{"build":"vite build"}}"#);
-        write(&ts, "tsconfig.json", "{}");
-        write(&ts, "pnpm-lock.yaml", "");
-        let p = plan(&ts, &BuildModel::default(), BuildKind::Build, None).unwrap();
-        assert_eq!(p.steps[0].args, ["--noEmit", "--pretty", "false", "-p", "."]);
-        let p = plan(&ts, &BuildModel::default(), BuildKind::Artifacts, None).unwrap();
-        assert_eq!(
-            (p.steps[0].program.as_str(), p.steps[0].args.as_slice()),
-            ("pnpm", &["run".to_owned(), "build".to_owned()][..])
-        );
-
-        let none = tmp.path().join("none");
-        std::fs::create_dir_all(&none).unwrap();
-        assert!(plan(&none, &BuildModel::default(), BuildKind::Build, None).is_err());
-    }
-
-    #[test]
     fn cmake_configure_and_build_steps() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().join("cm");
         write(&root, "CMakeLists.txt", "project(demo)\n");
         write(&root, "src/main.cpp", "int main() {}\n");
-        let model = BuildModel::default();
-        let p = plan(&root, &model, BuildKind::Build, Some(&root.join("src/main.cpp"))).unwrap();
+        let p = plan(&root, BuildKind::Build, Some(&root.join("src/main.cpp"))).unwrap();
         assert_eq!(p.system, BuildSystem::CMake);
         assert_eq!(p.title, "cm");
         assert_eq!(p.steps.len(), 2);
@@ -747,14 +586,11 @@ mod tests {
         assert_eq!(p.steps[0].args, ["-S", ".", "-B", "build", "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"]);
         assert_eq!(p.steps[0].cwd, root);
         assert_eq!(p.steps[1].args, ["--build", "build"]);
-        assert_eq!(
-            plan(&root, &model, BuildKind::Rebuild, None).unwrap().steps[1].args,
-            ["--build", "build", "--clean-first"]
-        );
+        assert_eq!(plan(&root, BuildKind::Rebuild, None).unwrap().steps[1].args, ["--build", "build", "--clean-first"]);
 
         // A configured build tree is used as is: no configure step runs for it.
         write(&root, "cmake-build-debug/CMakeCache.txt", "");
-        let p = plan(&root, &model, BuildKind::Build, None).unwrap();
+        let p = plan(&root, BuildKind::Build, None).unwrap();
         assert_eq!(p.steps.len(), 1);
         assert_eq!(p.steps[0].args, ["--build", "cmake-build-debug"]);
     }

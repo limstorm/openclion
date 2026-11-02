@@ -605,26 +605,10 @@ export const commands = {
 	runApplicationPublish: (config: RunConfig_Deserialize, classPaths: string[], mainClass: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_application_publish", { config, classPaths, mainClass })),
 	runTomcatUpdate: (config: RunConfig_Deserialize, mode: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_tomcat_update", { config, mode })),
 	runTestReportFile: (path: string, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_report_file", { path, sinceMs })),
-	/**  Maven and Gradle projects of the window's project, from the build files plus the last sync. */
-	buildModel: () => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_model")),
 	/**  Build directories, codemodel targets and presets of the window's CMake project. */
 	cmakeModel: () => typedError<CmakeModel_Serialize, IdeError>(__TAURI_INVOKE("cmake_model")),
 	/**  Configure and build presets of the project's `CMakePresets.json`. */
 	cmakePresets: () => typedError<CmakePreset_Serialize[], IdeError>(__TAURI_INVOKE("cmake_presets")),
-	/**
-	 *  Runs Maven (`help:effective-pom dependency:tree`) or Gradle (`tasks --all`) in the
-	 *  background, reporting progress on `on_progress`; cancellable with `cancel_request(request)`.
-	 *  Returns the refreshed model; a failed build is reported in its `syncError`.
-	 */
-	buildSync: (tool: BuildTool, request: RequestId, offline: boolean, profiles: string[], onProgress: Channel<SyncProgress>) => typedError<BuildModel, IdeError>(__TAURI_INVOKE("build_sync", { tool, request, offline, profiles, onProgress })),
-	/**  Where the direct dependency `dependency` of the Maven module `pom` is declared. */
-	mavenDependencyDeclaration: (pom: string, dependency: ArtifactKey) => typedError<Location, IdeError>(__TAURI_INVOKE("maven_dependency_declaration", { pom, dependency })),
-	/**
-	 *  Adds an `<exclusion>` of `exclusion` to the declaration of the direct dependency
-	 *  `dependency` of the Maven module `pom`, through the open document when there is one
-	 *  (saved). Returns the declaration; nothing changes when it already excludes it.
-	 */
-	mavenExcludeDependency: (pom: string, dependency: ArtifactKey, exclusion: ArtifactKey) => typedError<Location, IdeError>(__TAURI_INVOKE("maven_exclude_dependency", { pom, dependency, exclusion })),
 	/**
 	 *  Build › Build Project / Rebuild Project / Build Module (`file`: a file or folder of the
 	 *  module) / Build Artifacts, streaming the console and messages on `on_event`; cancellable
@@ -1461,12 +1445,6 @@ export type ApplyOutcome = {
 	conflicts: string[],
 };
 
-/**  `groupId:artifactId` of a dependency. */
-export type ArtifactKey = {
-	groupId: string,
-	artifactId: string,
-};
-
 /**  What an askpass prompt asks for. */
 export type AskpassKind = 
 /**  Password or passphrase: hidden input. */
@@ -1615,12 +1593,6 @@ export type BuildMessage = {
 	code: string | null,
 };
 
-/**  The build systems of a project; `None` when the project does not use one. */
-export type BuildModel = {
-	maven: MavenModel | null,
-	gradle: GradleModel | null,
-};
-
 export type BuildResult = {
 	system: BuildSystem,
 	title: string,
@@ -1632,8 +1604,6 @@ export type BuildResult = {
 };
 
 export type BuildSystem = "maven" | "gradle" | "cmake" | "cargo" | "go" | "typescript";
-
-export type BuildTool = "maven" | "gradle";
 
 /**  A slice of a file: `data` is base64; `total` is the file size. */
 export type ByteRange = {
@@ -3597,33 +3567,6 @@ export type GotoKind = "definition" | "declaration" | "typeDefinition" | "implem
 
 export type GradleDistribution = "wrapper" | "local";
 
-export type GradleModel = {
-	/**  Project-relative directory of the build (where `settings.gradle` is); `""` = project root. */
-	dir: string,
-	/**  The root project first, then subprojects in `include` order. */
-	projects: GradleProject[],
-	javaVersion: number | null,
-	/**  `gradlew` of the build (absolute), else `gradle`. */
-	command: string,
-	/**  Environment for runs (`JAVA_HOME`); filled in by the shell. */
-	env: { [key in string]: string },
-	/**  When the task list was last read from Gradle (Unix ms); `None` = static defaults. */
-	syncedAt: number | null,
-	stale: boolean,
-	syncError: string | null,
-};
-
-export type GradleProject = {
-	/**  Gradle path: `:` for the root project, `:app`, `:libs:core`. */
-	path: string,
-	name: string,
-	/**  Project-relative directory. */
-	dir: string,
-	/**  Project-relative build script, if any. */
-	buildFile: string | null,
-	tasks: GradleTask[],
-};
-
 /**  Build Tools › Gradle. */
 export type GradleSettings = {
 	/**  Empty = Project JDK; otherwise a JDK home. */
@@ -3633,13 +3576,6 @@ export type GradleSettings = {
 	home?: string,
 	/**  Empty = Gradle's default user home. */
 	userHome?: string,
-};
-
-export type GradleTask = {
-	name: string,
-	/**  Lower-case group (`build`, `build setup`, `other`). */
-	group: string,
-	description: string | null,
 };
 
 export type HierarchyDirection = 
@@ -4437,83 +4373,6 @@ export type Markup = {
 	value: string,
 };
 
-export type MavenDependency = {
-	groupId: string,
-	artifactId: string,
-	version: string | null,
-	/**  `jar`, `pom`, `test-jar`… */
-	type: string,
-	classifier: string | null,
-	scope: string,
-	optional: boolean,
-	/**  Transitive dependencies (only after a sync). */
-	children: MavenDependency[],
-	/**  Why Maven left this occurrence out of the resolved graph (`dependency:tree -Dverbose`). */
-	omitted?: Omission | null,
-	/**  The version that won when `omitted` is `Conflict`. */
-	conflictWith?: string | null,
-	/**  The version requested before `<dependencyManagement>` replaced it. */
-	managedFrom?: string | null,
-};
-
-export type MavenModel = {
-	/**  Pre-order: every aggregator comes before its modules. */
-	projects: MavenProject[],
-	/**  Profiles declared by any project, first declaration wins. */
-	profiles: MavenProfile[],
-	/**  When the effective build was last read (Unix ms); `None` = only the static POM parse. */
-	syncedAt: number | null,
-	/**  Build files changed since that sync. */
-	stale: boolean,
-	syncError: string | null,
-};
-
-export type MavenPlugin = {
-	groupId: string,
-	artifactId: string,
-	version: string | null,
-	/**  Goal prefix (`clean`, `spring-boot`): goals run as `<prefix>:<goal>`. */
-	prefix: string,
-	/**  Sorted goal names. */
-	goals: string[],
-};
-
-export type MavenProfile = {
-	id: string,
-	activeByDefault: boolean,
-};
-
-export type MavenProject = {
-	/**  Project-relative, `/`-separated (`pom.xml`, `core/pom.xml`). */
-	pom: string,
-	/**  Project-relative directory; `""` = the project root. */
-	dir: string,
-	groupId: string,
-	artifactId: string,
-	version: string,
-	packaging: string,
-	/**  `<name>` (resolved), else the artifactId. */
-	displayName: string,
-	/**  `groupId:artifactId:version` of the parent POM. */
-	parent: string | null,
-	/**  `pom` paths of this aggregator's modules. */
-	modules: string[],
-	/**  Listed as a module of another project here. */
-	aggregated: boolean,
-	plugins: MavenPlugin[],
-	dependencies: MavenDependency[],
-	/**  Profile ids declared in this POM. */
-	profiles: string[],
-	/**  Java feature version the project compiles for (`maven.compiler.release`, `java.version`…). */
-	javaVersion: number | null,
-	/**  Maven launcher: the nearest `mvnw` up to the project root (absolute), else `mvn`. */
-	command: string,
-	/**  Options before the goals (`-s`, `-Dmaven.repo.local=`); filled in by the shell from settings. */
-	options: string[],
-	/**  Environment for runs (`JAVA_HOME` of the matching JDK); filled in by the shell. */
-	env: { [key in string]: string },
-};
-
 /**  Build Tools › Maven. */
 export type MavenSettings = {
 	/**  Project-relative root POMs removed from the Maven project model. */
@@ -4714,15 +4573,6 @@ export type NotificationSettings = {
 };
 
 export type NotifyLevel = "info" | "warning" | "error";
-
-/**  Why a dependency occurrence is not part of the resolved graph. */
-export type Omission = 
-/**  Another occurrence of the same version is nearer the root. */
-"duplicate" | 
-/**  Another version is nearer the root (or declared first) and wins. */
-"conflict" | 
-/**  The artifact depends on itself through this path. */
-"cycle";
 
 /**  How `open_project_window` satisfied the request. */
 export type OpenOutcome = 
@@ -6140,12 +5990,6 @@ export type SyncEntry = {
 	local: FileStamp | null,
 	remote: FileStamp | null,
 	status: SyncStatus,
-};
-
-export type SyncProgress = {
-	message: string,
-	/**  0..1, or `None` when indeterminate. */
-	fraction: number | null,
 };
 
 export type SyncStatus = "localOnly" | "remoteOnly" | "localNewer" | "remoteNewer" | 

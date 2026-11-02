@@ -13,7 +13,6 @@ use serde_json::Value;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Format {
     /// Maven: `[ERROR] /p/A.java:[12,5] msg`, plus Kotlin and javac forms.
-    Maven,
     /// Gradle: javac's `A.java:12: error: msg` and Kotlin's `e: file:///p/A.kt:12:5 msg`.
     Gradle,
     /// `cargo --message-format=json`.
@@ -158,17 +157,6 @@ fn looks_like_source_path(p: &str) -> bool {
     !p.is_empty() && !p.contains(' ') && p.rsplit(['/', '\\']).next().is_some_and(|name| name.contains('.'))
 }
 
-/// `[12,5] msg` (Maven) → (12, 5, msg).
-fn bracket_pos(s: &str) -> Option<(u32, Option<u32>, &str)> {
-    let inner = s.strip_prefix('[')?;
-    let (pos, rest) = inner.split_once(']')?;
-    let (line, col) = match pos.split_once(',') {
-        Some((l, c)) => (num(l)?, num(c)),
-        None => (num(pos)?, None),
-    };
-    Some((line, col, rest.trim_start()))
-}
-
 /// `file:///p/A.kt` → `/p/A.kt` (percent-decoded).
 fn from_file_uri(s: &str) -> String {
     let Some(rest) = s.strip_prefix("file://") else { return s.to_owned() };
@@ -255,30 +243,6 @@ fn gcc_line(line: &str) -> Option<RawMessage> {
     };
     let msg = msg.trim();
     (!msg.is_empty()).then(|| RawMessage::new(severity, msg, ColUnit::Byte).at(path, ln, col))
-}
-
-/// Maven: `[ERROR] /p/A.java:[12,5] msg`, `[WARNING] …`, and Kotlin / javac forms after the level.
-fn maven_line(line: &str) -> Option<RawMessage> {
-    let (severity, rest) = if let Some(r) = line.strip_prefix("[ERROR] ") {
-        (Severity::Error, r)
-    } else {
-        let r = line.strip_prefix("[WARNING] ")?;
-        (Severity::Warning, r)
-    };
-    let rest = rest.trim_start();
-    if let Some((path, pos)) = rest.split_once(":[")
-        && looks_like_source_path(path)
-        && let Some((ln, col, msg)) = bracket_pos(&format!("[{pos}"))
-    {
-        return Some(RawMessage::new(severity, msg, ColUnit::Char).at(path, ln, col));
-    }
-    if let Some(m) = kotlin_line(rest) {
-        return Some(m);
-    }
-    if rest.starts_with("file://") || rest.contains(": (") {
-        return kotlin_location(rest, severity);
-    }
-    None
 }
 
 /// tsc: `a.ts(12,5): error TS2322: msg` or `a.ts:12:5 - error TS2322: msg`.
@@ -394,18 +358,8 @@ impl OutputParser {
             }
             p.source_lines = 0;
         }
-        // Maven repeats compiler messages in its failure summary with every line prefixed.
-        let body = match format {
-            Format::Maven => line
-                .strip_prefix("[ERROR]")
-                .or_else(|| line.strip_prefix("[WARNING]"))
-                .map_or(line, |r| r.strip_prefix(' ').unwrap_or(r)),
-            _ => line,
-        };
-        if matches!(format, Format::Maven | Format::Gradle | Format::Tsc)
-            && body.starts_with("  ")
-            && !body.trim().is_empty()
-        {
+        let body = line;
+        if matches!(format, Format::Gradle | Format::Tsc) && body.starts_with("  ") && !body.trim().is_empty() {
             p.msg.text.push('\n');
             p.msg.text.push_str(body.trim());
             return true;
@@ -431,7 +385,6 @@ impl OutputParser {
         }
         self.flush(&mut out.messages);
         let parsed = match self.format {
-            Format::Maven => maven_line(&line),
             Format::Gradle => javac_header(&line).or_else(|| kotlin_line(&line)),
             Format::Tsc => tsc_line(&line),
             Format::Go => go_line(&line),
@@ -471,42 +424,6 @@ mod tests {
 
     fn pos(m: &RawMessage) -> (Severity, &str, u32, Option<u32>) {
         (m.severity, m.path.as_deref().unwrap(), m.line.unwrap(), m.col)
-    }
-
-    #[test]
-    fn maven_javac() {
-        let out = parse(
-            Format::Maven,
-            "[INFO] --- compiler:3.13.0:compile (default-compile) @ demo ---\n\
-             [ERROR] COMPILATION ERROR : \n\
-             [ERROR] /p/src/main/java/a/A.java:[12,5] cannot find symbol\n\
-             \x20 symbol:   class Foo\n\
-             \x20 location: class a.A\n\
-             [WARNING] /p/src/main/java/a/B.java:[3,8] [deprecation] old() in a.C has been deprecated\n\
-             [INFO] 1 error\n\
-             [ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.13.0:compile\n",
-        );
-        assert_eq!(out.len(), 2, "{out:?}");
-        assert_eq!(pos(&out[0]), (Severity::Error, "/p/src/main/java/a/A.java", 12, Some(5)));
-        assert_eq!(out[0].text, "cannot find symbol\nsymbol:   class Foo\nlocation: class a.A");
-        assert_eq!(pos(&out[1]), (Severity::Warning, "/p/src/main/java/a/B.java", 3, Some(8)));
-        assert_eq!(out[1].unit, ColUnit::Char);
-    }
-
-    #[test]
-    fn maven_detail_lines_with_level_prefix_and_kotlin() {
-        let out = parse(
-            Format::Maven,
-            "[ERROR] /p/A.java:[7,20] incompatible types: String cannot be converted to int\n\
-             [ERROR] -> [Help 1]\n\
-             [ERROR] file:///p/src/K%20t.kt:4:9 Unresolved reference 'x'.\n\
-             [WARNING] /p/src/K.kt: (2, 3): Variable 'y' is never used\n",
-        );
-        assert_eq!(out.len(), 3, "{out:?}");
-        assert_eq!(out[0].text, "incompatible types: String cannot be converted to int");
-        assert_eq!(pos(&out[1]), (Severity::Error, "/p/src/K t.kt", 4, Some(9)));
-        assert_eq!(pos(&out[2]), (Severity::Warning, "/p/src/K.kt", 2, Some(3)));
-        assert_eq!(out[2].text, "Variable 'y' is never used");
     }
 
     #[test]

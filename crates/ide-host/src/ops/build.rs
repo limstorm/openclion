@@ -213,9 +213,7 @@ pub async fn build_run(
 ) -> IdeResult<BuildResult> {
     host.require_trust(window)?;
     let project = host.project(window)?;
-    let (root, cache, sink) = (project.root.clone(), project.build_cache_dir(), project.sink.clone());
-    let settings = project.settings.effective();
-    let config_dir = host.config_dir.clone();
+    let (root, sink) = (project.root.clone(), project.sink.clone());
     let token = host.begin_project_request(window, request);
     let result = tokio::task::spawn_blocking(move || {
         for path in clear {
@@ -228,9 +226,7 @@ pub async fn build_run(
         let plan = if let Some(workspace) = ide_workspace::workspace::Workspace::load(&root)? {
             let mut combined: Option<compile::BuildPlan> = None;
             for member in workspace.projects.iter().filter(|p| file.as_ref().is_none_or(|f| f.starts_with(p))) {
-                let settings = ide_workspace::SettingsStore::load(&config_dir, Some(member)).effective();
-                let member_cache = cache.join(crate::project::project_key(member));
-                let plan = compile::plan(member, &load(member, &member_cache, &settings), kind, file.as_deref())?;
+                let plan = compile::plan(member, kind, file.as_deref())?;
                 match &mut combined {
                     Some(combined) => combined.steps.extend(plan.steps),
                     None => combined = Some(plan),
@@ -240,7 +236,7 @@ pub async fn build_run(
             plan.title = workspace.name;
             plan
         } else {
-            compile::plan(&root, &load(&root, &cache, &settings), kind, file.as_deref())?
+            compile::plan(&root, kind, file.as_deref())?
         };
         let result = compile::run(&root, &plan, &token, &|e| {
             let _ = on_event.send(e);
