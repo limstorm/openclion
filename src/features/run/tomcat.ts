@@ -9,7 +9,6 @@ export const tomcatType: RunConfigTypeContribution = {
   label: "Local",
   icon: "server",
   description: "Run a WAR application in a local Tomcat server",
-  debugAdapter: "java-debug",
   terminal: false,
   defaults: {
     deployment: "artifact",
@@ -19,7 +18,7 @@ export const tomcatType: RunConfigTypeContribution = {
     ...updatePolicyDefaults,
   },
   fields: [
-    ...updatePolicyFields(true),
+    ...updatePolicyFields(),
     { key: "tomcatHome", label: "Tomcat installation directory", required: true, mono: true },
     {
       key: "deployment",

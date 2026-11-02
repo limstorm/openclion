@@ -74,3 +74,26 @@ test("Search Everywhere finds Generate Definition", async ({ workbench: page }) 
   await dialog.getByRole("combobox").fill("Generate Definition");
   await expect(dialog.getByRole("option", { name: /Generate Definition/ }).first()).toBeVisible();
 });
+
+test("Search Everywhere lists the Valgrind and sanitizer runs", async ({ workbench: page }) => {
+  await doubleShift(page);
+  const dialog = page.getByRole("dialog", { name: "Search Everywhere" });
+  for (const name of ["Run with Valgrind Memcheck", "Run with Sanitizers"]) {
+    await dialog.getByRole("combobox").fill(name);
+    await expect(dialog.getByRole("option", { name: new RegExp(name) }).first()).toBeVisible();
+  }
+});
+
+test("a CMake profile builds with sanitizers from Settings", async ({ workbench: page }) => {
+  await page.keyboard.press("Meta+,");
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await dialog.getByRole("textbox", { name: "Search settings" }).fill("CMake");
+  await dialog.getByRole("treeitem", { name: "CMake", exact: true }).first().click();
+  const sanitizers = dialog.getByRole("checkbox", {
+    name: "Build with AddressSanitizer and UndefinedBehaviorSanitizer",
+  });
+  await expect(sanitizers).not.toBeChecked();
+  await sanitizers.click();
+  await expect(dialog.getByLabel("CMake arguments")).toHaveValue(/-fsanitize=address,undefined/);
+  await page.screenshot({ path: "docs/media/openclion-sanitizers.png", animations: "disabled" });
+});

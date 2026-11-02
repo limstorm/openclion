@@ -21,8 +21,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-/// How long Inspect Code waits for a server that is still starting (jdtls,
-/// rust-analyzer on a large workspace).
+/// How long Inspect Code waits for a server that is still starting
+/// (rust-analyzer on a large workspace).
 const INSPECT_START_WAIT: Duration = Duration::from_secs(60);
 
 #[derive(Clone, Copy, Debug)]

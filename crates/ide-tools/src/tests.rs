@@ -44,61 +44,6 @@ fn find<'a>(list: &'a [ToolInfo], name: &str) -> &'a ToolInfo {
 }
 
 #[test]
-fn bundled_lombok_replaces_legacy_installs_on_every_platform_without_downloads() {
-    for os in [Os::Mac, Os::Linux, Os::Windows] {
-        for arch in [platform::Arch::Arm64, platform::Arch::X64] {
-            let env = Env::new();
-            let legacy = env.root.join("lombok/bin/lombok.jar");
-            fs::create_dir_all(legacy.parent().unwrap()).unwrap();
-            fs::write(&legacy, b"old official agent").unwrap();
-            fs::write(env.root.join("lombok").join(MANIFEST), r#"{"version":"1.18.48"}"#).unwrap();
-            let tools = Tools::with_paths(env.root.clone(), OsString::new(), Platform { os, arch });
-            let info = tools.info("lombok", &[]).unwrap();
-            let path = managed_bundle(env.root.parent().unwrap(), "lombok").unwrap();
-            assert_eq!(info.status, ToolStatus::Installed);
-            assert_eq!(info.version.as_deref(), Some("1.18.48-openclion.1"));
-            assert_eq!(info.path, Some(path.clone().into()));
-            assert_eq!(path.file_name().unwrap(), "lombok-1.18.48-openidea.1.jar");
-            assert!(!info.can_install && !info.can_uninstall);
-            assert_eq!(tools.unavailable_reason(registry::find("lombok").unwrap()), None);
-            assert_eq!(fs::read(&legacy).unwrap(), b"old official agent", "other windows may still use it");
-        }
-    }
-}
-
-#[test]
-fn bundled_lombok_is_available_offline_and_repairs_missing_or_corrupt_files() {
-    let env = Env::new();
-    let data = env.root.parent().unwrap();
-    let agent = managed_bundle(data, "lombok").unwrap();
-    let checksum = include_str!("../../../plugins/lombok/SHA256SUMS").split_whitespace().next().unwrap();
-    assert_eq!(sources::sha256_file(&agent).unwrap(), checksum);
-    for contents in [None, Some(b"incomplete jar".as_slice())] {
-        if let Some(contents) = contents {
-            fs::write(&agent, contents).unwrap();
-        } else {
-            fs::remove_file(&agent).unwrap();
-        }
-        assert_eq!(managed_bundle(data, "lombok"), Some(agent.clone()));
-        assert_eq!(sources::sha256_file(&agent).unwrap(), checksum);
-    }
-    assert_eq!(fs::read_dir(agent.parent().unwrap()).unwrap().count(), 1, "no temporary jars left behind");
-}
-
-#[test]
-fn concurrent_windows_get_the_same_complete_bundled_lombok() {
-    let env = Env::new();
-    let data = env.root.parent().unwrap();
-    std::thread::scope(|scope| {
-        let windows: Vec<_> = (0..8).map(|_| scope.spawn(|| managed_bundle(data, "lombok").unwrap())).collect();
-        let paths: Vec<_> = windows.into_iter().map(|window| window.join().unwrap()).collect();
-        assert!(paths.iter().all(|path| path == &paths[0]));
-        let checksum = include_str!("../../../plugins/lombok/SHA256SUMS").split_whitespace().next().unwrap();
-        assert_eq!(sources::sha256_file(&paths[0]).unwrap(), checksum);
-    });
-}
-
-#[test]
 fn version_parsing() {
     assert_eq!(parse_version("rust-analyzer 1.85.0 (4d91de4e 2025-02-17)").as_deref(), Some("1.85.0"));
     assert_eq!(
@@ -486,23 +431,6 @@ done"#,
     assert!(!uninstall.contains("typescript"), "typescript-language-server still needs it: {uninstall}");
 }
 
-#[test]
-fn installed_bundle_is_detected_and_resolvable() {
-    let env = Env::new();
-    let tools = env.tools();
-    assert_eq!(tools.info("java-debug", &langs()).unwrap().status, ToolStatus::Missing);
-    let bin = env.root.join("java-debug/bin");
-    fs::create_dir_all(&bin).unwrap();
-    fs::write(bin.join("com.microsoft.java.debug.plugin.jar"), b"PK").unwrap();
-    let info = tools.info("java-debug", &langs()).unwrap();
-    assert_eq!(info.status, ToolStatus::Installed);
-    assert_eq!(info.kind, ToolKind::Debugger);
-    assert_eq!(info.languages, ["Java"]);
-    let app_data = env.root.parent().unwrap();
-    assert_eq!(managed_bundle(app_data, "java-debug"), Some(bin.join("com.microsoft.java.debug.plugin.jar")));
-    assert_eq!(managed_bundle(app_data, "jdtls"), None, "not a bundle");
-}
-
 #[cfg(unix)]
 #[test]
 fn custom_paths_win_and_report_their_version() {
@@ -595,16 +523,6 @@ exit 0"#,
     assert_eq!(info.path.as_deref(), Some(wrapper.as_path()));
     let out = std::process::Command::new(&wrapper).output().unwrap();
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "/opt/dotnet");
-}
-
-#[test]
-fn kotlin_debugger_uses_existing_release_recipe_and_language_definition() {
-    let spec = registry::find("kotlin-debug-adapter").unwrap();
-    assert!(matches!(
-        spec.method,
-        Method::Release { source: ReleaseSource::GitHub { repo: "fwcd/kotlin-debug-adapter" }, .. }
-    ));
-    assert!(langs().iter().any(|l| l.debugger.as_ref().is_some_and(|d| d.adapter == spec.name)));
 }
 
 #[test]

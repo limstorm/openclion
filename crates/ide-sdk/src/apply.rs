@@ -83,19 +83,6 @@ pub fn project_jdk(root: &Path, s: &Settings) -> Option<crate::java::Jdk> {
     }
 }
 
-/// The JDK chosen to run jdtls (`languages.java.jdtlsJdk`): `Ok(None)` when not
-/// set, `Err` (the message) when it is not a JDK home.
-pub fn jdtls_jdk(root: &Path, s: &Settings) -> Result<Option<crate::java::Jdk>, String> {
-    match jdk_setting(root, &s.languages.java.jdtls_jdk) {
-        None => Ok(None),
-        Some(Ok(jdk)) => Ok(Some(jdk)),
-        Some(Err(p)) => Err(format!(
-            "The language server JDK {} is not a JDK home (Settings › Languages & Frameworks › Java).",
-            p.display()
-        )),
-    }
-}
-
 /// `mvn` of the configured Maven home (`languages.java.maven.home`): the
 /// executable itself, `<home>/bin/mvn` or `<bin>/mvn`; else of the Maven the project
 /// pins for mise / asdf when it has no Maven wrapper.
@@ -173,11 +160,23 @@ pub fn maven_local_repository(root: &Path, s: &Settings) -> Option<PathBuf> {
     let m = &s.languages.java.maven;
     setting_path(root, &m.local_repository).or_else(|| {
         let text = std::fs::read_to_string(setting_path(root, &m.user_settings)?).ok()?;
-        let repo = crate::java::xml_value(&crate::lombok::strip_xml_comments(&text), "localRepository")?;
+        let repo = crate::java::xml_value(&strip_xml_comments(&text), "localRepository")?;
         let home = crate::home_dir().map(|h| h.to_string_lossy().into_owned()).unwrap_or_default();
         let repo = repo.replace("${user.home}", &home);
         (!repo.is_empty() && !repo.contains("${")).then(|| PathBuf::from(repo))
     })
+}
+
+/// `text` without XML comments, so a commented-out `<localRepository>` is not read.
+fn strip_xml_comments(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(i) = rest.find("<!--") {
+        out.push_str(&rest[..i]);
+        rest = rest[i..].find("-->").map_or("", |j| &rest[i + j + 3..]);
+    }
+    out.push_str(rest);
+    out
 }
 
 /// TypeScript `lib` directory for the selected version; `None` = the server's bundled one.
@@ -210,60 +209,6 @@ fn merge(base: &mut Value, layer: Value) {
     }
 }
 
-/// Excludes project-relative Maven POM paths from JDTLS import, preserving user exclusions.
-pub fn configure_maven_import(cfg: &mut LanguageServerConfig, root: &Path, excluded_poms: &[PathBuf]) {
-    if cfg.name != "jdtls" {
-        return;
-    }
-    let mut options =
-        cfg.initialization_options.as_ref().and_then(|v| serde_json::to_value(v).ok()).unwrap_or_else(|| json!({}));
-    if let Some(settings) = &cfg.settings {
-        merge(&mut options, settings.clone());
-    }
-    let mut exclusions = options
-        .pointer("/java/import/exclusions")
-        .or_else(|| options.pointer("/settings/java/import/exclusions"))
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_else(|| {
-            vec![
-                json!("**/node_modules/**"),
-                json!("**/.metadata/**"),
-                json!("**/archetype-resources/**"),
-                json!("**/META-INF/maven/**"),
-            ]
-        });
-    for pom in excluded_poms {
-        let directory = root.join(pom).parent().unwrap_or(root).to_path_buf();
-        let directory = directory.to_string_lossy().replace('\\', "/");
-        // Java NIO glob syntax treats these characters specially even in literal paths.
-        let escaped: String =
-            directory.chars().flat_map(|c| if "*?[]{}\\".contains(c) { vec!['\\', c] } else { vec![c] }).collect();
-        exclusions.push(json!(escaped));
-    }
-    if !excluded_poms.is_empty() {
-        merge_init_options(cfg, json!({"settings": {"java": {"import": {"exclusions": exclusions}}}}));
-        if let Some(settings) = &mut cfg.settings {
-            merge(
-                settings,
-                json!({"java": {"import": {"exclusions": exclusions}}, "settings": {"java": {"import": {"exclusions": exclusions}}}}),
-            );
-        }
-        // A fresh workspace cannot retain Maven projects imported before unlinking.
-        if let Some(index) = cfg.args.iter().position(|arg| arg == "-data")
-            && let Some(workspace) = cfg.args.get_mut(index + 1)
-        {
-            let mut hash = 0xcbf29ce484222325u64;
-            for pom in excluded_poms {
-                for byte in pom.to_string_lossy().bytes().chain([0]) {
-                    hash = (hash ^ u64::from(byte)).wrapping_mul(0x100000001b3);
-                }
-            }
-            *workspace = format!("{workspace}-maven-{hash:016x}");
-        }
-    }
-}
-
 pub(crate) fn merge_init_options(cfg: &mut LanguageServerConfig, layer: Value) {
     let mut current =
         cfg.initialization_options.as_ref().and_then(|v| serde_json::to_value(v).ok()).unwrap_or_else(|| json!({}));
@@ -274,32 +219,6 @@ pub(crate) fn merge_init_options(cfg: &mut LanguageServerConfig, layer: Value) {
     match toml::Value::try_from(current) {
         Ok(v) => cfg.initialization_options = Some(v),
         Err(e) => tracing::warn!("{}: cannot apply settings to initialization options: {e}", cfg.name),
-    }
-}
-
-/// Workspace compiler defaults; Eclipse project preferences still take precedence.
-pub(crate) fn configure_java_compiler(cfg: &mut LanguageServerConfig, data_dir: &Path) {
-    let file = data_dir.join("lsp/jdtls/compiler-defaults.prefs");
-    const DEFAULTS: &str = "org.eclipse.jdt.core.compiler.problem.forbiddenReference=warning\n\
-org.eclipse.jdt.core.compiler.problem.discouragedReference=warning\n";
-    let write = || -> ide_core::IdeResult<()> {
-        std::fs::create_dir_all(file.parent().expect("compiler preferences directory"))?;
-        if std::fs::read_to_string(&file).ok().as_deref() != Some(DEFAULTS) {
-            ide_vfs::write_atomic(&file, DEFAULTS.as_bytes())?;
-        }
-        Ok(())
-    };
-    if let Err(e) = write() {
-        tracing::warn!("jdtls: cannot write compiler defaults: {e}");
-        return;
-    }
-    // jdtls accepts absolute filesystem paths as well as URLs (including paths
-    // containing spaces and Windows backslashes). Explicit server settings win later.
-    let defaults = json!({"settings": {"java": {"settings": {"url": file.to_string_lossy()}}}});
-    let existing = cfg.initialization_options.clone();
-    merge_init_options(cfg, defaults);
-    if let Some(existing) = existing {
-        merge_init_options(cfg, serde_json::to_value(existing).expect("TOML initialization options"));
     }
 }
 
@@ -405,20 +324,6 @@ pub fn configure_server(cfg: &mut LanguageServerConfig, root: &Path, server_root
         }
         if let Some(gopath) = setting_path(root, &s.languages.go.gopath) {
             cfg.env.insert("GOPATH".into(), gopath.to_string_lossy().into_owned());
-        }
-    }
-
-    if name == "jdtls" {
-        // The jdtls launcher forwards `--jvm-arg=` values to the JVM it starts.
-        let args = s.languages.java.jdtls_vm_args.split_whitespace().map(|a| format!("--jvm-arg={a}"));
-        cfg.args.extend(args);
-        // m2e (the Maven import) reads mirrors, servers and `<localRepository>` from it.
-        if let Some(file) = setting_path(root, &s.languages.java.maven.user_settings) {
-            let file = file.to_string_lossy();
-            merge_init_options(
-                cfg,
-                json!({ "settings": { "java": { "configuration": { "maven": { "userSettings": file } } } } }),
-            );
         }
     }
 
@@ -767,92 +672,4 @@ pub fn terminal_activation(root: &Path, s: &Settings, shell: &str) -> Option<Str
         _ => "activate",
     };
     script(target).is_file().then_some(line)
-}
-
-#[cfg(test)]
-mod java_compiler_tests {
-    use super::*;
-
-    fn options(cfg: &LanguageServerConfig) -> Value {
-        serde_json::to_value(cfg.initialization_options.as_ref().unwrap()).unwrap()
-    }
-
-    #[test]
-    fn compiler_defaults_live_in_the_cache_and_preserve_other_options() {
-        let tmp = tempfile::tempdir().unwrap();
-        let cache = tmp.path().join("cache with spaces 测试");
-        let mut cfg = custom_server("jdtls", &LanguageServerSettings::default());
-        merge_init_options(&mut cfg, json!({"settings": {"java": {"format": {"tabSize": 4}}}}));
-        configure_java_compiler(&mut cfg, &cache);
-        let options = options(&cfg);
-        let path = PathBuf::from(options.pointer("/settings/java/settings/url").unwrap().as_str().unwrap());
-        assert!(path.starts_with(&cache));
-        let prefs = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(prefs.lines().count(), 2);
-        for problem in ["forbiddenReference", "discouragedReference"] {
-            assert!(prefs.contains(&format!("org.eclipse.jdt.core.compiler.problem.{problem}=warning\n")));
-        }
-        assert_eq!(options.pointer("/settings/java/format/tabSize"), Some(&json!(4)));
-        let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
-        configure_java_compiler(&mut cfg, &cache);
-        assert_eq!(std::fs::metadata(path).unwrap().modified().unwrap(), modified);
-        assert_eq!(self::options(&cfg), options);
-    }
-
-    #[test]
-    fn explicit_compiler_settings_keep_priority() {
-        let tmp = tempfile::tempdir().unwrap();
-        let mut cfg = custom_server("jdtls", &LanguageServerSettings::default());
-        merge_init_options(&mut cfg, json!({"settings": {"java": {"settings": {"url": "own.prefs"}}}}));
-        configure_java_compiler(&mut cfg, tmp.path());
-        assert_eq!(options(&cfg).pointer("/settings/java/settings/url"), Some(&json!("own.prefs")));
-
-        for settings in [
-            json!({"java": {"settings": {"url": "custom.prefs"}}}),
-            json!({"settings": {"java": {"settings": {"url": "custom.prefs"}}}}),
-        ] {
-            cfg.settings = None;
-            let mut s = Settings::default();
-            s.language_servers.insert(
-                "jdtls".into(),
-                LanguageServerSettings { settings: Some(settings.clone()), ..Default::default() },
-            );
-            server_protocol_overrides(&mut cfg, &s);
-            assert_eq!(cfg.settings, Some(settings));
-        }
-        let mut s = Settings::default();
-        s.language_servers.insert(
-            "jdtls".into(),
-            LanguageServerSettings {
-                initialization_options: Some(json!({"settings": {"java": {"settings": {"url": "user.prefs"}}}})),
-                ..Default::default()
-            },
-        );
-        server_protocol_overrides(&mut cfg, &s);
-        assert_eq!(options(&cfg).pointer("/settings/java/settings/url"), Some(&json!("user.prefs")));
-    }
-}
-
-#[cfg(test)]
-mod maven_linkage_tests {
-    use super::*;
-
-    #[test]
-    fn import_excludes_unlinked_modules_and_changes_persistent_workspace() {
-        let tmp = tempfile::tempdir().unwrap();
-        std::fs::create_dir_all(tmp.path().join("a/child")).unwrap();
-        std::fs::write(tmp.path().join("a/pom.xml"), "<project><modules><module>child</module></modules></project>")
-            .unwrap();
-        std::fs::write(tmp.path().join("a/child/pom.xml"), "<project/>").unwrap();
-        let mut cfg = custom_server("jdtls", &LanguageServerSettings::default());
-        cfg.args = vec!["-data".into(), "/cache/jdtls".into()];
-        merge_init_options(&mut cfg, json!({"settings":{"java":{"import":{"exclusions":["**/custom"]}}}}));
-        configure_maven_import(&mut cfg, tmp.path(), &["a/child/pom.xml".into(), "a/pom.xml".into()]);
-        let options = serde_json::to_value(cfg.initialization_options).unwrap();
-        let exclusions = options.pointer("/settings/java/import/exclusions").unwrap().as_array().unwrap();
-        assert!(exclusions.contains(&json!("**/custom")));
-        assert!(exclusions.contains(&json!(tmp.path().join("a").to_string_lossy().replace('\\', "/"))));
-        assert!(exclusions.contains(&json!(tmp.path().join("a/child").to_string_lossy().replace('\\', "/"))));
-        assert!(cfg.args[1].starts_with("/cache/jdtls-maven-"));
-    }
 }

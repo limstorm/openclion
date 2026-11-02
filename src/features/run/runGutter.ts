@@ -88,7 +88,7 @@ export function targetTitle(t: RunTarget): string {
 }
 
 export function label(t: RunTarget): string {
-  if (t.kind === "main") return t.className ? `${t.name}.main()` : "main";
+  if (t.kind === "main") return "main";
   return t.name;
 }
 

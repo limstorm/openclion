@@ -203,6 +203,18 @@ which is what the Toolchains page edits.
   `cpp_generate_definition` in the IPC, `Generate Definition` in the Code menu,
   and `code.generate` (⌘N) falls back to it when clangd has nothing to generate.
 
+* **Valgrind Memcheck** — `Run with Valgrind Memcheck` runs a native target under
+  `valgrind --tool=memcheck --xml=yes`, then `src/features/valgrind/report.ts`
+  parses the XML and publishes one diagnostic per finding at its innermost
+  project frame (Problems view), with a summary notification. The report lives
+  in a temporary directory; nothing is written into the project.
+* **Sanitizers** — a CMake profile can be built with AddressSanitizer and UBSan
+  (a toggle on Settings › CMake that adds `-fsanitize=address,undefined` to the
+  profile's compiler flags), and `Run with Sanitizers` runs the binary with
+  symbolized ASan/LSan/UBSan runtime options, reads the run console and turns
+  each report into a Problems entry. `src/features/sanitizers/report.ts` knows
+  ASan, LeakSanitizer, ThreadSanitizer and UBSan banners.
+
 ## 6. Deliberate gaps (roadmap)
 
 Ordered by how much they would be missed by a CLion user:
@@ -217,10 +229,9 @@ Ordered by how much they would be missed by a CLion user:
    which runs clang-format and honours `.clang-format`.)
 3. **Sanitizers / Valgrind** — CLion's Valgrind and sanitizer integrations have
    no counterpart here yet.
-4. **JVM clean-up** — `plugins/{java-usages,kotlin-bridge,lombok}` and the
-   jdtls/JDWP paths in `ide-sdk`, `ide-lsp`, `ide-dap`, `ide-run` are still
-   compiled in. They are inert in a C/C++ project, but a clean fork would gate
-   them behind a feature flag or delete them.
+4. **Java/Kotlin leftovers** — jdtls, Lombok, the Kotlin bridge and JDWP are
+   gone; the Maven/Gradle build-tool model and the Java _run_ configurations are
+   kept (they launch `java` without a language server or debugger).
 
 ## 7. Verifying a change
 

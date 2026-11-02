@@ -12,9 +12,6 @@ pub mod adapter;
 pub mod attach;
 mod cargo;
 pub mod connection;
-pub mod jdwp;
-pub mod kotlin;
-mod kotlin_jdwp;
 mod session;
 
 use adapter::{AdapterLauncher, AdapterSpec, ProcessLauncher};
@@ -47,9 +44,9 @@ pub struct LaunchConfig {
     /// Adapter specific extra arguments as JSON text, merged into the launch request.
     /// A `"cargo": {"args": [...], "filter": {"name", "kind"}}` entry builds with cargo
     /// and launches the produced executable; `"debugServer": <port>` connects to an
-    /// adapter already listening on that local port (e.g. java-debug inside jdtls)
-    /// instead of starting one, `"debugServer": "host:port"` to one on another machine
-    /// (`dlv --headless`, `debugpy --listen`).
+    /// adapter already listening on that local port instead of starting one,
+    /// `"debugServer": "host:port"` to one on another machine (`dlv --headless`,
+    /// `debugpy --listen`).
     pub extra_json: Option<String>,
 }
 
@@ -65,8 +62,7 @@ pub struct Breakpoint {
 }
 
 /// A method breakpoint (DAP function breakpoint). `name` uses the adapter's syntax:
-/// `pkg.Class#method` for java-debug, `pkg.Func` / `pkg.(*T).Method` for Delve, a plain
-/// function name for debugpy and LLDB.
+/// `pkg.Func` / `pkg.(*T).Method` for Delve, a plain function name for debugpy and LLDB.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FunctionBreakpoint {
@@ -76,8 +72,7 @@ pub struct FunctionBreakpoint {
     pub enabled: bool,
 }
 
-/// A field watchpoint (DAP data breakpoint) on a `dataId` from [`DebugManager::data_breakpoint_info`]
-/// (java-debug ids, `Class#field`, stay valid across sessions).
+/// A field watchpoint (DAP data breakpoint) on a `dataId` from [`DebugManager::data_breakpoint_info`].
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct DataBreakpoint {
@@ -123,50 +118,8 @@ pub struct DebugCapabilities {
     pub conditional_breakpoints: bool,
     pub hit_conditional_breakpoints: bool,
     pub log_points: bool,
-    /// HotSwap ("Reload Changed Classes"): java-debug's `redefineClasses` request.
-    pub hot_code_replace: bool,
     /// The Memory view can read the debuggee's memory (`readMemory`).
     pub read_memory: bool,
-}
-
-/// Result of [`DebugManager::redefine_classes`].
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "camelCase")]
-pub struct HotSwapResult {
-    /// Fully qualified names of the classes reloaded (empty: nothing had changed).
-    pub changed_classes: Vec<String>,
-    pub error_message: Option<String>,
-}
-
-/// Adapters that implement java-debug's hot code replace protocol.
-pub const HOT_CODE_REPLACE_ADAPTERS: &[&str] = &["java-debug"];
-
-/// java-debug's `HotCodeReplaceEvent.changeType` (an enum name, or its numeric code).
-pub(crate) fn hot_code_replace_type(v: Option<&Value>) -> String {
-    match v {
-        Some(Value::String(s)) => s.clone(),
-        Some(Value::Number(n)) => match n.as_i64() {
-            Some(-1) => "ERROR",
-            Some(-2) => "WARNING",
-            Some(1) => "STARTING",
-            Some(2) => "END",
-            Some(3) => "BUILD_COMPLETE",
-            _ => "UNKNOWN",
-        }
-        .to_owned(),
-        _ => "UNKNOWN".to_owned(),
-    }
-}
-
-pub(crate) fn hot_swap_result(body: &Value) -> HotSwapResult {
-    HotSwapResult {
-        changed_classes: body
-            .get("changedClasses")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|c| c.as_str().map(str::to_owned)).collect())
-            .unwrap_or_default(),
-        error_message: body.get("errorMessage").and_then(Value::as_str).filter(|m| !m.is_empty()).map(str::to_owned),
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
@@ -284,8 +237,6 @@ const INIT_TIMEOUT: Duration = Duration::from_secs(20);
 const LAUNCH_TIMEOUT: Duration = Duration::from_secs(60);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(3);
-/// Redefining many classes in a large JVM can take a while.
-const HOT_SWAP_TIMEOUT: Duration = Duration::from_secs(120);
 
 pub struct DebugManager {
     languages: Arc<LanguageRegistry>,
@@ -377,7 +328,7 @@ pub(crate) fn substitute_free_port(value: &mut Value, port: &mut impl FnMut() ->
 /// Where a running adapter listens: `debugServer` of the launch arguments.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct DebugServer {
-    /// `None` for the loopback interface (an adapter inside a local process such as jdtls).
+    /// `None` for the loopback interface (an adapter listening on this machine).
     pub host: Option<String>,
     pub port: u16,
 }
@@ -489,7 +440,6 @@ pub(crate) fn capabilities_from(caps: &Value) -> DebugCapabilities {
         conditional_breakpoints: has("supportsConditionalBreakpoints"),
         hit_conditional_breakpoints: has("supportsHitConditionalBreakpoints"),
         log_points: has("supportsLogPoints"),
-        hot_code_replace: false,
         read_memory: has("supportsReadMemoryRequest"),
     }
 }
@@ -579,14 +529,6 @@ impl DebugManager {
         let dbg = adapter::find_config(&self.languages, &config.adapter)
             .ok_or_else(|| IdeError::unavailable(format!("unknown debug adapter `{}`", config.adapter)))?;
         let mut spec = adapter::resolve(&dbg, cwd.clone());
-        if config.adapter == kotlin::ADAPTER
-            && let Some(home) = arguments
-                .as_object_mut()
-                .and_then(|o| o.remove("__adapterJavaHome"))
-                .and_then(|v| v.as_str().map(str::to_owned))
-        {
-            spec.env.push(("JAVA_HOME".into(), home));
-        }
         if let Some(command) = custom_command(&spec.command) {
             spec.command = command;
         }
@@ -758,19 +700,7 @@ impl DebugManager {
         }
     }
 
-    async fn configure(&self, s: &Arc<Session>, mut arguments: Value) -> IdeResult<()> {
-        if s.adapter == kotlin::ADAPTER {
-            let project = arguments
-                .get("projectRoot")
-                .and_then(Value::as_str)
-                .map(PathBuf::from)
-                .unwrap_or_else(|| s.spec.cwd.clone());
-            let mirror = tokio::task::spawn_blocking(move || kotlin::SourceMirror::create(&project))
-                .await
-                .map_err(|e| IdeError::internal(e.to_string()))??;
-            arguments["projectRoot"] = json!(mirror.root());
-            *s.kotlin_mirror.lock() = Some(mirror);
-        }
+    async fn configure(&self, s: &Arc<Session>, arguments: Value) -> IdeResult<()> {
         let caps = s
             .conn
             .request_timeout(
@@ -797,32 +727,8 @@ impl DebugManager {
             .await?;
         *s.caps.lock() = if caps.is_object() { caps } else { json!({}) };
 
-        // The Kotlin adapter ignores the resolved classpath and project runtime on launch.
-        let request = if s.adapter == kotlin::ADAPTER && s.request == "launch" {
-            session::start_kotlin_debuggee(s, &mut arguments).await?;
-            "attach"
-        } else {
-            &s.request
-        };
-        if s.adapter == kotlin::ADAPTER {
-            let host = arguments
-                .get("hostName")
-                .and_then(Value::as_str)
-                .ok_or_else(|| IdeError::invalid("Missing Kotlin JDWP host"))?
-                .to_owned();
-            let port = arguments
-                .get("port")
-                .and_then(Value::as_u64)
-                .and_then(|p| u16::try_from(p).ok())
-                .filter(|p| *p != 0)
-                .ok_or_else(|| IdeError::invalid("Invalid Kotlin JDWP port"))?;
-            let (relay, port) = kotlin_jdwp::StartupRelay::start(host, port).await?;
-            *s.kotlin_relay.lock() = Some(relay);
-            arguments["hostName"] = json!("127.0.0.1");
-            arguments["port"] = json!(port);
-        }
         // Many adapters answer `launch` only after `configurationDone`, so don't wait for it yet.
-        let launch = s.conn.send_request(request, arguments)?;
+        let launch = s.conn.send_request(&s.request, arguments)?;
         let mut launch = Box::pin(async move { launch.await.unwrap_or(Err(DapError::Closed)) });
         let mut initialized = s.initialized.subscribe();
         let mut launch_result = None;
@@ -852,7 +758,6 @@ impl DebugManager {
                         s.emit(ide_core::event::DebugEvent::BreakpointsChanged { path: path.into() });
                     }
                 }
-                Err(e) if s.adapter == kotlin::ADAPTER => return Err(e.into()),
                 Err(e) => tracing::debug!("setBreakpoints for {} failed: {e}", path.display()),
             }
         }
@@ -875,11 +780,7 @@ impl DebugManager {
             let _ = self.send_exception_breakpoints(s).await;
         }
         if s.supports("supportsConfigurationDoneRequest") {
-            if s.adapter == kotlin::ADAPTER {
-                drop(s.conn.send_request("configurationDone", json!({}))?);
-            } else {
-                s.conn.request_timeout("configurationDone", Value::Null, REQUEST_TIMEOUT).await?;
-            }
+            s.conn.request_timeout("configurationDone", Value::Null, REQUEST_TIMEOUT).await?;
         }
         s.configured.store(true, Ordering::Release);
         if launch_result.is_none() {
@@ -889,9 +790,6 @@ impl DebugManager {
                 }
                 Err(_) => return Err(DapError::Timeout(s.request.clone()).into()),
             }
-        }
-        if let Some(relay) = s.kotlin_relay.lock().as_mut() {
-            relay.release();
         }
         Ok(())
     }
@@ -949,7 +847,6 @@ impl DebugManager {
                 Ok(states) => {
                     result.get_or_insert(states);
                 }
-                Err(e) if s.adapter == kotlin::ADAPTER => return Err(e.into()),
                 Err(e) => tracing::debug!("setBreakpoints on session {} failed: {e}", s.id.0),
             }
         }
@@ -965,23 +862,6 @@ impl DebugManager {
         });
         self.states.lock().insert(path, states.clone());
         Ok(states)
-    }
-
-    /// Refresh fallback copies after an editor save.
-    pub async fn refresh_source_mirrors(&self, owner: &str) -> IdeResult<()> {
-        let sessions: Vec<_> = self.sessions.lock().values().filter(|s| s.owner.key == owner).cloned().collect();
-        tokio::task::spawn_blocking(move || {
-            for s in sessions {
-                if let Some(mirror) = s.kotlin_mirror.lock().as_mut()
-                    && let Err(e) = mirror.refresh()
-                {
-                    tracing::warn!("Could not refresh Kotlin debug sources: {e}");
-                }
-            }
-            Ok(())
-        })
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))?
     }
 
     /// Last known verification states of a file's breakpoints (after `BreakpointsChanged`).
@@ -1350,23 +1230,7 @@ impl DebugManager {
 
     pub fn capabilities(&self, s: DebugSessionId) -> IdeResult<DebugCapabilities> {
         let session = self.session(s)?;
-        let mut caps = capabilities_from(&session.caps.lock());
-        caps.hot_code_replace = HOT_CODE_REPLACE_ADAPTERS.contains(&session.adapter.as_str());
-        Ok(caps)
-    }
-
-    /// HotSwap: reloads the classes compiled since the session started (or since the
-    /// last reload) into the debuggee (java-debug `redefineClasses`).
-    pub async fn redefine_classes(&self, s: DebugSessionId) -> IdeResult<HotSwapResult> {
-        let session = self.session(s)?;
-        if !HOT_CODE_REPLACE_ADAPTERS.contains(&session.adapter.as_str()) {
-            return Err(IdeError::unavailable(format!(
-                "debug adapter `{}` cannot reload changed classes",
-                session.adapter
-            )));
-        }
-        let body = session.conn.request_timeout("redefineClasses", json!({}), HOT_SWAP_TIMEOUT).await?;
-        Ok(hot_swap_result(&body))
+        Ok(capabilities_from(&session.caps.lock()))
     }
 
     /// Stores method breakpoints (kept without a session, sent on start) and sends them to

@@ -211,7 +211,7 @@ mod tests {
     #[test]
     fn exe_suffix() {
         assert_eq!(WIN.exe("clangd"), "clangd.exe");
-        assert_eq!(WIN.exe("jdtls.bat"), "jdtls.bat");
+        assert_eq!(WIN.exe("clangd.bat"), "clangd.bat");
         assert_eq!(MAC_ARM.exe("clangd"), "clangd");
     }
 }

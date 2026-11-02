@@ -61,7 +61,7 @@ pub fn uri_to_path(uri: &str) -> Option<PathBuf> {
 }
 
 /// The IDE identity of a document URI: its path for `file:` URIs, else the
-/// URI itself (a virtual document such as `jdt://contents/…`) plus the URI.
+/// URI itself (a virtual document such as `mocklib://deps/…`) plus the URI.
 pub fn uri_target(uri: &str) -> (PathBuf, Option<String>) {
     match uri_to_path(uri) {
         Some(p) => (p, None),
@@ -86,16 +86,16 @@ mod tests {
         assert_eq!(path_to_uri_string(Path::new("/a b")), "file:///a%20b");
         assert_eq!(uri_to_path("file://localhost/x/y"), Some(PathBuf::from("/x/y")));
         assert_eq!(uri_to_path("file:///x/%C3%BC"), Some(PathBuf::from("/x/ü")));
-        assert_eq!(uri_to_path("jdt://contents/x"), None);
+        assert_eq!(uri_to_path("mocklib://deps/x"), None);
     }
 
     #[test]
     fn virtual_targets() {
-        let jdt = "jdt://contents/rt.jar/java.lang/String.class?=p/%5C/x.jar%3Cjava.lang(String.class";
-        assert_eq!(uri_target(jdt), (PathBuf::from(jdt), Some(jdt.to_owned())));
+        let virtual_uri = "mocklib://deps/lib-1.0/Thing.mk?rev=2";
+        assert_eq!(uri_target(virtual_uri), (PathBuf::from(virtual_uri), Some(virtual_uri.to_owned())));
         #[cfg(unix)]
         assert_eq!(uri_target("file:///a/b.rs"), (PathBuf::from("/a/b.rs"), None));
-        assert!(is_virtual_uri(jdt));
+        assert!(is_virtual_uri(virtual_uri));
         assert!(is_virtual_uri("untitled:Untitled-1"));
         assert!(!is_virtual_uri("file:///a"));
         assert!(!is_virtual_uri("/a/b:c"));

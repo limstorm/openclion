@@ -16,7 +16,6 @@ pub mod doc;
 pub mod env;
 pub mod fs;
 pub mod history;
-pub mod java;
 pub mod jvm_icons;
 pub mod lsp;
 pub mod nav;
@@ -80,7 +79,6 @@ pub fn register_all(d: &mut crate::rpc::Dispatcher) {
     cmake::register(d);
     tools::register(d);
     sdk::register(d);
-    java::register(d);
     debug::register(d);
     bytes::register(d);
     vcs::register(d);

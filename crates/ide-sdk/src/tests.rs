@@ -1,5 +1,5 @@
 use crate::apply::{
-    apply_to_run_configs, configure_server, jdtls_jdk, maven_command, maven_options, project_jdk, python_interpreter,
+    apply_to_run_configs, configure_server, maven_command, maven_options, project_jdk, python_interpreter,
     terminal_activation, tsdk,
 };
 use crate::python::parse_pip_list;
@@ -82,16 +82,6 @@ fn pyright_gets_python_path_and_venv_env() {
     assert_eq!(opts["python"]["pythonPath"], py.to_string_lossy().as_ref());
     assert_eq!(cfg.env["VIRTUAL_ENV"], tmp.path().join(".venv").to_string_lossy());
     assert!(cfg.env["PATH"].starts_with(&*tmp.path().join(".venv").join(bin_dir()).to_string_lossy()));
-}
-
-#[test]
-fn jdtls_vm_args() {
-    let tmp = tempfile::tempdir().unwrap();
-    let mut s = Settings::default();
-    s.languages.java.jdtls_vm_args = " -Xmx2g  -javaagent:/opt/lombok.jar ".into();
-    let mut cfg = server("jdtls");
-    configure_server(&mut cfg, tmp.path(), tmp.path(), &s);
-    assert_eq!(cfg.args, ["--jvm-arg=-Xmx2g", "--jvm-arg=-javaagent:/opt/lombok.jar"]);
 }
 
 #[test]
@@ -291,25 +281,6 @@ fn language_server_settings_disable_add_and_override() {
     let init = serde_json::to_value(ra.initialization_options.unwrap()).unwrap();
     assert_eq!(init, json!({ "checkOnSave": false, "check": { "command": "clippy" } }));
     assert_eq!(ra.settings, Some(json!({ "rust-analyzer": { "cargo": { "features": "all" } } })));
-}
-
-#[test]
-fn jdtls_jdk_setting() {
-    if cfg!(windows) {
-        return; // Unix paths
-    }
-    let tmp = tempfile::tempdir().unwrap();
-    fake_jdk(&tmp.path().join("jdk17"));
-    let mut s = Settings::default();
-    assert_eq!(jdtls_jdk(tmp.path(), &s), Ok(None));
-    // Separate from the project JDK, which run configurations keep using.
-    s.languages.java.jdk = "jdk17".into();
-    assert_eq!(jdtls_jdk(tmp.path(), &s), Ok(None));
-    s.languages.java.jdtls_jdk = "jdk17/bin".into();
-    assert_eq!(jdtls_jdk(tmp.path(), &s).unwrap().map(|j| j.major), Some(17));
-    // A chosen path that is not a JDK is an error, not a silent fallback.
-    s.languages.java.jdtls_jdk = "missing".into();
-    assert!(jdtls_jdk(tmp.path(), &s).unwrap_err().contains("is not a JDK home"));
 }
 
 #[test]

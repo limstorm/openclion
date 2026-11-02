@@ -77,7 +77,7 @@ afterEach(() => {
 });
 
 describe("paused editor evaluation", () => {
-  it.each(["java-debug", "js-debug", "debugpy"])("evaluates the clicked member through %s", async (adapter) => {
+  it.each(["js-debug", "debugpy", "lldb-dap"])("evaluates the clicked member through %s", async (adapter) => {
     session(adapter);
     view.dispatch({ selection: { anchor: 0, head: 5 } });
     expect(click().defaultPrevented).toBe(true);

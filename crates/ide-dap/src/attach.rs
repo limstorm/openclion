@@ -1,6 +1,6 @@
 //! Attach to Process: the current user's processes, grouped by the debugger that can
-//! attach to them (IDEA's `XAttachDebuggerProvider`s): JVMs with a JDWP agent, Node,
-//! Python (debugpy injection), Go binaries (Delve) and anything else natively (LLDB).
+//! attach to them (IDEA's `XAttachDebuggerProvider`s): Node, Python (debugpy injection),
+//! Go binaries (Delve) and anything else natively (LLDB).
 
 use crate::adapter;
 use ide_core::{IdeError, IdeResult};
@@ -11,7 +11,6 @@ use std::path::Path;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub enum AttachKind {
-    Java,
     Node,
     Python,
     Go,
@@ -28,7 +27,7 @@ pub struct AttachableProcess {
     pub kind: AttachKind,
     /// Debug adapter that attaches to it.
     pub adapter: String,
-    /// Debug port the process listens on (JDWP, `--inspect`, `debugpy --listen`).
+    /// Debug port the process listens on (`--inspect`, `debugpy --listen`).
     pub host: Option<String>,
     pub port: Option<u16>,
 }
@@ -51,26 +50,6 @@ fn host_port(addr: &str) -> Option<(Option<String>, u16)> {
     let port: u16 = port.parse().ok()?;
     let host = host.filter(|h| !h.is_empty() && *h != "*" && *h != "0.0.0.0").map(str::to_owned);
     Some((host, port))
-}
-
-/// `-agentlib:jdwp=transport=dt_socket,server=y,address=*:5005` (or `-Xrunjdwp:`).
-pub fn jdwp_address(args: &str) -> Option<(Option<String>, u16)> {
-    let opts = args
-        .split_whitespace()
-        .find_map(|a| a.strip_prefix("-agentlib:jdwp=").or_else(|| a.strip_prefix("-Xrunjdwp:")))?;
-    let mut server = false;
-    let mut address = None;
-    for kv in opts.split(',') {
-        match kv.split_once('=') {
-            Some(("server", v)) => server = v == "y",
-            Some(("address", v)) => address = Some(v),
-            _ => {}
-        }
-    }
-    if !server {
-        return None;
-    }
-    host_port(address?)
 }
 
 /// `--inspect`, `--inspect-brk=9230`, `--inspect=127.0.0.1:9230` (default port 9229).
@@ -119,10 +98,6 @@ pub fn classify(p: &RawProcess, is_go: impl Fn(&str) -> bool, native_adapter: &s
         })
     };
     let base = name.strip_suffix(".exe").unwrap_or(&name);
-    if base == "java" || base == "javaw" {
-        // Only JVMs started with a JDWP agent can be attached to.
-        return jdwp_address(&p.args).and_then(|a| make(AttachKind::Java, "java-debug", Some(a)));
-    }
     if base == "node" || base == "nodejs" {
         return make(AttachKind::Node, "js-debug", inspect_address(&p.args));
     }
@@ -259,20 +234,6 @@ mod tests {
 
     fn kind(exe: &str, args: &str) -> Option<(AttachKind, Option<u16>)> {
         classify(&raw(exe, args), |e| e.ends_with("/gosrv"), "codelldb").map(|p| (p.kind, p.port))
-    }
-
-    #[test]
-    fn parses_jdwp_agents() {
-        let a = "java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar app.jar";
-        assert_eq!(jdwp_address(a), Some((None, 5005)));
-        assert_eq!(
-            jdwp_address("java -Xrunjdwp:transport=dt_socket,server=y,address=10.0.0.2:8000 X"),
-            Some((Some("10.0.0.2".into()), 8000))
-        );
-        // A client-mode agent connects out; nothing to attach to.
-        assert_eq!(jdwp_address("java -agentlib:jdwp=transport=dt_socket,server=n,address=5005 X"), None);
-        assert_eq!(kind("/jdk/bin/java", a), Some((AttachKind::Java, Some(5005))));
-        assert_eq!(kind("/jdk/bin/java", "java -jar app.jar"), None);
     }
 
     #[test]

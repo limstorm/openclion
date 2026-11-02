@@ -88,39 +88,6 @@ describe("detectRunTargets", () => {
       [7, "main", ""],
     ]);
   });
-
-  it("go and jvm", () => {
-    expect(
-      pick(detectRunTargets("package x\n\nfunc TestAdd(t *testing.T) {}\nfunc helper() {}", "pkg/add_test.go")),
-    ).toEqual([[2, "test", "TestAdd"]]);
-    expect(pick(detectRunTargets("package main\nfunc main() {}", "cmd/app/main.go"))).toEqual([[1, "main", ""]]);
-    // Subtests: literal names, map-keyed tables; a one-line test has none.
-    const go = [
-      "package x",
-      "func TestOne(t *testing.T) {}",
-      "func TestMap(t *testing.T) {",
-      "\tcases := map[string]struct{ in int }{",
-      '\t\t"small n": {in: 1},',
-      "\t}",
-      "\tfor name, tc := range cases {",
-      "\t\tt.Run(name, func(t *testing.T) { _ = tc })",
-      "\t}",
-      '\tt.Run("a\\"b", nil)',
-      "}",
-    ].join("\n");
-    expect(pick(detectRunTargets(go, "x_test.go"))).toEqual([
-      [1, "test", "TestOne"],
-      [2, "test", "TestMap"],
-      [4, "test", "TestMap/small_n"],
-      [9, "test", 'TestMap/a"b'],
-    ]);
-    const kt = ["class CalcTest {", "  @Test", "  fun `adds numbers`() {}", "  @Test fun subs() {}", "}"].join("\n");
-    expect(pick(detectRunTargets(kt, "src/test/kotlin/CalcTest.kt"))).toEqual([
-      [0, "suite", "CalcTest"],
-      [2, "test", "CalcTest/adds numbers"],
-      [3, "test", "CalcTest/subs"],
-    ]);
-  });
 });
 
 describe("targetConfig", () => {
@@ -165,11 +132,6 @@ describe("targetConfig", () => {
       "./pkg",
       "-run",
       "^TestAdd$",
-    ]);
-    expect(first("class FooTest {\n  @Test\n  void bar() {}\n}", "src/test/java/FooTest.java").args).toEqual([
-      "test",
-      "--tests",
-      "FooTest.bar",
     ]);
   });
 

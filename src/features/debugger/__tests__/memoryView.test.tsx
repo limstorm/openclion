@@ -44,7 +44,6 @@ const session: DebugSession = {
     stepInTargets: false,
     functionBreakpoints: false,
     dataBreakpoints: false,
-    hotCodeReplace: false,
     readMemory: true,
     setValue: true,
     conditionalBreakpoints: true,

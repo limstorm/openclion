@@ -2,6 +2,7 @@ import { useEffect, useId, useState } from "react";
 import { DEFAULT_CMAKE_PROFILE, type CMakeProfileValid } from "@/platform/cmakeSettings";
 import { call, commands, isTauri, type CmakePreset } from "@/platform/ipc";
 import { kitCompilers, loadKits, useKits } from "@/features/cmake/kits";
+import { hasSanitizerFlags, withSanitizerFlags } from "@/features/sanitizers/profiles";
 import { formatArgs, parseArgs } from "@/platform/commandLine";
 import { tx } from "@/platform/i18n";
 import { Checkbox, IconButton, Input, T } from "@/ui";
@@ -211,6 +212,13 @@ export function CMakeProfiles() {
               <option key={v} value={v} />
             ))}
           </datalist>
+          <Row label="Sanitizers">
+            <Checkbox
+              checked={hasSanitizerFlags(current.cmakeArgs)}
+              onChange={(on) => update({ cmakeArgs: withSanitizerFlags(current.cmakeArgs, on) })}
+              label="Build with AddressSanitizer and UndefinedBehaviorSanitizer"
+            />
+          </Row>
           <Row label="Environment variables" stacked>
             <TableEditor
               rows={Object.entries(current.env).map(([name, value]) => ({ name, value }))}

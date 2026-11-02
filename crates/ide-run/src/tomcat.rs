@@ -370,7 +370,7 @@ mod tests {
             env: Default::default(),
             detected: false,
             is_test: false,
-            debug_adapter: Some("java-debug".into()),
+            debug_adapter: None,
             allow_parallel: false,
             extras: Default::default(),
         }

@@ -22,7 +22,6 @@ import {
 } from "../state";
 
 const ipc = vi.hoisted(() => ({
-  javaDebugServer: vi.fn(async () => ({ status: "ok", data: 5005 })),
   debugStart: vi.fn(async () => ({ status: "ok", data: 42 })),
   debugStop: vi.fn(async () => ({ status: "ok", data: null })),
   runStop: vi.fn(async () => ({ status: "ok", data: null })),
@@ -137,24 +136,6 @@ it("preserves the source configuration for a separately built debug binary", asy
   try {
     await executeAction("debug.startConfig", { config, origin: { ...config, id: "source:server" } });
     expect(useDebug.getState().sessions[42]?.runConfig?.id).toBe("source:server");
-  } finally {
-    dispose();
-  }
-});
-
-it("keeps the originating JVM configuration when attaching to its build process", async () => {
-  const dispose = registerDebugActions();
-  try {
-    await executeAction("debug.attach", {
-      name: "server",
-      module: "",
-      hostName: "127.0.0.1",
-      port: 5005,
-      process: 7,
-      runConfig: config,
-    });
-    expect(useDebug.getState().sessions[42]).toMatchObject({ runConfig: config, process: 7, launch: null });
-    expect(useDebugRunSessions.getState().sessions[0]?.rerun).toBeTypeOf("function");
   } finally {
     dispose();
   }

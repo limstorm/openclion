@@ -327,18 +327,18 @@ pub struct ServerInfo {
 }
 
 /// Read-only contents a language server provides for a non-`file:` URI
-/// (library class source or decompiled code from `jdt://`, …).
+/// (library sources from a virtual scheme).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct VirtualDocument {
     pub uri: String,
     pub text: String,
     pub language_id: ide_core::LanguageId,
-    /// Tab title, e.g. `SpringApplication.class` (decompiled) or `SpringApplication.java`.
+    /// Tab title, e.g. the last path segment of the URI.
     pub title: String,
-    /// Origin shown in the tooltip / banner, e.g. the jar path.
+    /// Origin shown in the tooltip / banner, when the server has one.
     pub description: Option<String>,
-    /// Generated Java from a decompiler, rather than real source or a disassembler stub.
+    /// Whether the contents are generated (decompiled) rather than real source.
     pub decompiled: bool,
 }
 

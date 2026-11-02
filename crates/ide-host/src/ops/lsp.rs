@@ -83,16 +83,10 @@ pub async fn lsp_implementations(
     result
 }
 
-/// Contents of a read-only language-server document, including JDT library
-/// classes and disk class files. Cached per project.
+/// Contents of a read-only language-server document (a non-`file:` URI the
+/// server provides). Cached per project.
 pub async fn lsp_virtual_document(host: &Host, window: &str, uri: String) -> IdeResult<VirtualDocument> {
     host.project(window)?.lsp.virtual_document(&uri).await
-}
-
-/// Opens compiled classes through JDT, with project source taking priority on disk.
-pub async fn lsp_resolve_class_file(host: &Host, window: &str, path: std::path::PathBuf) -> IdeResult<String> {
-    let archive = ide_vfs::split_archive_path(&path);
-    host.project(window)?.lsp.java_class_file(&path, archive).await
 }
 
 /// References of the symbol at `pos`. `project_wide` also searches project files
@@ -269,13 +263,7 @@ pub fn lsp_resend_diagnostics(host: &Host, window: &str) -> IdeResult<()> {
 }
 
 pub async fn lsp_restart(host: &Host, window: &str, server: ServerId) -> IdeResult<()> {
-    let project = host.project(window)?;
-    let java = project.lsp.servers().iter().any(|s| s.id == server && s.name == "jdtls");
-    project.lsp.restart(server).await?;
-    if java && let Some(bridge) = &project.kotlin_bridge {
-        bridge.schedule();
-    }
-    Ok(())
+    host.project(window)?.lsp.restart(server).await
 }
 
 /// Applies a (previewed) workspace edit, e.g. after rename confirmation.
@@ -379,10 +367,6 @@ pub(crate) fn register(d: &mut Dispatcher) {
     d.add("lsp_implementations", |c| async move {
         lsp_implementations(&c.host, &c.window, c.arg("request")?, c.arg("doc")?, c.arg("positions")?).await
     });
-    d.add(
-        "lsp_resolve_class_file",
-        |c| async move { lsp_resolve_class_file(&c.host, &c.window, c.arg("path")?).await },
-    );
     d.add("lsp_virtual_document", |c| async move { lsp_virtual_document(&c.host, &c.window, c.arg("uri")?).await });
     d.add("lsp_references", |c| async move {
         lsp_references(

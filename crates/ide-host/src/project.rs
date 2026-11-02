@@ -42,8 +42,6 @@ pub struct Project {
     pub detected_roots: Arc<RwLock<Vec<SourceFolder>>>,
     /// Per-project cache directory (build tool sync results…).
     pub cache_dir: PathBuf,
-    /// Superseded launch snapshots retained until this project session ends.
-    pub(crate) java_launch_snapshots: Mutex<crate::ops::java::cache::Session>,
     /// Database tool window: data sources and their connections.
     pub db: Arc<ide_db::DbManager>,
     /// HTTP Client responses (IDEA's `.idea/httpRequests`), in the app data dir.
@@ -52,7 +50,6 @@ pub struct Project {
     pub agents: Arc<ide_agent::AgentManager>,
     /// Native notebooks and owned kernels, scoped to this project incarnation.
     pub notebooks: Arc<crate::notebook::NotebookService>,
-    pub(crate) kotlin_bridge: Option<Arc<crate::kotlin_bridge::KotlinBridge>>,
     pub(crate) watcher: Watcher,
     /// Watchers of the Project Structure content roots outside the project folder.
     pub(crate) content_watchers: Mutex<Vec<(PathBuf, Watcher)>>,
@@ -127,10 +124,7 @@ impl Host {
         {
             let settings = settings.clone();
             let root = root.clone();
-            let data_dir = self.local_data_dir.clone();
             let config_dir = self.config_dir.clone();
-            let sink = sink.clone();
-            let formatter_problem = std::sync::Mutex::new(None);
             lsp.set_config_hook(Box::new(move |cfg, server_root| {
                 let member = ide_workspace::workspace::Workspace::load(&root).ok().flatten().and_then(|w| {
                     w.projects.into_iter().filter(|p| server_root.starts_with(p)).max_by_key(|p| p.components().count())
@@ -143,91 +137,7 @@ impl Host {
                 ide_sdk::apply::server_launch_overrides(cfg, &effective);
                 ide_sdk::apply::configure_server(cfg, root, server_root, &effective);
                 ide_sdk::java::cap_java_home(cfg, &ide_sdk::java::installed_jdks());
-                if cfg.name == "jdtls" {
-                    let problem = ide_lsp::jdtls::configure_formatter(
-                        cfg,
-                        effective.editor.code_style.languages.get("java"),
-                        root,
-                        &data_dir,
-                        effective.language_servers.get("jdtls"),
-                    )
-                    .err()
-                    .map(|e| e.to_string());
-                    let mut previous = formatter_problem.lock().unwrap();
-                    if problem != *previous {
-                        if let Some(body) = &problem {
-                            sink.emit(IdeEvent::Notify {
-                                level: ide_core::event::NotifyLevel::Warning,
-                                title: "Java formatter configuration unavailable".into(),
-                                body: Some(body.clone()),
-                            });
-                        }
-                        *previous = problem;
-                    }
-                    drop(previous);
-                    ide_lsp::jdtls::configure_source_paths(
-                        cfg,
-                        ide_workspace::roots::unmanaged_java_source_paths(
-                            root,
-                            server_root,
-                            &effective.project_structure,
-                        ),
-                    );
-                    let bundles: Vec<PathBuf> = ide_tools::managed_bundle(&data_dir, "java-debug")
-                        .into_iter()
-                        .chain(ide_sdk::java::usages_bundle(&data_dir))
-                        .chain(ide_sdk::java::kotlin_bridge_bundle(&data_dir))
-                        .collect();
-                    let min_java = ide_sdk::java::jdtls_min_java(cfg);
-                    let jdks = ide_sdk::java::jdtls_jdks(min_java, &data_dir);
-                    let lombok = ide_sdk::lombok::lombok_agent(
-                        server_root,
-                        ide_sdk::lombok::agent_in_args(cfg.args.iter().map(String::as_str)),
-                        ide_tools::managed_bundle(&data_dir, "lombok"),
-                        ide_sdk::apply::maven_local_repository(root, &effective),
-                    );
-                    if let Some(problem) = lombok.problem() {
-                        tracing::warn!("{problem}");
-                    }
-                    let server_jdk = ide_sdk::apply::jdtls_jdk(root, &effective).unwrap_or_else(|e| {
-                        cfg.launch_error = Some(e);
-                        None
-                    });
-                    ide_sdk::java::configure_jdtls(
-                        cfg,
-                        server_root,
-                        &data_dir,
-                        &jdks,
-                        ide_sdk::apply::project_jdk(root, &effective).as_ref(),
-                        server_jdk.as_ref(),
-                        min_java,
-                        &bundles,
-                        lombok.jar(),
-                    );
-                    ide_sdk::jdtls::launch_directly(cfg);
-                }
                 ide_sdk::apply::server_protocol_overrides(cfg, &effective);
-                let excluded_poms = unlinked_maven_poms(root, &effective);
-                ide_sdk::apply::configure_maven_import(cfg, root, &excluded_poms);
-            }));
-        }
-        {
-            let settings = settings.clone();
-            let root = root.clone();
-            let data_dir = self.local_data_dir.clone();
-            let sink = sink.clone();
-            lsp.set_prepare_hook(Box::new(move |cfg, _, cancel| {
-                let effective = settings.effective();
-                if cfg.name == "jdtls" {
-                    crate::java_runtime::prepare(
-                        cfg,
-                        &data_dir,
-                        !effective.languages.java.jdtls_jdk.trim().is_empty()
-                            || ide_sdk::apply::jdtls_jdk(&root, &effective).is_err(),
-                        &sink,
-                        cancel,
-                    );
-                }
             }));
         }
         {
@@ -253,22 +163,11 @@ impl Host {
             trusted: trusted.clone(),
         }));
 
-        let kotlin_bridge = crate::kotlin_bridge::KotlinBridge::new(
-            root.clone(),
-            self.local_data_dir.join("cache").join(&project_key).join("build"),
-            &self.local_data_dir,
-            settings.clone(),
-            lsp.clone(),
-            sink.clone(),
-            trusted.clone(),
-        );
-        documents.add_observer(kotlin_bridge.clone());
         let repos = Arc::new(RwLock::new(Repos::enclosing(&root)?));
         for repo in repos.read().all() {
             repo.set_execution_allowed(trusted.load(Ordering::Acquire));
         }
         let watcher = {
-            let kotlin_bridge = kotlin_bridge.clone();
             let repos = repos.clone();
             let settings = settings.clone();
             let index = index.clone();
@@ -289,7 +188,6 @@ impl Host {
                 Box::new(move |batch| {
                     let changed: Vec<PathBuf> = batch.created.iter().chain(&batch.modified).cloned().collect();
                     index.update(&changed, &batch.removed);
-                    kotlin_bridge.files_changed(changed.iter().chain(&batch.removed));
                     lsp.project_files_changed(batch.created.iter().chain(&batch.removed));
                     // Atomic saves by external tools surface as `created`.
                     documents.on_disk_changed(&changed);
@@ -369,7 +267,7 @@ impl Host {
         let content_watchers = extra_roots
             .iter()
             .filter_map(|r| {
-                let w = content_root_watcher(r, &excludes, &sink, &index, &documents, &history, Some(&kotlin_bridge))?;
+                let w = content_root_watcher(r, &excludes, &sink, &index, &documents, &history)?;
                 Some((r.clone(), w))
             })
             .collect();
@@ -405,14 +303,10 @@ impl Host {
             syntax,
             detected_roots,
             cache_dir: self.local_data_dir.join("cache").join(&project_key),
-            java_launch_snapshots: Mutex::new(crate::ops::java::cache::Session::new(
-                self.local_data_dir.join("cache").join(&project_key).join("build"),
-            )),
             db,
             http_history,
             agents,
             notebooks,
-            kotlin_bridge: Some(kotlin_bridge),
             watcher,
             content_watchers: Mutex::new(content_watchers),
             _scratch_watcher: scratch_watcher,
@@ -431,9 +325,6 @@ impl Host {
             }));
         }
         self.insert_project(window, project.clone());
-        if let Some(bridge) = &project.kotlin_bridge {
-            bridge.start(&self.runtime);
-        }
         if let Some(cmd) = post_start {
             self.environment.spawn_post_start(cmd, project.root.clone(), project.sink.clone());
         }
@@ -527,14 +418,10 @@ impl Host {
             syntax,
             detected_roots: Arc::default(),
             cache_dir: self.local_data_dir.join("cache").join(&project_key),
-            java_launch_snapshots: Mutex::new(crate::ops::java::cache::Session::new(
-                self.local_data_dir.join("cache").join(&project_key).join("build"),
-            )),
             db,
             http_history,
             agents,
             notebooks,
-            kotlin_bridge: None,
             watcher,
             content_watchers: Mutex::new(Vec::new()),
             _scratch_watcher: None,
@@ -828,15 +715,9 @@ impl Project {
             if watchers.iter().any(|(p, _)| *p == r) {
                 continue;
             }
-            if let Some(w) = content_root_watcher(
-                &r,
-                &excludes,
-                &self.sink,
-                &self.index,
-                &self.documents,
-                &self.history,
-                self.kotlin_bridge.as_ref(),
-            ) {
+            if let Some(w) =
+                content_root_watcher(&r, &excludes, &self.sink, &self.index, &self.documents, &self.history)
+            {
                 watchers.push((r, w));
             }
         }
@@ -968,9 +849,7 @@ fn content_root_watcher(
     index: &Arc<ProjectIndex>,
     documents: &Arc<Documents>,
     history: &Arc<LocalHistory>,
-    kotlin_bridge: Option<&Arc<crate::kotlin_bridge::KotlinBridge>>,
 ) -> Option<Watcher> {
-    let kotlin_bridge = kotlin_bridge.cloned();
     let (index, documents, history) = (index.clone(), documents.clone(), history.clone());
     Watcher::start(
         dir,
@@ -979,9 +858,6 @@ fn content_root_watcher(
         Box::new(move |batch| {
             let changed: Vec<PathBuf> = batch.created.iter().chain(&batch.modified).cloned().collect();
             index.update(&changed, &batch.removed);
-            if let Some(bridge) = &kotlin_bridge {
-                bridge.files_changed(changed.iter().chain(&batch.removed));
-            }
             documents.on_disk_changed(&changed);
             record_external_changes(&history, &changed, &batch.removed);
         }),
@@ -990,6 +866,7 @@ fn content_root_watcher(
     .ok()
 }
 
+/// Project-relative POMs of Maven reactors excluded from the project (Settings › Maven › Unlinked projects).
 pub(crate) fn unlinked_maven_poms(root: &Path, settings: &ide_core::settings::Settings) -> Vec<PathBuf> {
     ide_build::maven::UnlinkedProjects::load(root, &settings.languages.java.maven).poms().map(PathBuf::from).collect()
 }
@@ -1158,7 +1035,11 @@ mod maven_linkage_tests {
         let detected = ide_workspace::roots::detect(tmp.path());
         let mut settings = ide_core::settings::Settings::default();
         settings.languages.java.maven.unlinked_projects.push("a/pom.xml".into());
-        let excluded_poms = super::unlinked_maven_poms(tmp.path(), &settings);
+        let excluded_poms: Vec<std::path::PathBuf> =
+            ide_build::maven::UnlinkedProjects::load(tmp.path(), &settings.languages.java.maven)
+                .poms()
+                .map(std::path::PathBuf::from)
+                .collect();
         assert_eq!(excluded_poms, vec![std::path::PathBuf::from("a/child/pom.xml"), "a/pom.xml".into()]);
         let configs = ide_run::detect_excluding(tmp.path(), &excluded_poms);
         assert!(configs.iter().any(|c| c.kind == "maven"));
@@ -1167,17 +1048,6 @@ mod maven_linkage_tests {
                 .iter()
                 .filter(|c| c.kind == "maven")
                 .all(|c| { c.cwd.as_ref().is_some_and(|dir| dir.as_ref() == std::path::Path::new("b")) })
-        );
-        let mut server = serde_json::from_value::<ide_language::LanguageServerConfig>(
-            serde_json::json!({"name": "jdtls", "command": "jdtls"}),
-        )
-        .unwrap();
-        ide_sdk::apply::configure_maven_import(&mut server, tmp.path(), &excluded_poms);
-        let options = serde_json::to_value(server.initialization_options).unwrap();
-        let exclusions = options.pointer("/settings/java/import/exclusions").unwrap().as_array().unwrap();
-        assert!(exclusions.contains(&serde_json::json!(tmp.path().join("a").to_string_lossy().replace('\\', "/"))));
-        assert!(
-            exclusions.contains(&serde_json::json!(tmp.path().join("a/child").to_string_lossy().replace('\\', "/")))
         );
         let roots = super::linked_roots(tmp.path(), &settings, &detected);
         assert!(roots.roots.iter().any(|r| r.path == "b/src/main/java"));

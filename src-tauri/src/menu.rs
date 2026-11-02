@@ -593,18 +593,12 @@ pub fn spec(os: Os) -> Vec<Entry> {
             act("debug.resetFrame", "Reset Frame"),
             act("debug.evaluate", "Evaluate Expression…"),
             act("debug.quickEvaluate", "Quick Evaluate Expression"),
-            sub(
-                "debuggingActions",
-                "Debugging Actions",
-                vec![act("debug.reloadChangedClasses", "Reload Changed Classes")],
-            ),
             SEP,
             act("coverage.hide", "Hide Coverage"),
             SEP,
             act("debug.toggleBreakpoint", "Toggle Line Breakpoint"),
             act("debug.toggleTemporaryBreakpoint", "Toggle Temporary Line Breakpoint"),
             act("debug.toggleMethodBreakpoint", "Toggle Method Breakpoint"),
-            act("debug.toggleFieldWatchpoint", "Toggle Field Watchpoint"),
             act("debug.viewBreakpoints", "View Breakpoints…"),
         ],
     ));

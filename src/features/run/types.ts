@@ -1,21 +1,13 @@
 /**
  * Built-in run configuration types (Shell Script, Program, npm, Gradle, Maven,
- * Application, Spring Boot, Compound) and the helpers that turn a type's params into the launched
+ * Compound) and the helpers that turn a type's params into the launched
  * command line. Other features contribute types with `registerRunConfigType`.
  */
-import { isJvmApplication, parseJavaArgs } from "@/platform/javaLaunch";
 import type { RunConfig } from "@/platform/ipc";
 import { registerRunConfigType, useRunConfigTypes, type RunConfigTypeContribution } from "@/workbench/contributions";
 import { formatArgs, parseArgs, uid, uniqueName } from "./configs";
 import { commandName } from "./commandName";
-import {
-  applicationType,
-  gradleForkedJvm,
-  isWindows,
-  mavenForkedJvm,
-  springBootType,
-  type ForkedJvm,
-} from "./jvmTypes";
+import { gradleForkedJvm, isWindows, mavenForkedJvm, type ForkedJvm } from "./jvmTypes";
 import { tx } from "@/platform/i18n";
 import { useProject } from "@/platform/project";
 
@@ -402,8 +394,6 @@ export const BUILTIN_TYPES: readonly RunConfigTypeContribution[] = [
   dotnetTestType,
   goBuildType,
   goTestType,
-  applicationType,
-  springBootType,
   tomcatType,
   compound,
 ];
@@ -457,9 +447,6 @@ export function withParams(config: RunConfig, params: Record<string, string>, ty
     ...(params.goKind ? { isTest: params.goKind === "test" } : {}),
     command: line.command,
     args: line.args,
-    ...(isJvmApplication(config) && parseJavaArgs(config.args).mainClass !== parseJavaArgs(line.args).mainClass
-      ? { module: undefined }
-      : {}),
     ...(type?.ownsWorkingDirectory ? { cwd: line.cwd ?? null } : {}),
     ...(line.stop ? { stopCommand: line.stop } : {}),
   };

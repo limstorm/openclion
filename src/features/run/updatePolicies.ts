@@ -10,7 +10,8 @@ const incrementalOptions = [
   { value: "classes", label: "Update classes and resources" },
 ];
 
-export function updatePolicyFields(tomcat: boolean): RunConfigTypeField[] {
+/** "Update Application" policies of a local Tomcat server configuration. */
+export function updatePolicyFields(): RunConfigTypeField[] {
   return [
     {
       key: "onUpdate",
@@ -19,7 +20,7 @@ export function updatePolicyFields(tomcat: boolean): RunConfigTypeField[] {
       options: [
         { value: "ask", label: "Show chooser" },
         ...incrementalOptions,
-        ...(tomcat ? [{ value: "redeploy", label: "Redeploy" }] : []),
+        { value: "redeploy", label: "Redeploy" },
         { value: "restart", label: "Restart" },
       ],
     },
@@ -33,17 +34,15 @@ export function updatePolicyFields(tomcat: boolean): RunConfigTypeField[] {
   ];
 }
 
+/** Configurations "Update Application" applies to: local Tomcat servers. */
 export function isUpdatable(config: RunConfig): boolean {
-  return !config.target && (config.kind === "tomcat" || config.kind === "spring-boot");
+  return !config.target && config.kind === "tomcat";
 }
 
 export function updateAllowed(config: RunConfig, mode: string): mode is UpdateMode {
   return (
     isUpdatable(config) &&
-    (mode === "resources" ||
-      mode === "classes" ||
-      mode === "restart" ||
-      (mode === "redeploy" && config.kind === "tomcat")) &&
-    !((mode === "resources" || mode === "classes") && config.kind === "tomcat" && config.params?.deployment === "war")
+    (mode === "resources" || mode === "classes" || mode === "restart" || mode === "redeploy") &&
+    !((mode === "resources" || mode === "classes") && config.params?.deployment === "war")
   );
 }

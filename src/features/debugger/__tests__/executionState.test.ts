@@ -8,7 +8,7 @@ const ipc = vi.hoisted(() => {
     debugCapabilities: vi.fn(async () => ok(null)),
     debugThreads: vi.fn(async () =>
       ok([
-        { id: 5, name: "http-nio-8179-exec-5" },
+        { id: 5, name: "worker-5" },
         { id: 1, name: "main" },
       ]),
     ),
@@ -28,10 +28,10 @@ vi.mock("@/workbench/contributions", async (orig) => ({
 }));
 import { adoptSession, handleDebugEvent, selectThread, resumeExecution, useDebug, useExecutionPoint } from "../state";
 
-const path = "/proj/MsMemberUtils.java";
+const path = "/proj/ticket.c";
 const frame = (line: number, id = 100): StackFrame => ({
   id,
-  name: "queryMsTicket",
+  name: "parse_ticket",
   path,
   line,
   column: 0,
@@ -52,7 +52,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   useDebug.setState({ sessions: {}, active: null, stopSeq: 0 });
   useExecutionPoint.setState({ path: null, line: 0, top: true, values: {} });
-  adoptSession(1, { adapter: "java-debug" });
+  adoptSession(1, { adapter: "lldb-dap" });
   ipc.debugStackTrace.mockResolvedValue(ipc.ok([frame(6840)]));
   ipc.debugVariables.mockResolvedValue(ipc.ok([]));
 });

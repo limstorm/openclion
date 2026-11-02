@@ -972,7 +972,7 @@ pub fn call_item(conv: &Conv, item: &lsp::CallHierarchyItem, from_ranges: Vec<Ra
 }
 
 /// A `TypeHierarchyItem` from JSON; `tags` is dropped since lsp-types expects
-/// a single tag where the protocol (and jdtls) sends an array.
+/// a single tag where the protocol (and some servers) sends an array.
 pub fn type_item_from_json(value: &serde_json::Value) -> Option<lsp::TypeHierarchyItem> {
     let mut v = value.clone();
     if let Some(o) = v.as_object_mut() {
@@ -1095,18 +1095,22 @@ mod tests {
     #[test]
     fn locations_keep_virtual_targets() {
         let conv = Conv::utf16();
-        let jdt = "jdt://contents/a.jar/p/C.class?=x/%5C/a.jar%3Cp%28C.class";
+        let virtual_uri = "mocklib://deps/a-1.0/C.mk?rev=2";
         let range = lsp::Range::new(lsp::Position::new(1, 2), lsp::Position::new(1, 5));
         let links = lsp::GotoDefinitionResponse::Link(vec![lsp::LocationLink {
             origin_selection_range: None,
-            target_uri: jdt.parse().unwrap(),
+            target_uri: virtual_uri.parse().unwrap(),
             target_range: range,
             target_selection_range: range,
         }]);
         let locs = goto_response(&conv, links);
         assert_eq!(
             locs,
-            vec![Location { path: jdt.into(), range: Range::new(p(1, 2), p(1, 5)), uri: Some(jdt.into()) }]
+            vec![Location {
+                path: virtual_uri.into(),
+                range: Range::new(p(1, 2), p(1, 5)),
+                uri: Some(virtual_uri.into())
+            }]
         );
 
         #[cfg(unix)]
@@ -1120,13 +1124,13 @@ mod tests {
             kind: lsp::SymbolKind::CLASS,
             tags: None,
             detail: None,
-            uri: jdt.parse().unwrap(),
+            uri: virtual_uri.parse().unwrap(),
             range,
             selection_range: range,
             data: None,
         };
         let h = type_item(&conv, &item).unwrap();
-        assert_eq!((h.path.into_path_buf(), h.uri.as_deref()), (PathBuf::from(jdt), Some(jdt)));
+        assert_eq!((h.path.into_path_buf(), h.uri.as_deref()), (PathBuf::from(virtual_uri), Some(virtual_uri)));
 
         // Flat document symbols of a virtual document match by URI.
         let flat = lsp::DocumentSymbolResponse::Flat(vec![
@@ -1136,11 +1140,11 @@ mod tests {
                 kind: lsp::SymbolKind::CLASS,
                 tags: None,
                 deprecated: None,
-                location: lsp::Location::new(jdt.parse().unwrap(), range),
+                location: lsp::Location::new(virtual_uri.parse().unwrap(), range),
                 container_name: None,
             },
         ]);
-        assert_eq!(document_symbols(&conv, Path::new(jdt), flat).len(), 1);
+        assert_eq!(document_symbols(&conv, Path::new(virtual_uri), flat).len(), 1);
     }
 
     #[test]
@@ -1187,8 +1191,8 @@ mod tests {
     }
 
     #[test]
-    fn jdtls_completion_defaults_preserve_prefix_range_and_edit_text() {
-        // JDT.LS 1.63: request after `System.out.` or `System.out.Print`.
+    fn completion_defaults_preserve_prefix_range_and_edit_text() {
+        // A server's itemDefaults apply to items with a prefix range (after `System.out.`).
         for end in [19, 24] {
             let (_, items) = parse_completion_response(json!({
                 "isIncomplete": false,

@@ -237,19 +237,6 @@ export function toggleMethodAt(path: string, line: number, name: string): Method
   return addMethodBreakpoint(name, { path, line });
 }
 
-export function toggleFieldAt(
-  path: string,
-  line: number,
-  props: { dataId: string; label: string },
-): FieldWatchpoint | null {
-  const existing = useSpecialBreakpoints.getState().fields.find((f) => f.path === path && f.line === line);
-  if (existing) {
-    removeSpecial(existing.id);
-    return null;
-  }
-  return addFieldWatchpoint({ ...props, accessType: "write" }, { path, line });
-}
-
 /** Moves gutter lines after an edit in `path` (see `mapLines`). */
 export function setSpecialLines(path: string, moved: ReadonlyArray<{ id: string; line: number }>) {
   const lines = new Map(moved.map((m) => [m.id, m.line]));

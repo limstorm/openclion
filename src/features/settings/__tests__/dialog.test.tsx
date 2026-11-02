@@ -389,9 +389,9 @@ describe("Settings dialog", () => {
   describe("toolchain settings with a project open", () => {
     let global: Settings;
     beforeEach(() => {
-      // Global layer: -Xmx1g; the project overrides it with -Xmx4g.
-      global = setAt(structuredClone(DEFAULT_SETTINGS) as Settings, "languages.java.jdtlsVmArgs", "-Xmx1g");
-      current = setAt(global, "languages.java.jdtlsVmArgs", "-Xmx4g");
+      // Global layer: a JDK; the project overrides it.
+      global = setAt(structuredClone(DEFAULT_SETTINGS) as Settings, "languages.java.jdk", "/usr/lib/jvm/jdk-17");
+      current = setAt(global, "languages.java.jdk", "/usr/lib/jvm/jdk-21");
       settingsGetGlobal.mockImplementation(async () => global);
       useProject.setState({
         settings: current,
@@ -402,17 +402,13 @@ describe("Settings dialog", () => {
     it("edit the project first; Global shows and writes the global layer", async () => {
       const dialog = await openDialog("languages.java");
       expect(within(dialog).getByRole("radio", { name: "This project" })).toHaveAttribute("aria-checked", "true");
-      expect(within(dialog).getByLabelText("JVM options")).toHaveValue("-Xmx4g");
+      // The Java page keeps the project JDK (used for JAVA_HOME); jdtls settings are gone.
+      expect(within(dialog).getByText("Project JDK")).toBeInTheDocument();
+      expect(within(dialog).queryByText("Language Server")).toBeNull();
 
       fireEvent.click(within(dialog).getByRole("radio", { name: "Global" }));
-      expect(within(dialog).getByLabelText("JVM options")).toHaveValue("-Xmx1g");
       expect(within(dialog).getByText(/used by new projects/)).toBeInTheDocument();
-
-      fireEvent.change(within(dialog).getByLabelText("JVM options"), { target: { value: "-Xmx2g" } });
-      await act(async () => {
-        fireEvent.click(within(dialog).getByRole("button", { name: "Apply" }));
-      });
-      expect(settingsSet.mock.calls).toEqual([["global", "languages.java.jdtlsVmArgs", '"-Xmx2g"']]);
+      expect(within(dialog).getByText("Project JDK")).toBeInTheDocument();
     });
 
     it("Settings for New Projects edits the global layer on every page", async () => {

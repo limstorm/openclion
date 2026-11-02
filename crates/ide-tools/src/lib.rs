@@ -10,7 +10,6 @@
 //! [`tools_bin_dirs`] on the process `PATH` at startup.
 
 pub mod archive;
-mod bundled;
 pub mod formatter;
 pub mod jdk;
 pub mod platform;
@@ -148,11 +147,7 @@ fn managed_bin_dir(root: &Path, spec: &ToolSpec, platform: Platform) -> Option<P
         Method::PipVenv { .. } => {
             Some(root.join(spec.name).join("venv").join(if platform.os == Os::Windows { "Scripts" } else { "bin" }))
         }
-        Method::Bundled { .. }
-        | Method::Rustup { .. }
-        | Method::PipUser { .. }
-        | Method::PipTarget { .. }
-        | Method::Manual { .. } => None,
+        Method::Rustup { .. } | Method::PipUser { .. } | Method::PipTarget { .. } | Method::Manual { .. } => None,
     }
 }
 
@@ -345,10 +340,6 @@ fn usages(langs: &[LanguageConfig]) -> BTreeMap<String, Usage> {
             add(name, &d.command, ToolKind::Debugger, d.install_hint.as_ref(), &l.name);
         }
     }
-    for (plugin, host) in registry::PLUGIN_HOSTS {
-        let languages = map.get(*host).map(|u| u.languages.clone()).unwrap_or_default();
-        map.entry(plugin.to_string()).or_default().languages = languages;
-    }
     // A server's defaults come from the first definition using it.
     for s in langs.iter().flat_map(|l| &l.language_servers).rev() {
         if let Some(u) = map.get_mut(&s.name) {
@@ -391,22 +382,6 @@ pub fn parse_version(text: &str) -> Option<String> {
         }
     }
     None
-}
-
-/// A tool whose "command" is a plugin jar (e.g. a jdtls bundle) rather than an executable.
-fn is_bundle(command: &str) -> bool {
-    command.ends_with(".jar")
-}
-
-/// Path of an app-provided or installed plugin jar. Embedded jars are materialized on demand.
-pub fn managed_bundle(app_data: &Path, name: &str) -> Option<PathBuf> {
-    let spec = registry::find(name)?;
-    if matches!(spec.method, Method::Bundled { .. }) {
-        return bundled::install(&tools_dir(app_data), spec).ok();
-    }
-    let jar = spec.commands.first().filter(|c| is_bundle(c))?;
-    let path = tools_dir(app_data).join(spec.name).join("bin").join(jar);
-    path.is_file().then_some(path)
 }
 
 /// Installer and detector over one tools directory.
@@ -554,7 +529,6 @@ impl Tools {
     fn method_missing(&self, method: Method) -> Option<String> {
         let need = |ok: bool, msg: &str| (!ok).then(|| msg.to_string());
         match method {
-            Method::Bundled { .. } => None,
             Method::Rustup { .. } => need(self.which("rustup").is_some(), "rustup is required (https://rustup.rs)"),
             Method::Npm { .. } => need(
                 self.which_any(&["npm", "pnpm"]).is_some(),
@@ -619,8 +593,7 @@ impl Tools {
         };
         let (status, path, version) = self.detect(spec);
         let unavailable_reason = self.unavailable_reason(spec);
-        let bundled = matches!(spec.method, Method::Bundled { .. });
-        let can_uninstall = status == ToolStatus::Installed && !bundled;
+        let can_uninstall = status == ToolStatus::Installed;
         Some(ToolInfo {
             name: spec.name.to_string(),
             display_name: spec.display.to_string(),
@@ -631,7 +604,7 @@ impl Tools {
             path: path.map(Into::into),
             version,
             install_method: Some(self.install_method(spec).label().to_string()),
-            can_install: unavailable_reason.is_none() && !bundled,
+            can_install: unavailable_reason.is_none(),
             unavailable_reason,
             can_uninstall,
             install_hint,
@@ -670,12 +643,6 @@ impl Tools {
     }
 
     fn detect(&self, spec: &ToolSpec) -> (ToolStatus, Option<PathBuf>, Option<String>) {
-        if let Method::Bundled { version, .. } = spec.method {
-            return match bundled::install(&self.root, spec) {
-                Ok(path) => (ToolStatus::Installed, Some(path), Some(version.to_owned())),
-                Err(_) => (ToolStatus::Missing, None, None),
-            };
-        }
         let main = spec.commands[0];
         let managed = managed_bin_dir(&self.root, spec, self.platform).and_then(|d| self.exe_in(&d, main));
         if let Some(path) = managed {
@@ -804,9 +771,6 @@ impl Tools {
             let method = self.install_method(spec);
             emit(InstallEvent::Line { text: format!("Installing {} via {}…", spec.display, method.label()) });
             match method {
-                Method::Bundled { .. } => {
-                    bundled::install(&self.root, spec)?;
-                }
                 Method::Rustup { component } => {
                     let mut c = self.command(self.which("rustup").expect("checked"));
                     c.args(["component", "add", component]);
@@ -1101,13 +1065,6 @@ impl Tools {
                 let json = http.get_text(&sources::hashicorp_latest_url(product), cancel)?;
                 sources::hashicorp_pick(&json, assets, self.platform)
             }
-            ReleaseSource::EclipseJdtls => {
-                let index = http.get_text(sources::JDTLS_MILESTONES, cancel)?;
-                let version = sources::jdtls_latest_milestone(&index)
-                    .ok_or_else(|| IdeError::new(ErrorKind::Protocol, "no JDT LS milestone found"))?;
-                let latest = http.get_text(&format!("{}{version}/latest.txt", sources::JDTLS_MILESTONES), cancel)?;
-                sources::jdtls_download(&version, &latest)
-            }
             ReleaseSource::OpenVsx { namespace, extension } => {
                 let json = http.get_text(&sources::openvsx_latest_url(namespace, extension), cancel)?;
                 let json = match sources::openvsx_platform_url(&json, assets, self.platform)? {
@@ -1115,10 +1072,6 @@ impl Tools {
                     None => json,
                 };
                 sources::openvsx_pick(&json, assets, self.platform)
-            }
-            ReleaseSource::MavenCentral { group, artifact } => {
-                let xml = http.get_text(&sources::maven_metadata_url(group, artifact), cancel)?;
-                sources::maven_pick(group, artifact, &xml)
             }
         }
     }
@@ -1187,17 +1140,9 @@ impl Tools {
         std::fs::rename(&pkg, &final_dir)?;
         let target = final_dir.join(&rel);
         let bin = final_dir.join("bin");
-        if is_bundle(main) {
-            // A plugin jar loaded by another tool: a stable name, no launcher script.
-            std::fs::create_dir_all(&bin)?;
-            if target != bin.join(main) {
-                std::fs::copy(&target, bin.join(main))?;
-            }
-        } else {
-            archive::make_executable(&target)?;
-            if self.exe_in(&bin, main).as_deref() != Some(target.as_path()) {
-                archive::link_executable(&bin, main, &target)?;
-            }
+        archive::make_executable(&target)?;
+        if self.exe_in(&bin, main).as_deref() != Some(target.as_path()) {
+            archive::link_executable(&bin, main, &target)?;
         }
         // Downloads made by the IDE itself are not quarantined, but archives may carry the flag.
         clear_quarantine(&final_dir);
@@ -1215,8 +1160,6 @@ impl Tools {
         let cancel = CancellationToken::new();
         let quiet = |_: InstallEvent| {};
         match self.install_method(spec) {
-            // App-owned resources remain available for every project/window.
-            Method::Bundled { .. } => {}
             // Toolchain-provided tools are not files the IDE owns.
             Method::Manual { .. } => {}
             Method::Rustup { component } => {

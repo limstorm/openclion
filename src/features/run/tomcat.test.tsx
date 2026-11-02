@@ -2,7 +2,6 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import { newConfigOfType, missingParams } from "./types";
 import { tomcatType, tomcatBrowserUrl } from "./tomcat";
-import { jdwpLaunch } from "./javaDebug";
 import { TomcatSettings } from "./TomcatSettings";
 import { typeRows } from "./AddConfigPopup";
 import { commands } from "@/platform/ipc";
@@ -28,7 +27,6 @@ describe("Tomcat Local", () => {
       buildArtifact: "true",
       openBrowser: "true",
     });
-    expect(config.debugAdapter).toBe("java-debug");
     expect(typeRows([tomcatType], "")).toEqual(
       expect.arrayContaining([expect.objectContaining({ label: "Tomcat Server" })]),
     );
@@ -52,14 +50,6 @@ describe("Tomcat Local", () => {
     config.params.contextPath = "/../app";
     expect(missingParams(config, tomcatType)).toHaveProperty("httpPort");
     expect(missingParams(config, tomcatType)).toHaveProperty("contextPath");
-  });
-  it("debugs through a Tomcat JDWP launch without treating an archive as a main program", () => {
-    const config = newConfigOfType(tomcatType, []);
-    const debug = jdwpLaunch(config)!;
-    expect(debug.command).toBe("catalina");
-    expect(debug.args).toEqual(["run"]);
-    expect(debug.params?.tomcatDebug).toBe("true");
-    expect(debug.env.JAVA_TOOL_OPTIONS).toBeUndefined();
   });
   it("shows the installation version and defaults to the project's WAR module", async () => {
     const config = newConfigOfType(tomcatType, []);

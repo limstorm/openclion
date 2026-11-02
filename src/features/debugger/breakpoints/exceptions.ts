@@ -71,7 +71,6 @@ export const BUILTIN_FILTERS: Record<string, ExceptionFilter[]> = {
     seed("uncaught", "Uncaught Exceptions", true),
     seed("userUnhandled", "User Uncaught Exceptions"),
   ],
-  "java-debug": [seed("caught", "Caught Exceptions"), seed("uncaught", "Uncaught Exceptions")],
   "js-debug": [seed("all", "Caught Exceptions"), seed("uncaught", "Uncaught Exceptions")],
   codelldb: [
     seed("rust_panic", "Rust: on panic", true),

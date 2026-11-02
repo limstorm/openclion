@@ -19,8 +19,8 @@ vi.mock("@/platform/ipc", async (original) => {
   return { ...real, isTauri: () => true, commands: { ...real.commands, ...ipc } };
 });
 const config = (request: string): LaunchConfig => ({
-  name: "Java",
-  adapter: "java-debug",
+  name: "C++",
+  adapter: "lldb-dap",
   request,
   program: null,
   args: [],
@@ -51,8 +51,8 @@ it.each(["launch", "attach"])("awaits every file before %s can send configuratio
         });
       }),
   );
-  addBreakpoint("/p/Main.java", 4);
-  addBreakpoint("/p/Other.java", 7);
+  addBreakpoint("/p/main.c", 4);
+  addBreakpoint("/p/other.c", 7);
   const starting = startSession(config(request));
   await vi.advanceTimersByTimeAsync(0);
   expect(ipc.debugSetBreakpoints).toHaveBeenCalledTimes(2);
@@ -62,7 +62,7 @@ it.each(["launch", "attach"])("awaits every file before %s can send configuratio
   expect(ipc.debugStart).not.toHaveBeenCalled();
   release[1]!();
   await starting;
-  expect(completed).toEqual(["/p/Main.java", "/p/Other.java"]);
+  expect(completed).toEqual(["/p/main.c", "/p/other.c"]);
   expect(ipc.debugStart).toHaveBeenCalledOnce();
   await vi.advanceTimersByTimeAsync(120);
   expect(ipc.debugSetBreakpoints).toHaveBeenCalledTimes(2);
@@ -78,7 +78,7 @@ it("drains an in-flight update and sends pending removals before startup", async
         }),
     )
     .mockResolvedValue({ status: "ok", data: [] });
-  addBreakpoint("/p/Main.java", 4);
+  addBreakpoint("/p/main.c", 4);
   await vi.advanceTimersByTimeAsync(120);
   removeAllBreakpoints();
   const starting = startSession(config("launch"));
@@ -86,16 +86,13 @@ it("drains an in-flight update and sends pending removals before startup", async
   expect(ipc.debugStart).not.toHaveBeenCalled();
   release();
   await starting;
-  expect(ipc.debugSetBreakpoints).toHaveBeenLastCalledWith("/p/Main.java", []);
+  expect(ipc.debugSetBreakpoints).toHaveBeenLastCalledWith("/p/main.c", []);
   expect(ipc.debugStart).toHaveBeenCalledOnce();
 });
 
 it("flushes persisted breakpoints immediately after project loading", async () => {
   ipc.debugSetBreakpoints.mockResolvedValue({ status: "ok", data: [] });
-  localStorage.setItem(
-    "openclion.debugger.breakpoints:/p",
-    JSON.stringify({ files: { "/p/Main.java": [{ line: 4 }] } }),
-  );
+  localStorage.setItem("openclion.debugger.breakpoints:/p", JSON.stringify({ files: { "/p/main.c": [{ line: 4 }] } }));
   loadBreakpoints("/p");
   await startSession(config("launch"));
   expect(ipc.debugSetBreakpoints).toHaveBeenCalledOnce();
@@ -112,20 +109,20 @@ it("flushes edits made while another file is still syncing", async () => {
         }),
     )
     .mockResolvedValue({ status: "ok", data: [] });
-  addBreakpoint("/p/Main.java", 4);
+  addBreakpoint("/p/main.c", 4);
   const starting = startSession(config("launch"));
   await vi.advanceTimersByTimeAsync(0);
-  addBreakpoint("/p/Other.java", 7);
+  addBreakpoint("/p/other.c", 7);
   release();
   await starting;
   expect(ipc.debugSetBreakpoints).toHaveBeenCalledTimes(2);
-  expect(ipc.debugSetBreakpoints.mock.calls[1]![0]).toBe("/p/Other.java");
+  expect(ipc.debugSetBreakpoints.mock.calls[1]![0]).toBe("/p/other.c");
   expect(ipc.debugSetBreakpoints.mock.invocationCallOrder[1]).toBeLessThan(ipc.debugStart.mock.invocationCallOrder[0]!);
 });
 
 it("does not start if the initial breakpoint sync fails", async () => {
   ipc.debugSetBreakpoints.mockRejectedValueOnce(new Error("breakpoint sync failed"));
-  addBreakpoint("/p/Main.java", 4);
+  addBreakpoint("/p/main.c", 4);
   expect(await startSession(config("launch"))).toBeNull();
   expect(ipc.debugStart).not.toHaveBeenCalled();
 });

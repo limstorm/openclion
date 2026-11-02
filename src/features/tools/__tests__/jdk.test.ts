@@ -73,17 +73,6 @@ describe("Download JDK N (one click)", () => {
     expect(notes.at(-1)).toMatchObject({ level: "info", title: "Eclipse Adoptium 25.0.1 downloaded" });
   });
 
-  it("replaces a language server JDK that is too old (in the project, whose value wins)", async () => {
-    withServerJdk("C:\\Java\\jdk-21");
-    await downloadJdkFor({ version: 25, languageServer: true });
-    expect(settingsSet).toHaveBeenCalledWith("project", "languages.java.jdtlsJdk", JSON.stringify(SDK.path));
-    expect(useProject.getState().settings?.languages?.java?.jdtlsJdk).toBe(SDK.path);
-
-    withServerJdk("/old", false);
-    await downloadJdkFor({ version: 25, languageServer: true });
-    expect(settingsSet).toHaveBeenLastCalledWith("global", "languages.java.jdtlsJdk", JSON.stringify(SDK.path));
-  });
-
   it("leaves the settings alone for a project JDK (Auto picks it per module)", async () => {
     withServerJdk("/old");
     await downloadJdkFor({ version: 21 });

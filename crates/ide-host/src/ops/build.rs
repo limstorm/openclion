@@ -97,7 +97,6 @@ pub async fn build_sync(
     host.require_trust(window)?;
     let project = host.project(window)?;
     let (root, cache, settings) = (project.root.clone(), project.build_cache_dir(), project.settings.effective());
-    let bridge_profiles = profiles.clone();
     let token = host.begin_project_request(window, request);
     let result = tokio::task::spawn_blocking(move || {
         let current = load(&root, &cache, &settings);
@@ -132,30 +131,6 @@ pub async fn build_sync(
     .map_err(join_err);
     host.end_request(request);
     let model = result??;
-    if tool == BuildTool::Maven
-        && model.maven.is_some()
-        && let Some(bridge) = &project.kotlin_bridge
-    {
-        bridge.configure_maven(offline, bridge_profiles);
-    }
-    // jdtls re-imports on pom changes but misses artifacts added to ~/.m2
-    // meanwhile ("missing artifact" stays until Invalidate Caches); asking it
-    // to update the project configurations re-resolves them (#436). The same
-    // holds for Gradle: it reuses its cached classpath on restart, so a
-    // dependency added to `build.gradle` stays unresolved until told to sync.
-    let build_files: Vec<String> = match tool {
-        BuildTool::Maven => model.maven.iter().flat_map(|m| m.projects.iter().map(|p| p.pom.clone())).collect(),
-        BuildTool::Gradle => {
-            model.gradle.iter().flat_map(|g| g.projects.iter().filter_map(|p| p.build_file.clone())).collect()
-        }
-    };
-    let lsp = project.lsp.clone();
-    let uris = build_files.iter().map(|f| ide_lsp::path_to_uri_string(&project.root.join(f))).collect();
-    tokio::spawn(async move {
-        if let Err(e) = lsp.java_update_project_configs(&project.root, uris).await {
-            tracing::debug!("java/projectConfigurationsUpdate: {e}");
-        }
-    });
     Ok(model)
 }
 

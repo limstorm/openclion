@@ -3,7 +3,6 @@
  * common ones, the options added through "Modify options" (⌥M) and the
  * Before launch list.
  */
-import { parseJavaArgs } from "@/platform/javaLaunch";
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode, type RefObject } from "react";
 import clsx from "clsx";
 import type { BeforeLaunchTask, RunConfig } from "@/platform/ipc";
@@ -47,15 +46,12 @@ import { TomcatSettings } from "./TomcatSettings";
 import styles from "./Run.module.css";
 
 /**
- * Debug adapters with a real launch template (`debugger/launch.ts`, `debugger/java.ts`),
- * verified against small programs. Others (dart, php-debug, …) only got
- * generic launch arguments and are left out until they have one; a configuration that
- * already names one keeps it.
+ * Debug adapters with a real launch template (`debugger/launch.ts`), verified against
+ * small programs. Others (dart, php-debug, …) only got generic launch arguments and are
+ * left out until they have one; a configuration that already names one keeps it.
  */
 const ADAPTERS: ReadonlyArray<{ id: string; label: string }> = [
   { id: "netcoredbg", label: "netcoredbg (.NET)" },
-  { id: "java-debug", label: "java-debug (Java)" },
-  { id: "kotlin-debug-adapter", label: "kotlin-debug-adapter (Kotlin)" },
   { id: "debugpy", label: "debugpy (Python)" },
   { id: "js-debug", label: "js-debug (Node.js / TypeScript)" },
   { id: "delve", label: "Delve (Go)" },
@@ -193,7 +189,7 @@ export function ConfigForm({ config, all, type, errors, template, onChange, modi
   }
 
   const compound = config.kind === COMPOUND;
-  // Compound and debug-only types (Remote JVM Debug) start no process of their own.
+  // Compound and debug-only types (Go Remote) start no process of their own.
   const noProcess = compound || !!type?.debugOnly;
   const params = compound ? {} : formParams(config, type);
   const update = (patch: Partial<RunConfig>) => onChange({ ...config, ...patch });
@@ -433,10 +429,7 @@ export function ConfigForm({ config, all, type, errors, template, onChange, modi
               placeholder="Space separated; quote with ' or &quot;"
               onChange={(e) => {
                 setArgsText(e.target.value);
-                const args = parseArgs(e.target.value);
-                const module =
-                  parseJavaArgs(args).mainClass === parseJavaArgs(config.args).mainClass ? config.module : undefined;
-                update({ args, params: {}, module });
+                update({ args: parseArgs(e.target.value), params: {} });
               }}
             />
           </Field>
@@ -704,7 +697,7 @@ function TypeField({
   );
 }
 
-/** Read-only text the form computes (e.g. the JDWP agent for the remote JVM), with Copy. */
+/** Read-only text the form computes (e.g. a remote debugger command line), with Copy. */
 function OutputField({ label, text }: { label: string; text: string }) {
   const tx = useTx();
   const [copied, setCopied] = useState(false);

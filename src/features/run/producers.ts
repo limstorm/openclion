@@ -12,7 +12,6 @@
 import type { RunConfig } from "@/platform/ipc";
 import { isTestPath } from "@/platform/languageSettings";
 import { currentRoots } from "@/platform/projectRoots";
-import { applicationConfig, jvmModuleDir } from "./application";
 import { formatArgs } from "./configs";
 import { goGenerateConfig } from "./goGenerate";
 import { goTestParts } from "./goArguments";
@@ -538,7 +537,6 @@ function buildOwners(rel: string, configs: readonly RunConfig[], kinds: readonly
 const cargoOwner = (rel: string, configs: readonly RunConfig[]) => buildOwners(rel, configs, ["cargo"]);
 const hasBuildTool = (rel: string, configs: readonly RunConfig[], kinds: readonly string[]) =>
   buildOwners(rel, configs, kinds).length > 0;
-const JVM_BUILDS = ["maven", "gradle"];
 
 /**
  * A Godot scene: `godot --path <project> res://<scene>` in the Godot project holding it
@@ -620,13 +618,6 @@ export function produceFile(input: ContextInput, env: ToolEnv): Produced | null 
       if (!hasGoMain(input.content)) return null;
       const main = contextConfig(rel, configs, input.content ?? "package main");
       if (main) return { name: main.name, scope: "file", config: main };
-    }
-    if (/\.(java|kt)$/.test(rel) && hasBuildTool(rel, configs, JVM_BUILDS)) {
-      if (input.content === undefined) return null;
-      const targets = detectRunTargets(input.content, rel).filter((t) => t.className);
-      const target = targets.find((t) => t.kind === "main") ?? targets.find((t) => t.kind === "suite");
-      const config = target ? targetConfig(target, rel, configs, input.content) : null;
-      return config ? { name: config.name, scope: "file", config } : null;
     }
   }
   if (!lang) return null;
@@ -722,7 +713,7 @@ export function produceFile(input: ContextInput, env: ToolEnv): Produced | null 
     case "java":
       if (input.content !== undefined && !/\bvoid\s+main\s*\(/.test(input.content)) return null;
       // JEP 330: `java Hi.java` compiles and runs a single source file.
-      return simple(lang, s, env, "java-file", () => [s.arg], "java-debug");
+      return simple(lang, s, env, "java-file", () => [s.arg]);
     case "rust":
       if (!hasRustMain(input.content)) {
         // A standalone file with tests only: run them all.
@@ -820,7 +811,7 @@ export function fileTargets(input: Pick<ContextInput, "path" | "root" | "configs
     // Scratches: mains only (tests need the project's runner).
     const isGo = /\.go$/.test(input.path);
     return detectRunTargets(content, isGo || /\.py$/.test(input.path) ? input.path : s.rel).filter(
-      (t) => t.kind === "main" && (!t.className || /\.(java|kt)$/.test(input.path)),
+      (t) => t.kind === "main",
     );
   }
   return detectRunTargets(content, s.rel);
@@ -834,11 +825,6 @@ function elementProduction(input: ContextInput, env: ToolEnv, target: RunTarget)
     return config ? { name: config.name, scope: "element", config } : null;
   }
   if (target.kind === "main") {
-    // Java / Kotlin main classes in a Maven / Gradle project: an Application configuration.
-    if (target.className && s.inProject && hasBuildTool(rel, input.configs, JVM_BUILDS)) {
-      const config = applicationConfig({ className: target.className, spring: target.spring }, rel, input.configs);
-      return { name: config.name, scope: "element", config };
-    }
     const file = produceFile(input, env);
     return file ? { ...file, scope: "element" } : null;
   }
@@ -954,8 +940,7 @@ export function produceDirectory(input: ContextInput): Produced | null {
   if (jvmRoot || jvmPackage || /(^|\/)src\/test(\/|$)/.test(rel)) {
     const base = closest(["gradle", "maven"]);
     if (base) {
-      const module = jvmModuleDir(rel + "/x.java", input.configs);
-      const moduleBase = { ...base, cwd: module || base.cwd };
+      const moduleBase = base;
       if (!jvmPackage) return make(moduleBase, "All Tests", [...base.args]);
       const pkg = jvmPackage[2]!.replace(/\//g, ".");
       return base.kind === "gradle"

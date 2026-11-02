@@ -221,12 +221,6 @@ pub enum DebugEvent {
     Exited {
         code: i32,
     },
-    /// java-debug's `hotcodereplace` event: `change_type` is `BUILD_COMPLETE` (classes
-    /// changed and can be reloaded), `STARTING`, `END`, `WARNING` or `ERROR`.
-    HotCodeReplace {
-        change_type: String,
-        message: String,
-    },
 }
 
 /// Where backend crates publish [`IdeEvent`]s. Cheap to clone via `Arc`.

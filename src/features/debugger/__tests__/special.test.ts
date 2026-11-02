@@ -27,26 +27,26 @@ beforeEach(() => {
 
 describe("method breakpoints and field watchpoints", () => {
   it("toggles a method breakpoint on its declaration line and persists it", () => {
-    const bp = toggleMethodAt("/p/A.java", 4, "a.A#run");
-    expect(bp?.name).toBe("a.A#run");
-    expect(specialAt("/p/A.java").map((b) => b.line)).toEqual([4]);
+    const bp = toggleMethodAt("/p/a.go", 4, "shop.Parse");
+    expect(bp?.name).toBe("shop.Parse");
+    expect(specialAt("/p/a.go").map((b) => b.line)).toEqual([4]);
     loadSpecialBreakpoints("/p");
-    expect(useSpecialBreakpoints.getState().methods.map((m) => m.name)).toEqual(["a.A#run"]);
-    expect(toggleMethodAt("/p/A.java", 4, "a.A#run")).toBeNull();
-    expect(specialAt("/p/A.java")).toEqual([]);
+    expect(useSpecialBreakpoints.getState().methods.map((m) => m.name)).toEqual(["shop.Parse"]);
+    expect(toggleMethodAt("/p/a.go", 4, "shop.Parse")).toBeNull();
+    expect(specialAt("/p/a.go")).toEqual([]);
   });
 
   it("sends enabled state, conditions and muting to the backend lists", () => {
     const m = addMethodBreakpoint("main.run");
     updateSpecial(m.id, { condition: " n > 1 ", enabled: false });
-    const f = addFieldWatchpoint({ dataId: "a.A#count", label: "A.count", accessType: "write" });
-    expect(addFieldWatchpoint({ dataId: "a.A#count", label: "dup" }).id).toBe(f.id);
+    const f = addFieldWatchpoint({ dataId: "0x1234", label: "order.total", accessType: "write" });
+    expect(addFieldWatchpoint({ dataId: "0x1234", label: "dup" }).id).toBe(f.id);
     const { methods, fields } = useSpecialBreakpoints.getState();
     expect(toFunctionBreakpoints(methods, false)).toEqual([
       { name: "main.run", condition: "n > 1", hitCondition: null, enabled: false },
     ]);
     expect(toDataBreakpoints(fields, false)).toEqual([
-      { dataId: "a.A#count", accessType: "write", condition: null, hitCondition: null, enabled: true },
+      { dataId: "0x1234", accessType: "write", condition: null, hitCondition: null, enabled: true },
     ]);
     expect(toDataBreakpoints(fields, true)[0]!.enabled).toBe(false);
   });
@@ -65,19 +65,12 @@ describe("method breakpoints and field watchpoints", () => {
     });
   });
 
-  it("toggles like IDEA: Java declarations get method / field breakpoints, other lines line breakpoints", () => {
-    const src = "package a;\nclass A {\n  int count;\n  void run() {\n    count++;\n  }\n}";
-    toggleBreakpointSmart("/p/A.java", 3, "java", src);
-    toggleBreakpointSmart("/p/A.java", 2, "java", src);
-    toggleBreakpointSmart("/p/A.java", 4, "java", src);
-    expect(useSpecialBreakpoints.getState().methods.map((m) => m.name)).toEqual(["a.A#run"]);
-    expect(useSpecialBreakpoints.getState().fields.map((f) => f.dataId)).toEqual(["a.A#count"]);
-    expect(breakpointsOf("/p/A.java").map((b) => b.line)).toEqual([4]);
-    // Again on the declaration: removed.
-    toggleBreakpointSmart("/p/A.java", 3, "java", src);
+  it("removes a method breakpoint on the line, otherwise toggles a line breakpoint", () => {
+    toggleMethodAt("/p/a.py", 1, "run");
+    toggleBreakpointSmart("/p/a.py", 1);
     expect(useSpecialBreakpoints.getState().methods).toEqual([]);
-    // Python `def` lines stay line breakpoints.
-    toggleBreakpointSmart("/p/a.py", 0, "python", "def run():\n  pass");
+    expect(breakpointsOf("/p/a.py")).toEqual([]);
+    toggleBreakpointSmart("/p/a.py", 0);
     expect(breakpointsOf("/p/a.py").map((b) => b.line)).toEqual([0]);
   });
 });

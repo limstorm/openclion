@@ -8,7 +8,6 @@
 pub mod application_update;
 pub mod compile;
 pub mod gradle;
-pub mod kotlin_bridge;
 pub mod maven;
 pub mod pom_edit;
 mod process;

@@ -15,7 +15,6 @@ import {
 } from "./configs";
 import { contextConfig, fileRole } from "./context";
 import { envFromRows } from "./EnvDialog";
-import { defaultSelection } from "./store";
 
 const cfg = (over: Partial<RunConfig> & { id: string }): RunConfig => ({
   name: over.id,
@@ -73,20 +72,6 @@ describe("config merge / override", () => {
       ["npm", ["a", "c"]],
       ["Cargo", ["b"]],
     ]);
-  });
-
-  it("prefers an application config as the default selection", () => {
-    const list = [
-      cfg({ id: "cargo:build" }),
-      cfg({ id: "cargo:test", isTest: true }),
-      cfg({ id: "cargo:run:app", name: "cargo run app" }),
-    ];
-    expect(defaultSelection(list)?.id).toBe("cargo:run:app");
-    const spring = [
-      cfg({ id: "maven:spring-boot:run", kind: "maven" }),
-      cfg({ id: "application:demo.App", kind: "spring-boot" }),
-    ];
-    expect(defaultSelection(spring)?.id).toBe("application:demo.App");
   });
 });
 

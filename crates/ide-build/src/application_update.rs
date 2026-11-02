@@ -86,7 +86,7 @@ pub fn publish(root: &Path, cache: &Path, class_paths: &[String], main_class: &s
     if paths.contains(&output) {
         return Ok(());
     }
-    // jdtls uses bin/main for Gradle, rather than Gradle's build/resources/main.
+    // Gradle's compiled output may use bin/main rather than build/resources/main.
     let class_file = main_class.split('.').collect::<PathBuf>().with_extension("class");
     let destination = paths.iter().find(|p| p.join(&class_file).is_file()).ok_or_else(|| {
         IdeError::invalid("Cannot find the running main class output directory; restart the application")

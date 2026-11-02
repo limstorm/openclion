@@ -38,7 +38,6 @@ const STATUS_TONE: Record<ToolInfo["status"], "success" | "accent" | "warning"> 
 const KIND_LABEL: Record<ToolInfo["kind"], string> = {
   languageServer: "Language server",
   debugger: "Debugger",
-  plugin: "Plugin",
   formatter: "Formatter",
 };
 
@@ -149,10 +148,7 @@ function Details({ tool, pending }: { tool: ToolInfo; pending: boolean }) {
   const busy = !!job;
   // Servers and adapters show the install hint next to their executable.
   const manualHint =
-    !pending &&
-    !tool.canInstall &&
-    tool.status === "missing" &&
-    (tool.unavailableReason ?? (tool.kind === "plugin" ? tool.installHint : null));
+    !pending && !tool.canInstall && tool.status === "missing" && (tool.unavailableReason ?? tool.installHint);
   return (
     <div className={styles.details} aria-label={`${tool.displayName} details`}>
       <div className={styles.header}>

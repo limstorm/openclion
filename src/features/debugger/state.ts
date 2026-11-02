@@ -284,10 +284,6 @@ export function publishContext() {
   setContext("debugSessionRunning", s?.status === "running");
   setContext("debugSessionPaused", s?.status === "paused");
   setContext("debugCanRerun", !!s && !!(rootOf(s).runConfig || rootOf(s).launch));
-  setContext(
-    "debugCanHotSwap",
-    Object.values(useDebug.getState().sessions).some((x) => isLive(x) && !!x.caps?.hotCodeReplace),
-  );
 }
 
 // --- console -----------------------------------------------------------------
@@ -450,7 +446,7 @@ export async function startSession(
   options: {
     runConfig?: RunConfig;
     preparation?: { id: DebugSessionId; signal: AbortSignal };
-    /** A process started for this session (e.g. Maven with a JDWP agent): Stop ends it too. */
+    /** A process started for this session (e.g. a build tool): Stop ends it too. */
     process?: RunId | null;
     /** Rerun repeats the launch (false for attaching to a process that is gone afterwards). */
     rerunnable?: boolean;
@@ -577,7 +573,7 @@ export async function stopSession(id: DebugSessionId, options: { stopProcess?: b
     console.warn("debugStop failed", e);
     markTerminated(root.id);
   }
-  // Detaching leaves an attached JVM running: stop the process it belongs to, like IDEA.
+  // Detaching leaves the attached process running: stop the process it belongs to, like IDEA.
   if (options.stopProcess !== false && root.process != null)
     await call(commands.runStop(root.process)).catch(() => undefined);
 }

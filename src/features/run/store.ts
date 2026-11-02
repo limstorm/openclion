@@ -9,16 +9,11 @@ import {
   call,
   commands,
   isTauri,
-  isCancelled,
-  nextRequestId,
-  type RequestId,
   type OutputChunk,
   type RunConfig,
   type RunId,
   type TestCaseReport,
 } from "@/platform/ipc";
-import { findJavaModule, isJvmApplication, parseJavaArgs, prepareJavaLaunch } from "@/platform/javaLaunch";
-import { downloadJdkActions } from "@/platform/jdk";
 import { useProject } from "@/platform/project";
 import { executeAction } from "@/platform/actions";
 import { workflowSettings } from "@/platform/workflowSettings";
@@ -73,7 +68,6 @@ export interface RunSession {
 }
 
 interface SessionRuntime {
-  resolveRequest?: { id: RequestId; controller: AbortController };
   console: ConsoleModel;
   tests: TestResults | null;
   parser: TestOutputParser | null;
@@ -192,11 +186,10 @@ export async function loadConfigs(): Promise<void> {
   }
 }
 
-/** IDEA picks an application config first; prefer a run/dev/start target over builds and tests. */
+/** IDEA picks a run target first; prefer a run/dev/start target over builds and tests. */
 export function defaultSelection(configs: readonly RunConfig[]): RunConfig | undefined {
   const score = (c: RunConfig) => {
     if (c.isTest) return 1;
-    if (c.kind === "spring-boot") return 4;
     const s = `${c.id} ${c.name}`.toLowerCase();
     if (/bootrun|spring-boot:run|:run\b|run:|\bdev\b|\bstart\b|\bserve\b|runserver/.test(s)) return 3;
     if (/build|package|lint|check|format|clean/.test(s)) return 0;
@@ -323,11 +316,6 @@ export async function deleteConfig(id: string): Promise<void> {
 
 /** Persists user configurations and reloads the merged list. */
 export async function saveUserConfigs(user: RunConfig[], removedDetectedIds: string[] = []): Promise<void> {
-  user = await Promise.all(
-    user.map(async (config) =>
-      isJvmApplication(config) && config.module == null ? { ...config, module: await findJavaModule(config) } : config,
-    ),
-  );
   await call(
     commands.runSaveConfigs(
       user.map((c) => ({ ...c, detected: false })),
@@ -637,18 +625,6 @@ export async function startRun(
   };
   try {
     let launch = options.launch ?? config;
-    if (isJvmApplication(launch)) {
-      const resolved = await resolveJvmApplication(sessionId, launch);
-      if (runtimes.get(sessionId)?.generation !== generation) return getSession(sessionId) ?? null;
-      if (!resolved) {
-        patchSession(sessionId, {
-          status: getSession(sessionId)?.stopped ? "finished" : "failed",
-          endedAt: Date.now(),
-        });
-        return getSession(sessionId) ?? null;
-      }
-      launch = resolved;
-    }
     const prepare = typeFor(launch.kind)?.prepareLaunch;
     if (prepare) {
       launch = await prepare(launch);
@@ -695,64 +671,6 @@ function revealSession(sessionId: string) {
     if (!toolWindowService().isVisible("run")) toolWindowService().show("run");
   } catch {
     /* no workbench (tests) */
-  }
-}
-
-/**
- * Builds the module (jdtls workspace build) and resolves `${classpath}` and the
- * project JDK of a Java application configuration. Null (and a console message) on failure.
- */
-async function resolveJvmApplication(sessionId: string, config: RunConfig): Promise<RunConfig | null> {
-  const say = (text: string, kind: OutputChunk["kind"] = "system") => {
-    enqueue(sessionId, { kind, text } as OutputChunk);
-    flush(sessionId);
-  };
-  const parsed = parseJavaArgs(config.args);
-  if (!parsed.mainClass) {
-    say(`No main class in '${config.name}': expected java [options] -cp \${classpath} <main class> [args]\n`, "stderr");
-    return null;
-  }
-  if (!parsed.classpath) return config;
-  const rt = runtime(sessionId)!;
-  const request = { id: nextRequestId(), controller: new AbortController() };
-  rt.resolveRequest = request;
-  try {
-    const { info, resolved } = await prepareJavaLaunch(config, {
-      request: request.id,
-      signal: request.controller.signal,
-      report: say,
-    });
-    // No installed JDK is new enough for the module: offer to download one.
-    const jdkHint = info.hints.find((h) => downloadJdkActions(h).length);
-    if (jdkHint)
-      notifications().notify({
-        group: "run",
-        level: "warning",
-        key: "run.jdk-missing",
-        title: `No JDK can run '${config.name}'`,
-        body: jdkHint,
-        actions: downloadJdkActions(jdkHint),
-      });
-    return resolved;
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    if (request.controller.signal.aborted || isCancelled(e)) {
-      if (runtimes.get(sessionId) === rt && rt.resolveRequest === request) patchSession(sessionId, { stopped: true });
-      return null;
-    }
-    say(`Cannot resolve the classpath: ${message}\n`, "stderr");
-    // jdtls can't start without a newer JDK: "Download JDK 25".
-    const actions = downloadJdkActions(message);
-    notifications().notify({
-      group: "run",
-      level: "error",
-      title: `Cannot run '${config.name}'`,
-      body: message,
-      actions,
-    });
-    return null;
-  } finally {
-    if (rt.resolveRequest === request) delete rt.resolveRequest;
   }
 }
 
@@ -880,13 +798,6 @@ export function onRunExited(runId: RunId, code: number | null) {
 export async function stopSession(sessionId: string): Promise<void> {
   const session = getSession(sessionId);
   if (!session) return;
-  const request = runtimes.get(sessionId)?.resolveRequest;
-  if (session.status === "starting" && request) {
-    request.controller.abort();
-    patchSession(sessionId, { stopped: true, status: "finished", endedAt: Date.now() });
-    await commands.cancelRequest(request.id);
-    return;
-  }
   if (session.runId === null || session.status !== "running") return;
   patchSession(sessionId, { stopped: true });
   try {

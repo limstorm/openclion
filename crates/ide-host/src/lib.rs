@@ -6,8 +6,6 @@
 pub mod data_dirs;
 pub mod environment;
 mod formatter;
-mod java_runtime;
-mod kotlin_bridge;
 pub mod notebook;
 pub mod ops;
 mod project;
@@ -171,15 +169,9 @@ impl Host {
             if !project.light {
                 self.environment.project_closed();
             }
-            if let Some(bridge) = &project.kotlin_bridge {
-                bridge.stop();
-            }
             project.agents.shutdown();
             project.notebooks.stop_admission();
-            self.shutdown_project_workers_blocking(
-                vec![project.notebooks.clone()],
-                project.kotlin_bridge.iter().cloned().collect(),
-            );
+            self.shutdown_project_workers_blocking(vec![project.notebooks.clone()]);
             let lsp = project.lsp.clone();
             self.runtime.spawn(async move { lsp.shutdown_all().await });
         }
@@ -187,14 +179,7 @@ impl Host {
 
     /// Synchronous project/window destruction must finish owned kernel cleanup,
     /// not enqueue work which can be lost as the desktop runtime exits.
-    fn shutdown_project_workers_blocking(
-        &self,
-        notebooks: Vec<Arc<notebook::NotebookService>>,
-        bridges: Vec<Arc<kotlin_bridge::KotlinBridge>>,
-    ) {
-        for bridge in &bridges {
-            bridge.stop();
-        }
+    fn shutdown_project_workers_blocking(&self, notebooks: Vec<Arc<notebook::NotebookService>>) {
         for service in &notebooks {
             service.stop_admission();
         }
@@ -202,9 +187,6 @@ impl Host {
         let wait = move || {
             let worker = std::thread::spawn(move || {
                 runtime.block_on(async move {
-                    for bridge in bridges {
-                        bridge.shutdown().await;
-                    }
                     for service in notebooks {
                         service.shutdown().await;
                     }
@@ -226,10 +208,7 @@ impl Host {
     /// Called before the desktop runtime exits, including update/restart exits.
     pub fn shutdown_notebooks_on_exit(&self) {
         let projects = self.projects();
-        self.shutdown_project_workers_blocking(
-            projects.iter().map(|project| project.notebooks.clone()).collect(),
-            projects.iter().filter_map(|project| project.kotlin_bridge.clone()).collect(),
-        );
+        self.shutdown_project_workers_blocking(projects.iter().map(|project| project.notebooks.clone()).collect());
     }
 
     /// Stops what this host started: notebook kernels, language servers, agents, runs and terminals.
@@ -240,18 +219,12 @@ impl Host {
         self.terminals.kill_all();
         let projects: Vec<_> = self.projects.write().drain().map(|(_, p)| p).collect();
         for project in &projects {
-            if let Some(bridge) = &project.kotlin_bridge {
-                bridge.stop();
-            }
             project.notebooks.stop_admission();
             project.agents.shutdown();
         }
         // Kernel cleanup owns its interrupt/termination/reaping deadlines. An
         // outer LSP timeout must never abort it before owned children are reaped.
         for project in &projects {
-            if let Some(bridge) = &project.kotlin_bridge {
-                bridge.shutdown().await;
-            }
             project.notebooks.shutdown().await;
         }
         let stop_language_servers = async {

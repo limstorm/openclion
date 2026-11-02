@@ -1,52 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { fieldAt, methodAt } from "../breakpoints/symbols";
+import { methodAt } from "../breakpoints/symbols";
 
-const java = `package com.shop;
-
-import java.util.List;
-
-public class Orders {
-    private int count = 0;
-    static final String NAME = "x"; // not a { brace
-
-    public Orders() {
-        count = 1;
-    }
-
-    @Override
-    public List<String> load(int id) {
-        int local = 2;
-        helper(local);
-        return List.of();
-    }
-
-    static class Line {
-        long total;
-        void add(long n) { total += n; }
-    }
-}
-`;
-
-describe("method / field declarations", () => {
-  it("names Java methods the way java-debug expects (pkg.Class#method)", () => {
-    expect(methodAt("java", java, 13)).toEqual({ name: "com.shop.Orders#load", label: "Orders.load()" });
-    expect(methodAt("java", java, 8)).toEqual({ name: "com.shop.Orders#<init>", label: "Orders.Orders()" });
-    expect(methodAt("java", java, 21)).toEqual({ name: "com.shop.Orders$Line#add", label: "Line.add()" });
-    // Calls and statements are not declarations.
-    expect(methodAt("java", java, 14)).toBeNull();
-    expect(methodAt("java", java, 15)).toBeNull();
-    expect(methodAt("java", java, 16)).toBeNull();
-  });
-
-  it("finds Java fields (not locals) as watchpoint ids", () => {
-    expect(fieldAt("java", java, 5)).toEqual({ dataId: "com.shop.Orders#count", label: "Orders.count" });
-    expect(fieldAt("java", java, 6)).toEqual({ dataId: "com.shop.Orders#NAME", label: "Orders.NAME" });
-    expect(fieldAt("java", java, 20)).toEqual({ dataId: "com.shop.Orders$Line#total", label: "Line.total" });
-    expect(fieldAt("java", java, 14)).toBeNull();
-    expect(fieldAt("java", java, 13)).toBeNull();
-    expect(fieldAt("python", "x = 1", 0)).toBeNull();
-  });
-
+describe("method declarations", () => {
   it("names functions for debugpy, Delve, LLDB and js-debug", () => {
     expect(methodAt("python", "class A:\n    async def run(self, n):\n        pass", 1)?.name).toBe("run");
     const go =

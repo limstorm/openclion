@@ -4,17 +4,17 @@
  */
 import { workflowSettings } from "@/platform/workflowSettings";
 import type { AttachKind, AttachableProcess, LaunchConfig } from "@/platform/ipc";
-import { javaAttachConfig } from "./java";
 
-export const KIND_LABELS: Record<AttachKind, string> = {
-  java: "Java (JDWP)",
+const ATTACH_KINDS = ["node", "python", "go", "native"] as const satisfies readonly AttachKind[];
+
+type AttachSupportedKind = (typeof ATTACH_KINDS)[number];
+
+export const KIND_LABELS: Record<AttachSupportedKind, string> = {
   node: "Node.js",
   python: "Python (debugpy)",
   go: "Go (Delve)",
   native: "Native (LLDB)",
 };
-
-const KIND_ORDER: AttachKind[] = ["java", "node", "python", "go", "native"];
 
 export type AttachRow =
   | { kind: "group"; key: string; label: string; count: number }
@@ -31,7 +31,7 @@ export function matchesFilter(p: AttachableProcess, filter: string): boolean {
 /** Rows of the popup: a header per debugger, then its processes (interpreters first). */
 export function attachRows(list: readonly AttachableProcess[], filter: string): AttachRow[] {
   const rows: AttachRow[] = [];
-  for (const kind of KIND_ORDER) {
+  for (const kind of ATTACH_KINDS) {
     const items = list.filter((p) => p.kind === kind && matchesFilter(p, filter));
     if (!items.length) continue;
     rows.push({ kind: "group", key: `group:${kind}`, label: KIND_LABELS[kind], count: items.length });
@@ -59,15 +59,12 @@ function base(p: AttachableProcess, cwd: string, extra: Record<string, unknown>)
   };
 }
 
-/** The attach request for `p`; `root` is the project root (sources, java module). */
+/** The attach request for `p`; `root` is the project root (sources). */
 export async function attachConfig(p: AttachableProcess, root: string): Promise<LaunchConfig> {
+  // The popup lists only these kinds; the narrow type keeps the switch exhaustive.
+  const kind = p.kind as AttachSupportedKind;
   const skip = workflowSettings().debugger.skipLibraryCode;
-  switch (p.kind) {
-    case "java":
-      return javaAttachConfig(
-        { name: `${p.name} (${p.pid})`, module: "", hostName: p.host ?? "localhost", port: p.port! },
-        root,
-      );
+  switch (kind) {
     case "node":
       return base(p, root, {
         type: "pwa-node",

@@ -15,9 +15,6 @@ import {
   updateBreakpoint,
   useBreakpoints,
 } from "../breakpoints/store";
-import { classFileBreakpointReason } from "@/platform/classFiles";
-import { tx } from "@/platform/i18n";
-import { showStatusInfo } from "@/workbench/contributions";
 import { canPlaceBreakpoint } from "../breakpoints/languages";
 import {
   removeSpecial,
@@ -132,31 +129,6 @@ function inBreakpointArea(e: MouseEvent): boolean {
 }
 
 export function breakpointGutter(ctx: EditorDocContext): Extension {
-  const reason = classFileBreakpointReason(ctx.path);
-  if (reason) {
-    const message = tx(reason);
-    return ViewPlugin.fromClass(
-      class {
-        constructor(readonly view: EditorView) {
-          view.dom.addEventListener("mouseover", this.hover);
-          view.dom.addEventListener("mousedown", this.down, true);
-        }
-        hover = (e: MouseEvent) => {
-          if (inBreakpointArea(e)) (e.target as HTMLElement).closest(".cm-gutters")?.setAttribute("title", message);
-        };
-        down = (e: MouseEvent) => {
-          if (!inBreakpointArea(e)) return;
-          showStatusInfo(message);
-        };
-        destroy() {
-          this.view.dom.removeEventListener("mouseover", this.hover);
-          this.view.dom.removeEventListener("mousedown", this.down, true);
-          const gutters = this.view.dom.querySelector(".cm-gutters");
-          if (gutters?.getAttribute("title") === message) gutters.removeAttribute("title");
-        }
-      },
-    );
-  }
   const path = ctx.path;
   const field = StateField.define<RangeSet<BreakpointMarker>>({
     create: (state) => buildMarkers(state, path),
@@ -276,7 +248,7 @@ export function breakpointGutter(ctx: EditorDocContext): Extension {
           openBreakpointPopover(path, created.id, { x: e.clientX, y: e.clientY });
           return;
         }
-        toggleBreakpointSmart(path, line, ctx.language, this.view.state.doc.toString());
+        toggleBreakpointSmart(path, line);
       };
 
       onContextMenu = (e: MouseEvent) => {

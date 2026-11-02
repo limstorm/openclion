@@ -77,8 +77,7 @@ pub async fn tools_install(
     .map_err(join_err);
     host.end_request(request);
     let info = result??;
-    // Language servers whose launch depends on installed tools (jdtls loads the
-    // java-debug bundle) pick the change up.
+    // Language servers whose launch depends on installed tools pick the change up.
     reconfigure_servers(host);
     Ok(info)
 }
@@ -119,7 +118,7 @@ pub fn jdk_download_location(host: &Host, _window: &str) -> IdeResult<ide_core::
 /// Downloads the latest `vendor` JDK of Java `version` into `location` (default:
 /// [`jdk_download_location`]), streaming progress through `on_event`; cancellable
 /// with `cancel_request(request)`. The JDK is then detected like an installed one,
-/// and language servers waiting for a JDK (jdtls) start on it.
+/// and language servers waiting for a JDK start on it.
 #[allow(clippy::too_many_arguments)]
 pub async fn jdk_download(
     host: &Host,

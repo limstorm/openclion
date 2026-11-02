@@ -380,7 +380,6 @@ export const commands = {
 	 *  classes and disk class files. Cached per project.
 	 */
 	lspVirtualDocument: (uri: string) => typedError<VirtualDocument, IdeError>(__TAURI_INVOKE("lsp_virtual_document", { uri })),
-	lspResolveClassFile: (path: string) => typedError<string, IdeError>(__TAURI_INVOKE("lsp_resolve_class_file", { path })),
 	/**
 	 *  References of the symbol at `pos`. `project_wide` also searches project files
 	 *  outside the language server's analysis scope; bulk scans over many symbols
@@ -639,17 +638,6 @@ export const commands = {
 	 *  are cleared first; the new messages are published as `build` diagnostics.
 	 */
 	buildRun: (kind: BuildKind, file: string | null, request: RequestId, clear: string[], onEvent: Channel<BuildEvent>) => typedError<BuildResult, IdeError>(__TAURI_INVOKE("build_run", { kind, file, request, clear, onEvent })),
-	/**
-	 *  Cancellable with `cancel_request(request)`.
-	 *  Builds the workspace (when `build`), then resolves the runtime (or test)
-	 *  classpath and the JDK of the module at `module` (absolute, or relative to the project root).
-	 *  A module with Kotlin / Groovy / Scala sources is built by its build system, whose class directories come first.
-	 */
-	javaResolveLaunch: (module: string, test: boolean, build: boolean, request: RequestId) => typedError<JavaLaunchInfo, IdeError>(__TAURI_INVOKE("java_resolve_launch", { module, test, build, request })),
-	/**  Port of java-debug's DAP server inside the jdtls serving `module` (started on demand). */
-	javaDebugServer: (module: string) => typedError<number, IdeError>(__TAURI_INVOKE("java_debug_server", { module })),
-	/**  Incremental build of the jdtls workspace serving `module` (e.g. before HotSwap). */
-	javaBuildWorkspace: (module: string) => typedError<JavaBuildStatus, IdeError>(__TAURI_INVOKE("java_build_workspace", { module })),
 	/**  Starts a session owned by this window: its events (and those of child sessions) go here only. */
 	debugStart: (config: LaunchConfig) => typedError<DebugSessionId, IdeError>(__TAURI_INVOKE("debug_start", { config })),
 	debugSetBreakpoints: (path: string, breakpoints: Breakpoint[]) => typedError<BreakpointState[], IdeError>(__TAURI_INVOKE("debug_set_breakpoints", { path, breakpoints })),
@@ -818,13 +806,6 @@ export const commands = {
 	debugDataBreakpointInfo: (session: DebugSessionId, container: number, name: string, frameId: number | null) => typedError<DataBreakpointInfo, IdeError>(__TAURI_INVOKE("debug_data_breakpoint_info", { session, container, name, frameId })),
 	/**  Attach to Process: the user's processes a debugger can attach to. */
 	debugAttachableProcesses: () => typedError<AttachableProcess[], IdeError>(__TAURI_INVOKE("debug_attachable_processes")),
-	/**
-	 *  Remote JVM Debug in listen mode: waits (cancellable through `request`) for the remote
-	 *  JVM to connect to `host:port`; returns the loopback port java-debug attaches to.
-	 */
-	debugListenForJvm: (request: RequestId, host: string, port: number) => typedError<number, IdeError>(__TAURI_INVOKE("debug_listen_for_jvm", { request, host, port })),
-	/**  HotSwap (Reload Changed Classes) in a java-debug session. */
-	debugRedefineClasses: (session: DebugSessionId) => typedError<HotSwapResult, IdeError>(__TAURI_INVOKE("debug_redefine_classes", { session })),
 	/**  Headers related to a C/C++ source (or sources related to a header), best first. */
 	cppRelatedFiles: (path: string) => typedError<IpcPath[], IdeError>(__TAURI_INVOKE("cpp_related_files", { path })),
 	/**
@@ -1490,7 +1471,7 @@ export type AskpassKind =
 /**  Yes / no (an unknown host key); answered with `yes` or `no`. */
 "confirm";
 
-export type AttachKind = "java" | "node" | "python" | "go" | "native";
+export type AttachKind = "node" | "python" | "go" | "native";
 
 export type AttachableProcess = {
 	pid: number,
@@ -1500,7 +1481,7 @@ export type AttachableProcess = {
 	kind: AttachKind,
 	/**  Debug adapter that attaches to it. */
 	adapter: string,
-	/**  Debug port the process listens on (JDWP, `--inspect`, `debugpy --listen`). */
+	/**  Debug port the process listens on (`--inspect`, `debugpy --listen`). */
 	host: string | null,
 	port: number | null,
 };
@@ -2275,10 +2256,7 @@ export type CustomKeymap = {
 	overrides?: { [key in string]: string[] },
 };
 
-/**
- *  A field watchpoint (DAP data breakpoint) on a `dataId` from [`DebugManager::data_breakpoint_info`]
- *  (java-debug ids, `Class#field`, stay valid across sessions).
- */
+/**  A field watchpoint (DAP data breakpoint) on a `dataId` from [`DebugManager::data_breakpoint_info`]. */
 export type DataBreakpoint = {
 	dataId: string,
 	/**  `read`, `write` or `readWrite` (adapter default when unset). */
@@ -2596,8 +2574,6 @@ export type DebugCapabilities = {
 	conditionalBreakpoints: boolean,
 	hitConditionalBreakpoints: boolean,
 	logPoints: boolean,
-	/**  HotSwap ("Reload Changed Classes"): java-debug's `redefineClasses` request. */
-	hotCodeReplace: boolean,
 	/**  The Memory view can read the debuggee's memory (`readMemory`). */
 	readMemory: boolean,
 };
@@ -2607,12 +2583,7 @@ export type DebugEvent =
  *  First event of every session (only build output of a root session's
  *  `cargo` step can precede it). `parent` is set for adapter-started child sessions.
  */
-{ kind: "started"; name: string; adapter: string; parent: DebugSessionId | null } | { kind: "initialized" } | { kind: "stopped"; threadId: number; reason: string; description: string | null; allThreadsStopped: boolean } | { kind: "continued"; threadId: number; allThreadsContinued: boolean } | { kind: "output"; category: string; output: string } | { kind: "thread"; threadId: number; started: boolean } | { kind: "breakpointsChanged"; path: IpcPath } | { kind: "terminated" } | { kind: "exited"; code: number } | 
-/**
- *  java-debug's `hotcodereplace` event: `change_type` is `BUILD_COMPLETE` (classes
- *  changed and can be reloaded), `STARTING`, `END`, `WARNING` or `ERROR`.
- */
-{ kind: "hotCodeReplace"; changeType: string; message: string };
+{ kind: "started"; name: string; adapter: string; parent: DebugSessionId | null } | { kind: "initialized" } | { kind: "stopped"; threadId: number; reason: string; description: string | null; allThreadsStopped: boolean } | { kind: "continued"; threadId: number; allThreadsContinued: boolean } | { kind: "output"; category: string; output: string } | { kind: "thread"; threadId: number; started: boolean } | { kind: "breakpointsChanged"; path: IpcPath } | { kind: "terminated" } | { kind: "exited"; code: number };
 
 /**  A debug adapter session. */
 export type DebugSessionId = number;
@@ -3440,8 +3411,7 @@ export type FsConnection = { kind: "sftp"; ssh: string } | { kind: "local" };
 
 /**
  *  A method breakpoint (DAP function breakpoint). `name` uses the adapter's syntax:
- *  `pkg.Class#method` for java-debug, `pkg.Func` / `pkg.(*T).Method` for Delve, a plain
- *  function name for debugpy and LLDB.
+ *  `pkg.Func` / `pkg.(*T).Method` for Delve, a plain function name for debugpy and LLDB.
  */
 export type FunctionBreakpoint = {
 	name: string,
@@ -3682,13 +3652,6 @@ export type HistoryKind =
  *  for everything under `path` (the project root); has no content.
  */
 "label";
-
-/**  Result of [`DebugManager::redefine_classes`]. */
-export type HotSwapResult = {
-	/**  Fully qualified names of the classes reloaded (empty: nothing had changed). */
-	changedClasses: string[],
-	errorMessage: string | null,
-};
 
 export type Hover = {
 	contents: Markup,
@@ -4029,62 +3992,12 @@ export type IssueLink = {
 	link?: string,
 };
 
-/**  Result of `java/buildWorkspace` (jdtls `BuildWorkspaceStatus`). */
-export type JavaBuildStatus = "failed" | "succeeded" | 
-/**  Compiled, but some project has compile errors. */
-"withErrors" | "cancelled";
-
-/**  One error diagnostic; `line` / `column` are 1-based for display. */
-export type JavaCompileError = {
-	path: IpcPath,
-	line: number,
-	column: number,
-	message: string,
-};
-
-/**  Everything needed to launch a class of a module: build outcome, classpath and JDK. */
-export type JavaLaunchInfo = {
-	/**  `None` when no build was requested. */
-	build: JavaBuildStatus | null,
-	projectRoot: IpcPath | null,
-	classPaths: string[],
-	modulePaths: string[],
-	/**  Path list separator of the host that runs the JVM. */
-	pathListSeparator: string,
-	/**  JDK home jdtls compiles the project against. */
-	javaHome: IpcPath | null,
-	/**  The `java` launcher to use (filled in by the caller from the installed JDKs). */
-	javaExec: string | null,
-	/**
-	 *  How a launcher that builds the command line itself must shorten it (java-debug's
-	 *  `shortenCommandLine`: `none` | `jarmanifest` | `argfile`; filled in by the caller).
-	 */
-	shortenCommandLine: string | null,
-	/**  First compile errors of the workspace when the build had errors. */
-	errors: JavaCompileError[],
-	/**  All compile errors (`errors` is capped). */
-	errorCount: number,
-	/**  Likely causes of the errors worth telling the user (e.g. a missing Lombok agent). */
-	hints: string[],
-};
-
 export type JavaSettings = {
 	/**
 	 *  Project JDK home; empty = per module, the installed JDK matching the
 	 *  Java version it targets.
 	 */
 	jdk?: string,
-	/**
-	 *  JDK home the Java language server (jdtls) runs on, apart from the project
-	 *  JDK (IDEA's "JDK for importer"); empty = the project JDK when new enough,
-	 *  else the first installed one that is.
-	 */
-	jdtlsJdk?: string,
-	/**
-	 *  Extra JVM options for the Java language server (jdtls), space-separated
-	 *  (VS Code's `java.jdt.ls.vmargs`).
-	 */
-	jdtlsVmArgs?: string,
 	/**  Build Tools › Maven. */
 	maven?: MavenSettings,
 	/**  Build Tools › Gradle. */
@@ -4298,9 +4211,9 @@ export type LaunchConfig = {
 	 *  Adapter specific extra arguments as JSON text, merged into the launch request.
 	 *  A `"cargo": {"args": [...], "filter": {"name", "kind"}}` entry builds with cargo
 	 *  and launches the produced executable; `"debugServer": <port>` connects to an
-	 *  adapter already listening on that local port (e.g. java-debug inside jdtls)
-	 *  instead of starting one, `"debugServer": "host:port"` to one on another machine
-	 *  (`dlv --headless`, `debugpy --listen`).
+	 *  adapter already listening on that local port instead of starting one,
+	 *  `"debugServer": "host:port"` to one on another machine (`dlv --headless`,
+	 *  `debugpy --listen`).
 	 */
 	extraJson: string | null,
 };
@@ -6448,9 +6361,7 @@ export type ToolInfo = {
 	alternatives: string[],
 };
 
-export type ToolKind = "languageServer" | "debugger" | 
-/**  Loaded into another tool's process, e.g. a jdtls agent. */
-"plugin" | "formatter";
+export type ToolKind = "languageServer" | "debugger" | "formatter";
 
 export type ToolSettings = {
 	/**  Executable to launch instead of the managed / `PATH` one; empty = auto-detect. */
@@ -6589,17 +6500,17 @@ export type VcsSettings = {
 
 /**
  *  Read-only contents a language server provides for a non-`file:` URI
- *  (library class source or decompiled code from `jdt://`, …).
+ *  (library sources from a virtual scheme).
  */
 export type VirtualDocument = {
 	uri: string,
 	text: string,
 	languageId: LanguageId,
-	/**  Tab title, e.g. `SpringApplication.class` (decompiled) or `SpringApplication.java`. */
+	/**  Tab title, e.g. the last path segment of the URI. */
 	title: string,
-	/**  Origin shown in the tooltip / banner, e.g. the jar path. */
+	/**  Origin shown in the tooltip / banner, when the server has one. */
 	description: string | null,
-	/**  Generated Java from a decompiler, rather than real source or a disassembler stub. */
+	/**  Whether the contents are generated (decompiled) rather than real source. */
 	decompiled: boolean,
 };
 

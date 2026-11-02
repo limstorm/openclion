@@ -28,7 +28,6 @@ pub mod fs;
 pub mod github;
 pub mod history;
 pub mod http;
-pub mod java;
 pub mod lsp;
 pub mod nav;
 pub mod notebook;
@@ -208,7 +207,6 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         lsp::lsp_goto,
         lsp::lsp_implementations,
         lsp::lsp_virtual_document,
-        lsp::lsp_resolve_class_file,
         lsp::lsp_references,
         lsp::lsp_document_highlights,
         lsp::lsp_workspace_symbols,
@@ -335,9 +333,6 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         build::maven_dependency_declaration,
         build::maven_exclude_dependency,
         build::build_run,
-        java::java_resolve_launch,
-        java::java_debug_server,
-        java::java_build_workspace,
         debug::debug_start,
         debug::debug_set_breakpoints,
         debug::debug_threads,
@@ -404,8 +399,6 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         debug::debug_set_data_breakpoints,
         debug::debug_data_breakpoint_info,
         debug::debug_attachable_processes,
-        debug::debug_listen_for_jvm,
-        debug::debug_redefine_classes,
         cpp::cpp_related_files,
         cpp::cpp_generate_definition,
         coverage::coverage_prepare,

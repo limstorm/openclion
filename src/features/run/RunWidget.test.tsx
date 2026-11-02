@@ -4,7 +4,6 @@ import { executeAction } from "@/platform/actions";
 import { setContext } from "@/platform/context";
 import type { RunConfig } from "@/platform/ipc";
 import { useDebugRunSessions, type DebugRunSession } from "@/workbench/contributions";
-import { applicationConfig } from "./application";
 import { activate } from "./index";
 import { RunWidget } from "./RunWidget";
 import { resetRuns, useRun, type RunSession } from "./store";
@@ -107,17 +106,4 @@ it("ignores an unrelated debug session for an idle selection", () => {
 
 it.each([1, 3])("prefers the newest Run or Debug session of the same config (run start %s)", (startedAt) => {
   expect(selectedTarget(app.id, [run(app, startedAt)], [debug(app, 2)])?.debug).toBe(startedAt < 2);
-});
-
-it("matches a detected Spring configuration after its object and id are regenerated", () => {
-  const detect = () =>
-    applicationConfig(
-      { className: "com.example.SdCloudOaApplication", spring: true },
-      "src/main/java/com/example/SdCloudOaApplication.java",
-    );
-  const original = detect();
-  const regenerated = detect();
-  expect(regenerated).not.toBe(original);
-  expect(regenerated.id).toBe(original.id);
-  expect(selectedTarget(regenerated.id, [run(original), run(npm)], [])?.name).toBe(original.name);
 });

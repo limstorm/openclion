@@ -25,8 +25,6 @@ struct Case {
     /// Line of the `return total` after the loop (Force Run to Cursor target).
     after_loop: u32,
     function: &'static str,
-    /// Persistent field watchpoint id, when the adapter has one (java-debug).
-    field: Option<&'static str>,
     config: LaunchConfig,
 }
 
@@ -49,41 +47,13 @@ fn cases(dir: &Path) -> Vec<Case> {
     let go = dir.join("go");
     let rust = dir.join("rust");
     let c = dir.join("c");
-    let java = dir.join("java");
-    // java-debug runs inside jdtls: OPENCLION_JAVA_DEBUG_SERVER is the port the IDE's
-    // `java_debug_server` returned for this folder (classes compiled to java/out).
-    let java_case =
-        std::env::var("OPENCLION_JAVA_DEBUG_SERVER").ok().and_then(|p| p.parse::<u16>().ok()).map(|port| Case {
-            adapter: "java-debug",
-            source: java.join("src/demo/Main.java"),
-            loop_line: 14,
-            after_loop: 16,
-            function: "demo.Main#parse",
-            field: Some("demo.Main#count"),
-            config: LaunchConfig {
-                program: None,
-                ..launch(
-                    "java-debug",
-                    Path::new(""),
-                    &java,
-                    serde_json::json!({
-                        "debugServer": port,
-                        "mainClass": "demo.Main",
-                        "classPaths": [java.join("out")],
-                        "console": "internalConsole",
-                    }),
-                )
-            },
-        });
-    let mut out: Vec<Case> = java_case.into_iter().collect();
-    out.extend(vec![
+    vec![
         Case {
             adapter: "debugpy",
             source: py.join("app.py"),
             loop_line: 8,
             after_loop: 9,
             function: "parse",
-            field: None,
             config: launch(
                 "debugpy",
                 &py.join("app.py"),
@@ -102,7 +72,6 @@ fn cases(dir: &Path) -> Vec<Case> {
             loop_line: 8,
             after_loop: 10,
             function: "parse",
-            field: None,
             config: launch(
                 "js-debug",
                 &node.join("app.js"),
@@ -116,7 +85,6 @@ fn cases(dir: &Path) -> Vec<Case> {
             loop_line: 15,
             after_loop: 17,
             function: "main.parse",
-            field: None,
             config: launch("delve", &go.join("demo"), &go, serde_json::json!({"mode": "exec"})),
         },
         Case {
@@ -125,7 +93,6 @@ fn cases(dir: &Path) -> Vec<Case> {
             loop_line: 8,
             after_loop: 10,
             function: "parse",
-            field: None,
             config: launch(
                 "codelldb",
                 &rust.join("target/debug/demo"),
@@ -139,7 +106,6 @@ fn cases(dir: &Path) -> Vec<Case> {
             loop_line: 13,
             after_loop: 15,
             function: "parse",
-            field: None,
             config: launch("codelldb", &c.join("main"), &c, serde_json::json!({})),
         },
         Case {
@@ -148,11 +114,9 @@ fn cases(dir: &Path) -> Vec<Case> {
             loop_line: 13,
             after_loop: 15,
             function: "parse",
-            field: None,
             config: launch("lldb-dap", &c.join("main"), &c, serde_json::json!({"env": ["OPENCLION_FIXTURE=1"]})),
         },
-    ]);
-    out
+    ]
 }
 
 struct Run {
@@ -229,7 +193,6 @@ fn installed(adapter: &str) -> bool {
         }
         "js-debug" => "js-debug-adapter",
         "delve" => "dlv",
-        "java-debug" => return true,
         other => other,
     };
     adapter::resolve_binary(cmd, Path::new("/")).is_some()
@@ -365,19 +328,16 @@ async fn scenario(case: &Case) -> Result<Vec<String>, String> {
     let f = run.top(s, t).await;
     report.push(format!("force step over: {reason} at line {}", f.line + 1));
 
-    // Field watchpoint / data breakpoint on `total` (java-debug: a field id).
+    // Field watchpoint / data breakpoint on `total`.
     if caps.data_breakpoints {
         let frame = run.top(s, thread).await;
-        let mut data_id = case.field.map(str::to_owned);
-        if data_id.is_none() {
-            for scope in m.scopes(s, frame.id).await.map_err(|e| e.message)?.iter().filter(|sc| !sc.expensive) {
-                if let Ok(info) =
-                    m.data_breakpoint_info(s, scope.variables_reference, "total".into(), Some(frame.id)).await
-                    && info.data_id.is_some()
-                {
-                    data_id = info.data_id;
-                    break;
-                }
+        let mut data_id = None;
+        for scope in m.scopes(s, frame.id).await.map_err(|e| e.message)?.iter().filter(|sc| !sc.expensive) {
+            if let Ok(info) = m.data_breakpoint_info(s, scope.variables_reference, "total".into(), Some(frame.id)).await
+                && info.data_id.is_some()
+            {
+                data_id = info.data_id;
+                break;
             }
         }
         match data_id {
@@ -485,8 +445,7 @@ async fn attach_to_processes() {
     let Some(dir) = std::env::var_os("OPENCLION_DAP_FIXTURES").map(PathBuf::from) else { return };
     add_managed_tools_to_path();
     let s = |p: &Path| p.display().to_string();
-    let java_server = std::env::var("OPENCLION_JAVA_DEBUG_SERVER").ok().and_then(|p| p.parse::<u16>().ok());
-    let mut cases = vec![
+    let cases = vec![
         // `debugpy --pid` injection ships only an x86_64 helper on macOS, so on Apple
         // Silicon the attach goes through a `debugpy --listen` process.
         AttachCase {
@@ -537,24 +496,6 @@ async fn attach_to_processes() {
             extra: |pid, _| serde_json::json!({"pid": pid}),
         },
     ];
-    if java_server.is_some() {
-        cases.insert(
-            0,
-            AttachCase {
-                kind: attach::AttachKind::Java,
-                command: vec![
-                    "java".into(),
-                    "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5917".into(),
-                    "-cp".into(),
-                    s(&dir.join("java/out")),
-                    "demo.Server".into(),
-                ],
-                source: dir.join("java/src/demo/Server.java"),
-                line: 4,
-                extra: |_, port| serde_json::json!({"hostName": "localhost", "port": port}),
-            },
-        );
-    }
     let only = std::env::var("OPENCLION_DAP_ONLY").ok();
     let mut failures = Vec::new();
     for case in cases {
@@ -576,10 +517,7 @@ async fn attach_to_processes() {
             if p.kind != case.kind {
                 return Err(format!("listed as {:?}", p.kind));
             }
-            let mut extra = (case.extra)(p.pid, p.port);
-            if p.kind == attach::AttachKind::Java {
-                extra["debugServer"] = java_server.unwrap().into();
-            }
+            let extra = (case.extra)(p.pid, p.port);
             let config = LaunchConfig {
                 name: format!("{} ({})", p.name, p.pid),
                 adapter: p.adapter.clone(),

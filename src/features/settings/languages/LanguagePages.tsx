@@ -217,8 +217,6 @@ export function GoPage() {
 // Java
 
 export function JavaPage() {
-  const [vmArgs, setVmArgs] = useSetting<string>("languages.java.jdtlsVmArgs");
-  const id = useId();
   return (
     <div className={styles.page}>
       <Section title="Project JDK">
@@ -231,35 +229,8 @@ export function JavaPage() {
           directory
           browseTitle="Select JDK Home Directory"
           aria-label="Project JDK"
-          hint="Compiles and runs the project: the default jdtls runtime, Run/Debug, and JAVA_HOME for Maven and Gradle."
+          hint="Compiles and runs the project: Run/Debug configurations, and JAVA_HOME for Maven and Gradle."
         />
-      </Section>
-      <Section title="Language Server">
-        <SdkRow
-          k="languages.java.jdtlsJdk"
-          label="JDK"
-          kind="jdk"
-          emptyLabel="Auto"
-          emptyDetail="auto-managed; uses an installed JDK or downloads a runtime when needed"
-          directory
-          browseTitle="Select JDK Home Directory"
-          aria-label="Language server JDK"
-          hint="Runs jdtls only; the project keeps its Project JDK. When empty, a suitable installed JDK is used first, otherwise Eclipse Temurin is downloaded automatically into a separate language-server folder. The jdtls executable itself is set in Language Servers."
-        />
-        <Row
-          label="JVM options"
-          htmlFor={id}
-          hint="Passed to the JVM running jdtls (java.jdt.ls.vmargs), e.g. -Xmx4g. jdtls runs with -XX:+UseParallelGC -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Xmx2G -Xms100m by default; an option set here replaces the default for the same setting, and another collector (e.g. -XX:+UseG1GC) replaces the default collector options. A Lombok agent is added automatically: the one installed in Language Servers, else, when the project uses Lombok (its build, an inherited parent POM or Gradle build, or its sources' imports), the newest from the Maven / Gradle caches."
-        >
-          <Input
-            id={id}
-            mono
-            className={styles.pathInput}
-            value={vmArgs}
-            placeholder="-Xmx4g"
-            onChange={(e) => setVmArgs(e.target.value)}
-          />
-        </Row>
       </Section>
     </div>
   );

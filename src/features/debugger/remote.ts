@@ -1,14 +1,13 @@
 /**
  * Remote debug run configurations: the debugger attaches to a process started
- * elsewhere (another machine, a container) over host:port, like IDEA's Remote JVM
- * Debug, GoLand's Go Remote, PyCharm's remote debugpy and IDEA's Attach to Node.js.
+ * elsewhere (another machine, a container) over host:port, like GoLand's Go Remote,
+ * PyCharm's remote debugpy and IDEA's Attach to Node.js.
  * Only Debug applies to them (`debugOnly`); they launch no process.
  */
 import type { LaunchConfig, RunConfig } from "@/platform/ipc";
 import { workflowSettings } from "@/platform/workflowSettings";
 import type { RunConfigTypeContribution, RunConfigTypeField } from "@/workbench/contributions";
 
-export const REMOTE_JVM = "remote-jvm";
 export const GO_REMOTE = "go-remote";
 export const PYTHON_REMOTE = "python-remote";
 export const NODE_REMOTE = "node-remote";
@@ -35,80 +34,6 @@ const portField: RunConfigTypeField = {
 
 const hostOf = (p: Params) => p.host?.trim() || "localhost";
 const portOf = (p: Params, fallback: number) => parsePort(p.port) ?? fallback;
-
-// ---------------------------------------------------------------------------
-// Remote JVM Debug
-
-export type JdwpMode = "attach" | "listen";
-export type JdkVersion = "9" | "5" | "1.4";
-
-/**
- * The agent the remote JVM is started with, as IDEA shows it ("Command line arguments
- * for remote JVM"). Attach: the JVM listens (`server=y`); JDK 9+ binds only to localhost
- * unless the address names a host, hence `*:`. Listen: the JVM connects to the IDE.
- */
-export function jdwpAgentArgs(p: Params): string {
-  const mode: JdwpMode = p.mode === "listen" ? "listen" : "attach";
-  const jdk = (p.jdk || "9") as JdkVersion;
-  const port = portOf(p, 5005);
-  const opts =
-    mode === "listen"
-      ? `transport=dt_socket,server=n,address=${hostOf(p)}:${port},suspend=y`
-      : `transport=dt_socket,server=y,suspend=n,address=${jdk === "9" ? "*:" : ""}${port}`;
-  return jdk === "1.4" ? `-Xdebug -Xrunjdwp:${opts}` : `-agentlib:jdwp=${opts}`;
-}
-
-const JVM_KINDS = new Set(["application", "spring-boot", "maven", "gradle", "java-file"]);
-
-export const remoteJvmType: RunConfigTypeContribution = {
-  id: REMOTE_JVM,
-  label: "Remote JVM Debug",
-  icon: "attach-to-process",
-  description: "Attach the debugger to a JVM started with a JDWP agent, here or on another machine",
-  defaults: { mode: "attach", host: "localhost", port: "5005", jdk: "9" },
-  debugOnly: true,
-  debugAdapter: "java-debug",
-  fields: [
-    {
-      key: "mode",
-      label: "Debugger mode",
-      control: "select",
-      options: [
-        { value: "attach", label: "Attach to remote JVM" },
-        { value: "listen", label: "Listen to remote JVM" },
-      ],
-    },
-    hostField,
-    portField,
-    {
-      key: "jdk",
-      label: "JDK version of the remote JVM",
-      control: "select",
-      options: [
-        { value: "9", label: "JDK 9 or later" },
-        { value: "5", label: "JDK 5 - 8" },
-        { value: "1.4", label: "JDK 1.4.x" },
-      ],
-    },
-    {
-      key: "args",
-      label: "Command line arguments for remote JVM",
-      control: "output",
-      mono: true,
-      value: jdwpAgentArgs,
-      hint: "Add to the remote JVM's command line (or JAVA_TOOL_OPTIONS)",
-    },
-    {
-      key: "module",
-      label: "Use module classpath",
-      mono: true,
-      placeholder: "Project root",
-      hint: "Module directory whose sources the debugger shows",
-      suggestions: (configs) => [...new Set(configs.filter((c) => JVM_KINDS.has(c.kind) && c.cwd).map((c) => c.cwd!))],
-    },
-  ],
-  commandLine: () => null,
-};
 
 // ---------------------------------------------------------------------------
 // Go Remote (Delve headless server)
@@ -246,7 +171,6 @@ export const godotAttachType: RunConfigTypeContribution = {
 };
 
 export const REMOTE_TYPES: readonly RunConfigTypeContribution[] = [
-  remoteJvmType,
   goRemoteType,
   pythonRemoteType,
   nodeRemoteType,
@@ -330,15 +254,4 @@ export function remoteAttachConfig(rc: RunConfig, root: string): LaunchConfig | 
     default:
       return null;
   }
-}
-
-/** What a Remote JVM Debug configuration attaches to (before the listen mode relay). */
-export function remoteJvmTarget(rc: RunConfig): { mode: JdwpMode; host: string; port: number; module: string } {
-  const p = rc.params ?? {};
-  return {
-    mode: p.mode === "listen" ? "listen" : "attach",
-    host: hostOf(p),
-    port: portOf(p, 5005),
-    module: p.module?.trim() ?? "",
-  };
 }

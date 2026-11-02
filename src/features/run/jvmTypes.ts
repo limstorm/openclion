@@ -1,22 +1,15 @@
 /**
- * JVM run configuration types: Application and Spring Boot
- * (`java [VM options] -cp ${classpath} <main class> [program arguments]`), and the
- * VM options Maven / Gradle configurations hand to the JVM the build forks
+ * Maven / Gradle configurations hand their VM options to the JVM the build forks
  * (`spring-boot:run`, tests, `bootRun`) rather than to the build tool's own JVM.
  */
 import { call, commands, type RunConfig } from "@/platform/ipc";
-import { CLASSPATH, parseJavaArgs, TEST_CLASSPATH } from "@/platform/javaLaunch";
-import type { RunConfigTypeContribution, RunConfigTypeField } from "@/workbench/contributions";
-import { formatArgs, parseArgs } from "./configs";
-import { commandName } from "./commandName";
-import { updatePolicyDefaults, updatePolicyFields } from "./updatePolicies";
+import type { RunConfigTypeField } from "@/workbench/contributions";
+import { parseArgs } from "./configs";
 
 export const isWindows = () => typeof navigator !== "undefined" && /win/i.test(navigator.platform);
 
 /** VM options / program arguments as typed; on Windows a backslash is a path separator. */
 export const splitJvmArgs = (text: string | undefined, windows = isWindows()) => parseArgs(text ?? "", windows);
-
-export const PROFILES_ARG = "--spring.profiles.active=";
 
 const VM_OPTIONS_PLACEHOLDER = "e.g. -Xmx1g -Dkey=value --add-opens java.base/java.lang=ALL-UNNAMED";
 
@@ -39,95 +32,6 @@ const profilesField = (hint: string, visible?: RunConfigTypeField["visible"]): R
   hint,
   ...(visible ? { visible } : {}),
 });
-
-/** Main classes of the JVM configurations, offered while typing. */
-function mainClasses(configs: readonly RunConfig[]): string[] {
-  const out = new Set<string>();
-  for (const c of configs) {
-    if (c.kind !== "application" && c.kind !== "spring-boot") continue;
-    const main = c.params?.mainClass || parseJavaArgs(c.args).mainClass;
-    if (main) out.add(main);
-  }
-  return [...out];
-}
-
-function jvmApplicationType(spring: boolean): RunConfigTypeContribution {
-  return {
-    id: spring ? "spring-boot" : "application",
-    label: spring ? "Spring Boot" : "Application",
-    icon: spring ? "spring-boot" : "class",
-    description: spring ? "Run a Spring Boot application" : "Run a Java main class",
-    defaults: { classpath: CLASSPATH, ...(spring ? updatePolicyDefaults : {}) },
-    debugAdapter: "java-debug",
-    fields: [
-      {
-        key: "mainClass",
-        label: "Main class",
-        mono: true,
-        required: true,
-        placeholder: "e.g. com.example.Application",
-        suggestions: mainClasses,
-      },
-      vmOptionsField(),
-      { key: "programArgs", label: "Program arguments", mono: true },
-      ...(spring ? [profilesField("Comma separated; passed as --spring.profiles.active")] : []),
-      ...(spring ? updatePolicyFields(false) : []),
-      {
-        key: "classpath",
-        label: "Classpath",
-        control: "select",
-        options: [
-          { value: CLASSPATH, label: "Runtime classpath of the module" },
-          { value: TEST_CLASSPATH, label: "Test classpath of the module" },
-        ],
-      },
-    ],
-    commandLine(p) {
-      const main = p.mainClass?.trim() ?? "";
-      const profiles = spring ? (p.activeProfiles?.trim() ?? "") : "";
-      return {
-        command: p.executable || "java",
-        args: [
-          ...splitJvmArgs(p.vmOptions),
-          "-cp",
-          p.classpath || CLASSPATH,
-          ...(main ? [main] : []),
-          ...(profiles ? [PROFILES_ARG + profiles] : []),
-          ...splitJvmArgs(p.programArgs),
-        ],
-      };
-    },
-    // Configurations detected or saved before these fields existed: `java [vm] -cp <cp> Main [args]`.
-    paramsFrom(c) {
-      if (!/^java$/i.test(commandName(c.command))) return null;
-      const parsed = parseJavaArgs(c.args);
-      const classpath =
-        parsed.classpath === "runtime"
-          ? CLASSPATH
-          : parsed.classpath === "test"
-            ? TEST_CLASSPATH
-            : parsed.explicitClasspath;
-      if (!parsed.mainClass || classpath === null) return null;
-      let rest = parsed.programArgs;
-      let activeProfiles = "";
-      if (spring && rest[0]?.startsWith(PROFILES_ARG)) {
-        activeProfiles = rest[0].slice(PROFILES_ARG.length);
-        rest = rest.slice(1);
-      }
-      return {
-        ...(c.command !== "java" ? { executable: c.command } : {}),
-        mainClass: parsed.mainClass,
-        vmOptions: formatArgs(parsed.vmArgs),
-        programArgs: formatArgs(rest),
-        classpath,
-        ...(activeProfiles ? { activeProfiles } : {}),
-      };
-    },
-  };
-}
-
-export const applicationType = jvmApplicationType(false);
-export const springBootType = jvmApplicationType(true);
 
 /**
  * One value for a Maven property holding JVM arguments (`spring-boot.run.jvmArguments`,

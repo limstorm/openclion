@@ -24,7 +24,6 @@ import { breakpointGutter } from "./editor/breakpointGutter";
 import { executionPoint } from "./editor/execution";
 import { runToCursorInlay } from "./editor/runToCursor";
 import { installSmartStepPicking, smartStepTargets } from "./editor/smartStep";
-import { onHotCodeReplace } from "./hotswap";
 import {
   activeSession,
   handleDebugEvent,
@@ -50,7 +49,7 @@ export function activate(): () => void {
   const disposers = [
     () => useDebugRunSessions.setState({ sessions: [], serviceSessions: [], Console: null }),
     registerDebugActions(),
-    // Remote JVM Debug, Go Remote, …: Run/Debug Configurations › Add New Configuration.
+    // Go Remote, Python / Node.js remote…: Run/Debug Configurations › Add New Configuration.
     ...REMOTE_TYPES.map(registerRunConfigType),
     registerToolWindow({
       id: "debug",
@@ -91,10 +90,7 @@ export function activate(): () => void {
       ],
     }),
     installSmartStepPicking(),
-    onIdeEvent("debug", (e) => {
-      if (e.event.kind === "hotCodeReplace") onHotCodeReplace(e.session, e.event);
-      else handleDebugEvent(e.session, e.event);
-    }),
+    onIdeEvent("debug", (e) => handleDebugEvent(e.session, e.event)),
     useProject.subscribe((s, prev) => {
       const root = s.project?.root ?? null;
       if (root !== (prev.project?.root ?? null) || s.project?.trusted !== prev.project?.trusted) {

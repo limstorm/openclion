@@ -107,16 +107,6 @@ pub async fn lsp_virtual_document(
     ide_host::ops::lsp::lsp_virtual_document(&state.host, window.label(), uri).await
 }
 
-#[tauri::command]
-#[specta::specta]
-pub async fn lsp_resolve_class_file(
-    window: Window,
-    state: State<'_, AppState>,
-    path: std::path::PathBuf,
-) -> IdeResult<String> {
-    ide_host::ops::lsp::lsp_resolve_class_file(&state.host, window.label(), path).await
-}
-
 /// References of the symbol at `pos`. `project_wide` also searches project files
 /// outside the language server's analysis scope; bulk scans over many symbols
 /// leave it off. Cancel with `cancel_request(request)`.

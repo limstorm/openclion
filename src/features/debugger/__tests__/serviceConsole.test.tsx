@@ -59,7 +59,7 @@ it("explains why a remote attached process may have no application logs", () => 
   adoptSession(1, {
     launch: {
       name: "remote",
-      adapter: "java-debug",
+      adapter: "codelldb",
       request: "attach",
       program: null,
       args: [],

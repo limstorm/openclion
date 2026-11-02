@@ -716,13 +716,6 @@ pub struct JavaSettings {
     /// Project JDK home; empty = per module, the installed JDK matching the
     /// Java version it targets.
     pub jdk: String,
-    /// JDK home the Java language server (jdtls) runs on, apart from the project
-    /// JDK (IDEA's "JDK for importer"); empty = the project JDK when new enough,
-    /// else the first installed one that is.
-    pub jdtls_jdk: String,
-    /// Extra JVM options for the Java language server (jdtls), space-separated
-    /// (VS Code's `java.jdt.ls.vmargs`).
-    pub jdtls_vm_args: String,
     /// Build Tools › Maven.
     pub maven: MavenSettings,
     /// Build Tools › Gradle.

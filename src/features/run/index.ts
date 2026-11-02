@@ -31,7 +31,6 @@ import {
   runContextAction,
 } from "./contextRun";
 import { runWithExecutor } from "./executors";
-import { debugWithAgent, jdwpLaunch } from "./javaDebug";
 import { RunDialogsOverlay } from "./dialogs";
 import { registerExternalTools } from "./externalTools";
 import { EditConfigsOverlay } from "./EditConfigsDialog";
@@ -107,7 +106,7 @@ async function debugConfig(config: RunConfig, chain: readonly string[] = []) {
   if (remoteDebugBlocked(config)) return;
   if (!(await prepareLaunch(config, chain))) return;
   recordRun(config.id);
-  // Remote JVM Debug, Go Remote…: the debugger attaches, nothing is launched here.
+  // Go Remote, Python / Node.js remote…: the debugger attaches, nothing is launched here.
   if (isDebugOnly(config) && getAction("debug.startConfig")) {
     await executeAction("debug.startConfig", config);
     return;
@@ -116,11 +115,6 @@ async function debugConfig(config: RunConfig, chain: readonly string[] = []) {
   const compiled = await compiledDebugPlan(config);
   if (compiled?.debug) {
     await launchProduced(compiled, true);
-    return;
-  }
-  // Maven / Gradle: the build tool starts the JVM with a debug agent, the debugger attaches.
-  if (jdwpLaunch(config) && getAction("debug.attach")) {
-    await debugWithAgent(config);
     return;
   }
   if (getAction("debug.startConfig")) {

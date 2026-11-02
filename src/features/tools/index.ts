@@ -8,7 +8,7 @@
 import { lazyComponent } from "@/ui";
 import { executeAction, registerActions } from "@/platform/actions";
 import { registerSettingsPage } from "@/workbench/contributions";
-import { installJdkPrompts, registerJdkActions } from "./jdk";
+import { registerJdkActions } from "./jdk";
 import { installMissingServerPrompts, promptInstall } from "./missing";
 import { installTool, refreshTools, SETTINGS_PAGE_ID, toolByName, useTools } from "./store";
 
@@ -80,7 +80,6 @@ export function activate(): () => void {
     ]),
     installMissingServerPrompts(),
     registerJdkActions(),
-    installJdkPrompts(),
   ];
   return () => disposers.reverse().forEach((d) => d());
 }

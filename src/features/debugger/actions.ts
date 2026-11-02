@@ -1,12 +1,10 @@
 /** Debugger actions (ids match `keymaps/intellij-macos.ts`). */
 import { executeAction, getAction, registerActions, type Action } from "@/platform/actions";
-import { call, commands, isCancelled, isTauri, nextRequestId, type RunConfig, type RunId } from "@/platform/ipc";
-import { downloadJdkActions } from "@/platform/jdk";
+import { call, commands, isTauri, type RunConfig } from "@/platform/ipc";
 import { useProject } from "@/platform/project";
 import { activeEditor } from "@/editor/api";
 import type { EditorView } from "@codemirror/view";
 import { maybeEditorService, notifications, showStatusInfo, toolWindowService } from "@/workbench/contributions";
-import { classFileBreakpointReason } from "@/platform/classFiles";
 import { canPlaceBreakpoint } from "./breakpoints/languages";
 import {
   removeAllBreakpoints,
@@ -15,13 +13,11 @@ import {
   toggleTemporaryBreakpoint,
   useBreakpoints,
 } from "./breakpoints/store";
-import { removeAllSpecial, specialAt, toggleFieldAt, toggleMethodAt } from "./breakpoints/special";
-import { fieldAt, methodAt } from "./breakpoints/symbols";
+import { removeAllSpecial, specialAt, toggleMethodAt } from "./breakpoints/special";
+import { methodAt } from "./breakpoints/symbols";
 import { toggleBreakpointSmart } from "./breakpoints/toggle";
-import { isJavaAttachTarget, isJavaDebuggable, javaAttachConfig, javaLaunchConfig } from "./java";
-import { reloadChangedClasses } from "./hotswap";
 import { debugUnsupportedReason, launchConfigFor } from "./launch";
-import { isRemoteConfig, REMOTE_JVM, remoteAttachConfig, remoteJvmTarget } from "./remote";
+import { isRemoteConfig, remoteAttachConfig } from "./remote";
 import {
   activeSession,
   resumeExecution,
@@ -33,7 +29,6 @@ import {
   sessionSupports,
   showExecutionPoint,
   startSession,
-  startPreparedSession,
   stopSession,
   useDebug,
   type DebugSession,
@@ -65,9 +60,7 @@ async function report(title: string, p: Promise<unknown>) {
   try {
     await p;
   } catch (e) {
-    // A Java launch without a JDK new enough (for jdtls or the project) offers to download one.
-    const actions = downloadJdkActions(errorText(e));
-    notifications().notify({ group: "run", level: "error", title, body: errorText(e), key: "debug.action", actions });
+    notifications().notify({ group: "run", level: "error", title, body: errorText(e), key: "debug.action" });
   }
 }
 
@@ -79,11 +72,8 @@ function pausedTarget(): { s: DebugSession; thread: number } | null {
   return thread == null ? null : { s, thread };
 }
 
-function breakpointPathAllowed(path: string): boolean {
-  const reason = classFileBreakpointReason(path);
-  if (!reason) return true;
-  showStatusInfo(tx(reason));
-  return false;
+function breakpointPathAllowed(_path: string): boolean {
+  return true;
 }
 
 /** Run to Cursor at `line` (0-based) of `path` in the paused session. */
@@ -191,70 +181,10 @@ async function quickEvaluate(arg?: unknown) {
   }
 }
 
-/**
- * Remote JVM Debug in listen mode: the IDE listens and the remote JVM connects; java-debug
- * then attaches through a loopback relay. Null when cancelled.
- */
-async function listenForJvm(name: string, host: string, port: number): Promise<number | null> {
-  const request = nextRequestId();
-  const key = `debug.listen.${request}`;
-  notifications().notify({
-    group: "run",
-    level: "info",
-    key,
-    sticky: true,
-    title: `'${name}': listening for the remote JVM on port ${port}`,
-    body: tx`Start the remote JVM with -agentlib:jdwp=transport=dt_socket,server=n,address=${host}:${port},suspend=y`,
-    actions: [{ label: "Cancel", run: () => void commands.cancelRequest(request) }],
-  });
-  try {
-    return await call(commands.debugListenForJvm(request, host, port));
-  } catch (e) {
-    if (isCancelled(e)) return null;
-    throw e;
-  } finally {
-    notifications().expire?.(key);
-  }
-}
-
-/** Remote JVM Debug, Go Remote, Python / Node.js remote: attach over host:port. */
+/** Go Remote, Python / Node.js remote: attach over host:port. */
 async function startRemote(config: RunConfig, root: string) {
-  if (config.kind === REMOTE_JVM) {
-    const t = remoteJvmTarget(config);
-    let hostName = t.host;
-    let port = t.port;
-    if (t.mode === "listen") {
-      const relay = await listenForJvm(config.name, t.host, t.port);
-      if (relay == null) return;
-      [hostName, port] = ["127.0.0.1", relay];
-    }
-    const launch = await javaAttachConfig({ name: config.name, module: t.module, hostName, port }, root);
-    // A listen relay accepts one debugger: rerunning listens again through the configuration.
-    await startSession(launch, { runConfig: config, rerunnable: t.mode === "attach" });
-    return;
-  }
   const launch = remoteAttachConfig(config, root);
   if (launch) await startSession(launch, { runConfig: config });
-}
-
-/** Preparation belongs to a session from the moment the action begins. */
-async function startJavaConfig(config: RunConfig, root: string, origin: RunConfig) {
-  await startPreparedSession(origin, async (signal, report) => {
-    const request = nextRequestId();
-    const cancel = () => {
-      void commands.cancelRequest(request).catch(() => undefined);
-    };
-    signal.addEventListener("abort", cancel, { once: true });
-    try {
-      await maybeEditorService()
-        ?.saveAll()
-        .catch(() => undefined);
-      signal.throwIfAborted();
-      return await javaLaunchConfig(config, root, { request, signal, report });
-    } finally {
-      signal.removeEventListener("abort", cancel);
-    }
-  });
 }
 
 async function startConfig(arg: unknown) {
@@ -283,7 +213,6 @@ async function startConfig(arg: unknown) {
       return;
     }
     config = configs[0]!;
-    // Through Run's debug flow: Maven / Gradle / scripts start the JVM with a JDWP agent there.
     if (getAction("run.debugConfig")) {
       await executeAction("run.debugConfig", config);
       return;
@@ -291,10 +220,6 @@ async function startConfig(arg: unknown) {
   }
   if (isRemoteConfig(config)) {
     await startRemote(config, root);
-    return;
-  }
-  if (isJavaDebuggable(config)) {
-    await startJavaConfig(config, root, origin ?? config);
     return;
   }
   const dotnet = config.kind === "dotnet" && config.debugAdapter === "netcoredbg";
@@ -343,28 +268,6 @@ export function registerDebugActions(): () => void {
       run: ({ arg }) => report("Cannot start debugging", startConfig(arg)),
     },
     {
-      id: "debug.attach",
-      title: "Attach Debugger",
-      category: "Debug",
-      hidden: true,
-      description:
-        "Attach the Java debugger to a JVM listening for JDWP (arg: { name, module, hostName, port, process })",
-      run: ({ arg }) =>
-        report(
-          "Cannot attach the debugger",
-          (async () => {
-            const root = useProject.getState().project?.root;
-            if (!root || !isJavaAttachTarget(arg)) return;
-            const launch = await javaAttachConfig(arg, root);
-            await startSession(launch, {
-              process: (arg.process ?? null) as RunId | null,
-              runConfig: arg.runConfig,
-              rerunnable: false,
-            });
-          })(),
-        ),
-    },
-    {
       id: "debug.stop",
       title: "Stop",
       category: "Debug",
@@ -374,22 +277,6 @@ export function registerDebugActions(): () => void {
         const s = activeSession() ?? Object.values(useDebug.getState().sessions).find(isLive);
         if (s) void stopSession(s.id);
       },
-    },
-    {
-      id: "debug.reloadChangedClasses",
-      title: "Reload Changed Classes",
-      description: "HotSwap: compile and reload the changed classes into the running Java debug session",
-      category: "Debug",
-      icon: "refresh",
-      keywords: ["hotswap", "hot swap", "hot code replace"],
-      when: "debugCanHotSwap",
-      run: ({ arg }) =>
-        reloadChangedClasses(
-          true,
-          typeof arg === "object" && arg !== null && "configId" in arg && typeof arg.configId === "string"
-            ? arg.configId
-            : undefined,
-        ),
     },
     {
       id: "debug.rerun",
@@ -545,7 +432,6 @@ export function registerDebugActions(): () => void {
       title: "Attach to Process…",
       category: "Debug",
       icon: "attach-to-process",
-      description: "Attach the debugger to a running Java, Node.js, Python, Go or native process",
       run: () => void openAttachPopup(),
     },
     {
@@ -601,7 +487,7 @@ export function registerDebugActions(): () => void {
           return;
         }
         const ed = activeEditor();
-        if (ed) toggleBreakpointSmart(c.path, c.line, language, ed.view.state.doc.toString());
+        if (ed) toggleBreakpointSmart(c.path, c.line);
         else toggleBreakpoint(c.path, c.line);
       },
     },
@@ -638,29 +524,6 @@ export function registerDebugActions(): () => void {
           return;
         }
         toggleMethodAt(c.path, c.line, method?.name ?? "");
-      },
-    },
-    {
-      id: "debug.toggleFieldWatchpoint",
-      title: "Toggle Field Watchpoint",
-      category: "Debug",
-      icon: "breakpoint-field",
-      run: () => {
-        const ed = activeEditor();
-        const c = cursor();
-        if (!ed || !c || !breakpointPathAllowed(c.path)) return;
-        const existing = specialAt(c.path).find((b) => b.kind === "field" && b.line === c.line);
-        const field = fieldAt(ed.ctx.language, ed.view.state.doc.toString(), c.line);
-        if (!existing && !field) {
-          notifications().notify({
-            level: "info",
-            key: "debug.noField",
-            title: "No field declaration on this line",
-            body: "Field watchpoints can be set on Java field declarations, or from the Variables view while suspended.",
-          });
-          return;
-        }
-        toggleFieldAt(c.path, c.line, field ?? { dataId: "", label: "" });
       },
     },
     {

@@ -1,9 +1,7 @@
-import { tx } from "@/platform/i18n";
 import { create } from "zustand";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { executeAction, getAction } from "@/platform/actions";
-import { call, commands, isTauri, nextRequestId, type RunConfig } from "@/platform/ipc";
-import { parseJavaArgs, resolveJavaModule } from "@/platform/javaLaunch";
+import { executeAction } from "@/platform/actions";
+import { call, commands, isTauri, type RunConfig } from "@/platform/ipc";
 import {
   maybeEditorService,
   notifications,
@@ -12,9 +10,8 @@ import {
 } from "@/workbench/contributions";
 import { showContextMenu } from "@/ui";
 import { buildTomcatArtifact } from "./tomcat";
-import { runUpdateBuild } from "./buildUpdate";
 import { startRun, stopSession, useRun, waitForExit, type RunSession } from "./store";
-import { isUpdatable, updateAllowed, type UpdateMode } from "./updatePolicies";
+import { isUpdatable, updateAllowed } from "./updatePolicies";
 
 export type UpdateSession = Pick<RunSession, "id" | "config"> & { debug?: DebugServiceSession };
 export const useApplicationUpdates = create<{ ids: ReadonlySet<string> }>(() => ({ ids: new Set() }));
@@ -38,32 +35,6 @@ function params(session: UpdateSession): RunConfig["params"] {
   return useRun.getState().configs.find((c) => c.id === session.config.id)?.params ?? session.config.params;
 }
 
-async function updateSpringBoot(config: RunConfig, mode: UpdateMode, debugging: boolean) {
-  const module = await resolveJavaModule(config);
-  const parsed = parseJavaArgs(config.args);
-  if (!parsed.mainClass) throw new Error(tx("The Spring Boot configuration has no main class"));
-  const info = await call(
-    commands.javaResolveLaunch(module, parsed.classpath === "test", mode === "classes", nextRequestId()),
-  );
-  if (info.build === "failed" || info.build === "withErrors" || info.build === "cancelled")
-    throw new Error(tx("Application update build failed"));
-  await runUpdateBuild(await call(commands.runApplicationBuild(config, module)));
-  const classPaths = parsed.explicitClasspath?.split(info.pathListSeparator) ?? info.classPaths;
-  await call(commands.runApplicationPublish(config, classPaths, parsed.mainClass));
-  if (mode === "classes" && debugging && (await executeAction("debug.reloadChangedClasses", { configId: config.id })))
-    return;
-  notifications().notify({
-    group: "run",
-    level: "info",
-    title: "Resources updated",
-    ...(mode === "classes"
-      ? {
-          body: "Classes were compiled. Restart the application to load them, or launch with the debugger to use HotSwap.",
-        }
-      : {}),
-  });
-}
-
 export async function updateApplication(session: UpdateSession, mode: string): Promise<void> {
   if (!updateAllowed(session.config, mode) || updatingConfigs.has(session.config.id)) return;
   updatingConfigs.add(session.config.id);
@@ -83,19 +54,11 @@ export async function updateApplication(session: UpdateSession, mode: string): P
       return;
     }
     await maybeEditorService()?.saveAll();
-    if (session.config.kind === "spring-boot") {
-      await updateSpringBoot(session.config, mode, debugging);
-    } else {
-      await buildTomcatArtifact(session.config);
-      await call(commands.runTomcatUpdate(session.config, mode));
-      if (mode === "classes" && debugging) {
-        const swapped =
-          getAction("debug.reloadChangedClasses") &&
-          (await executeAction("debug.reloadChangedClasses", { configId: session.config.id }));
-        if (!swapped) await call(commands.runTomcatUpdate(session.config, "redeploy"));
-      }
-      notifications().notify({ group: "run", level: "info", title: "Application updated" });
-    }
+    await buildTomcatArtifact(session.config);
+    await call(commands.runTomcatUpdate(session.config, mode));
+    // Classes need a fresh class loader: redeploy after copying them.
+    if (mode === "classes") await call(commands.runTomcatUpdate(session.config, "redeploy"));
+    notifications().notify({ group: "run", level: "info", title: "Application updated" });
     if (!session.debug) useRun.setState({ activeSession: session.id });
   } catch (e) {
     notifications().notify({ group: "run", level: "error", title: "Application update failed", body: String(e) });
@@ -118,8 +81,8 @@ export function showApplicationUpdate(sessionId?: string): void {
   const choices = [
     ["resources", "Update resources"],
     ["classes", "Update classes and resources"],
-    ...(session.config.kind === "tomcat" ? [["redeploy", "Redeploy"]] : []),
-    ["restart", session.config.kind === "tomcat" ? "Restart server" : "Restart"],
+    ["redeploy", "Redeploy"],
+    ["restart", "Restart server"],
   ];
   showContextMenu({ x: window.innerWidth / 2 - 140, y: 100 }, [
     { kind: "header", label: "Update Application" },

@@ -106,9 +106,6 @@ impl crate::Host {
             if previous == trusted {
                 continue;
             }
-            if let Some(bridge) = &project.kotlin_bridge {
-                bridge.schedule();
-            }
             if !trusted {
                 project.lsp.set_execution_allowed(false);
             }

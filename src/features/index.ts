@@ -20,6 +20,8 @@ import { activate as macros } from "./macros";
 import { activate as debuggerFeature } from "./debugger";
 import { activate as coverage } from "./coverage";
 import { activate as profiler } from "./profiler";
+import { activate as valgrind } from "./valgrind";
+import { activate as sanitizers } from "./sanitizers";
 import { activate as buildTools } from "./build-tools";
 import { activate as build } from "./build";
 import { activate as cmake } from "./cmake";
@@ -66,6 +68,8 @@ const features: Array<[string, Activate]> = [
   ["debugger", debuggerFeature],
   ["coverage", coverage],
   ["profiler", profiler],
+  ["valgrind", valgrind],
+  ["sanitizers", sanitizers],
   ["build-tools", buildTools],
   ["build", build],
   ["cmake", cmake],

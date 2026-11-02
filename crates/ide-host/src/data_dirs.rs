@@ -11,9 +11,6 @@ pub fn is_local(entry: &Path) -> bool {
         .any(|root| entry.starts_with(root))
         || entry.starts_with("agents/tools")
         || entry == Path::new("agents/registry.json")
-        || (entry.components().count() == 1
-            && entry.file_name().is_some_and(|name| name.to_string_lossy().starts_with("java-usages-"))
-            && entry.extension().is_some_and(|ext| ext == "jar" || ext == "tmp"))
 }
 
 pub fn data_path(data: &Path, local: &Path, entry: &Path) -> PathBuf {
@@ -49,19 +46,11 @@ pub fn migrate(data: &Path, local: &Path) {
 }
 
 fn migrate_entries(data: &Path, local: &Path) {
-    let mut entries: Vec<PathBuf> = [
-        "language-server-runtimes",
-        "index",
-        "cache",
-        "lsp",
-        "notebook-runtime",
-        "server",
-        "java-usages-1.1.1.jar",
-        "agents/registry.json",
-    ]
-    .into_iter()
-    .map(PathBuf::from)
-    .collect();
+    let mut entries: Vec<PathBuf> =
+        ["language-server-runtimes", "index", "cache", "lsp", "notebook-runtime", "server", "agents/registry.json"]
+            .into_iter()
+            .map(PathBuf::from)
+            .collect();
     // Virtual environments contain absolute interpreter paths. Keep the old copy
     // intact; these tools are installed afresh in Local when requested. Registry
     // agents also have absolute commands in user config, so leave legacy installs.
@@ -297,7 +286,6 @@ mod tests {
             "logs",
             "agents/tools",
             "agents/registry.json",
-            "java-usages-1.1.1.jar",
         ] {
             assert!(is_local(Path::new(entry)), "{entry}");
             assert_eq!(

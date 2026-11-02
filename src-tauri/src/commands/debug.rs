@@ -267,23 +267,3 @@ pub async fn debug_data_breakpoint_info(
 pub async fn debug_attachable_processes(state: State<'_, AppState>) -> IdeResult<Vec<attach::AttachableProcess>> {
     ide_host::ops::debug::debug_attachable_processes(&state.host, "").await
 }
-
-/// Remote JVM Debug in listen mode: waits (cancellable through `request`) for the remote
-/// JVM to connect to `host:port`; returns the loopback port java-debug attaches to.
-#[tauri::command]
-#[specta::specta]
-pub async fn debug_listen_for_jvm(
-    state: State<'_, AppState>,
-    request: ide_core::RequestId,
-    host: String,
-    port: u16,
-) -> IdeResult<u16> {
-    ide_host::ops::debug::debug_listen_for_jvm(&state.host, "", request, host, port).await
-}
-
-/// HotSwap (Reload Changed Classes) in a java-debug session.
-#[tauri::command]
-#[specta::specta]
-pub async fn debug_redefine_classes(state: State<'_, AppState>, session: DebugSessionId) -> IdeResult<HotSwapResult> {
-    ide_host::ops::debug::debug_redefine_classes(&state.host, "", session).await
-}
