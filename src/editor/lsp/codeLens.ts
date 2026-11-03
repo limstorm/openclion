@@ -105,6 +105,18 @@ function openUsages(view: EditorView, offset: number) {
   void executeAction("find.showUsages");
 }
 
+/**
+ * Whether a viewport needs a new pass: counts are only fetched for lines inside
+ * the last covered window (viewport plus margin), so scrolling within it is free.
+ */
+export function viewportNeedsLenses(
+  covered: { first: number; last: number } | null,
+  first: number,
+  last: number,
+): boolean {
+  return !covered || first < covered.first || last > covered.last;
+}
+
 class UsagesLensPlugin {
   private schedule = debounce(() => void this.run(), 900);
   /** `${line}:${col}:${name}` → count, valid for `cacheDoc`. */
@@ -114,6 +126,8 @@ class UsagesLensPlugin {
   private generation = 0;
   private pending = new Set<RequestId>();
   private incomplete = false;
+  /** Line range the last pass fetched counts for (viewport plus margin). */
+  private covered: { first: number; last: number } | null = null;
   private unsubscribe: () => void;
   private offReady: () => void;
   private offSettled: () => void;
@@ -136,7 +150,19 @@ class UsagesLensPlugin {
   }
 
   update(u: ViewUpdate) {
-    if (u.docChanged || u.viewportChanged) this.refresh();
+    if (u.docChanged) {
+      this.refresh();
+      return;
+    }
+    if (!u.viewportChanged) return;
+    // Every pass costs one `lspReferences` per visible symbol (up to MAX_PER_PASS),
+    // each behind a document sync. Scrolling inside the window already fetched
+    // needs no new counts.
+    const { from, to } = u.view.viewport;
+    const first = u.view.state.doc.lineAt(from).number - 1;
+    const last = u.view.state.doc.lineAt(to).number - 1;
+    if (!viewportNeedsLenses(this.covered, first, last)) return;
+    this.refresh();
   }
 
   private cancel() {
@@ -180,6 +206,7 @@ class UsagesLensPlugin {
       const { from, to } = view.viewport;
       const firstLine = Math.max(0, text.lineAt(from).number - 1 - MARGIN_LINES);
       const lastLine = text.lineAt(to).number - 1 + MARGIN_LINES;
+      this.covered = { first: firstLine, last: lastLine };
       const visible = this.outline.targets
         .filter((t) => t.line >= firstLine && t.line <= lastLine)
         .slice(0, MAX_PER_PASS);

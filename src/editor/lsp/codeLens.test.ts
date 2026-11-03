@@ -3,6 +3,7 @@ import { EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { OutlineItem, References } from "@/platform/ipc";
 import { _addEditor, _removeEditor, codeLenses, documentSynced } from "@/editor/api";
+import { viewportNeedsLenses } from "./codeLens";
 
 const ipc = vi.hoisted(() => ({
   docOutline: vi.fn(),
@@ -202,5 +203,20 @@ describe("background usage counts", () => {
     } finally {
       _removeEditor(handle);
     }
+  });
+});
+
+describe("codeLens viewport gate", () => {
+  it("does not refetch counts for a viewport already covered", () => {
+    const covered = { first: 40, last: 160 };
+    expect(viewportNeedsLenses(covered, 80, 120)).toBe(false);
+    expect(viewportNeedsLenses(covered, 40, 160)).toBe(false);
+  });
+
+  it("refetches when scrolling reveals lines outside the window", () => {
+    const covered = { first: 40, last: 160 };
+    expect(viewportNeedsLenses(covered, 30, 120)).toBe(true);
+    expect(viewportNeedsLenses(covered, 80, 170)).toBe(true);
+    expect(viewportNeedsLenses(null, 0, 50)).toBe(true);
   });
 });
