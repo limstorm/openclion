@@ -114,3 +114,20 @@ describe("inlay hints", () => {
     expect(view.contentDOM.classList.contains("cm-lsp-navigation-modifier")).toBe(false);
   });
 });
+
+describe("inlay hint viewport gate", () => {
+  it("reuses hints while the viewport stays inside the fetched range", async () => {
+    const { viewportNeedsHints } = await import("./inlay");
+    const covered = { first: 1_000, last: 5_000 };
+    expect(viewportNeedsHints(covered, 2_000, 4_000)).toBe(false);
+    expect(viewportNeedsHints(covered, 1_000, 5_000)).toBe(false);
+  });
+
+  it("refetches when the viewport leaves it", async () => {
+    const { viewportNeedsHints } = await import("./inlay");
+    const covered = { first: 1_000, last: 5_000 };
+    expect(viewportNeedsHints(covered, 500, 4_000)).toBe(true);
+    expect(viewportNeedsHints(covered, 2_000, 5_500)).toBe(true);
+    expect(viewportNeedsHints(null, 0, 100)).toBe(true);
+  });
+});

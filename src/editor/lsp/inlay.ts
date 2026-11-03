@@ -156,6 +156,18 @@ function shownKind(kind: InlayHint["kind"]): boolean {
   return kind === "type" ? p.types : kind === "parameter" ? p.parameters : p.other;
 }
 
+/**
+ * Whether a viewport needs new hints: the plugin only fetched them for the last
+ * visible range, so scrolling inside it costs no request.
+ */
+export function viewportNeedsHints(
+  covered: { first: number; last: number } | null,
+  first: number,
+  last: number,
+): boolean {
+  return !covered || first < covered.first || last > covered.last;
+}
+
 const inlayPlugin = ViewPlugin.fromClass(
   class {
     private refresh = debounce(() => void this.run(), 400);
@@ -191,7 +203,7 @@ const inlayPlugin = ViewPlugin.fromClass(
       const { from, to } = u.view.viewport;
       const first = u.view.state.doc.lineAt(from).from;
       const last = u.view.state.doc.lineAt(to).to;
-      if (this.covered && first >= this.covered.first && last <= this.covered.last) return;
+      if (!viewportNeedsHints(this.covered, first, last)) return;
       this.refresh();
     }
     async run() {
