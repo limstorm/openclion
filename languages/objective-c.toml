@@ -9,7 +9,7 @@ ui-mode = "Objective-C"
 [[language-servers]]
 name = "clangd"
 command = "clangd"
-args = ["--background-index", "--background-index-priority=normal", "-j=${cpus}"]
+args = ["--background-index", "--background-index-priority=normal", "-j=${workers}"]
 root-markers = ["compile_commands.json", "compile_flags.txt", ".clangd"]
 install-hint = "Install clangd (LLVM): brew install llvm"
 

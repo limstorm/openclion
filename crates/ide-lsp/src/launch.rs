@@ -107,19 +107,28 @@ impl Launcher for ProcessLauncher {
 ///   CMake and Meson write it into the build directory, where no language server
 ///   looks on its own (`clangd` gets it as `--compile-commands-dir`); without a
 ///   database this is the root, so servers fall back to searching the tree.
-/// * `${cpus}` — the machine's usable core count, for server flags that size a
-///   worker pool (`clangd -j`: the background index uses that many workers).
+/// * `${workers}` — a worker-pool size for server flags like `clangd -j`: the
+///   usable core count, capped at [`MAX_INDEX_WORKERS`]. Measured on an 80-core
+///   host: `-j=80` made clangd hold 10 GB of preambles while the background index
+///   still got ~4 cores of throughput, so the extra workers only cost memory and
+///   slowed interactive requests down.
 pub fn expand_args(args: &[String], root: &Path) -> Vec<String> {
     let compile_commands = compile_commands_dir(root);
     let root = root.to_string_lossy();
     let compile_commands = compile_commands.to_string_lossy();
-    let cpus = std::thread::available_parallelism().map_or(1, |n| n.get()).to_string();
+    let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(MAX_INDEX_WORKERS).to_string();
     args.iter()
         .map(|arg| {
-            arg.replace("${root}", &root).replace("${compileCommands}", &compile_commands).replace("${cpus}", &cpus)
+            arg.replace("${root}", &root)
+                .replace("${compileCommands}", &compile_commands)
+                .replace("${workers}", &workers)
         })
         .collect()
 }
+
+/// Upper bound for language-server worker pools (`clangd -j`). Beyond a handful of
+/// workers a background index is bound by per-translation-unit cost, not by cores.
+pub const MAX_INDEX_WORKERS: usize = 8;
 
 /// The directory holding the project's compile database: the first configured
 /// build directory of the root (`build`, `out`, `cmake-build-*`, …), else the root.
@@ -237,12 +246,12 @@ mod tests {
     }
 
     #[test]
-    fn arguments_expand_the_core_count_for_worker_pools() {
+    fn arguments_expand_a_bounded_worker_count() {
         let tmp = tempfile::tempdir().unwrap();
-        let args = ["-j=${cpus}"].map(str::to_owned);
+        let args = ["-j=${workers}"].map(str::to_owned);
         let expanded = expand_args(&args, tmp.path());
-        let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
-        assert_eq!(expanded[0], format!("-j={cpus}"));
+        let workers = std::thread::available_parallelism().map_or(1, |n| n.get()).min(MAX_INDEX_WORKERS);
+        assert_eq!(expanded[0], format!("-j={workers}"));
     }
 
     #[test]
