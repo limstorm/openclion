@@ -691,3 +691,20 @@ pnpm e2e
 ---
 
 _报告结束。全部结论来自只读检索；未执行构建，未修改除本文件外的任何文件。_
+
+---
+
+## 附：Java/JVM 清理完成记录
+
+| 完成                                                                                              | 提交      |
+| ------------------------------------------------------------------------------------------------- | --------- |
+| jdtls、JDWP/java-debug/HotSwap、Lombok、Kotlin 桥、Java 应用与按模块 JUnit 运行配置、jdtls 设置页 | `ae257a2` |
+| Kotlin 语言服务（需要 Java 运行时）                                                               | `3e90d2e` |
+| JVM 文件图标（`jvm_file_presentations`）                                                          | `1146022` |
+| Java 测试报告的项目级扫描                                                                         | `43afc0b` |
+| 构建工具窗（Build/Dependencies）、`build.maven`/`build.gradle` 设置页、JDK 下载 UI                | `8afa867` |
+| CMake 构建计划与 Maven/Gradle 模型解耦；`build_model`/`build_sync`/`maven_*` 命令                 | `cb377b7` |
+| Tomcat（部署/构件/更新/启动）、Update Application、Gradle fork-JVM 初始化脚本                     | `4c89b26` |
+| Maven/Gradle 运行配置类型（`buildToolType` 与两个类型贡献）                                       | `f788691` |
+
+有意保留：`ide-run` 的 Maven/Gradle 检测（只产出命令模板，前端已无对应类型；旧 `run.toml` 条目按普通命令行运行）、`ide-sdk` 的 JDK 发现（供这些命令的 `JAVA_HOME`）、`ide_http::client` 与 `ide_build::compile` 的 CMake 路径。
