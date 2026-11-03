@@ -162,6 +162,8 @@ const inlayPlugin = ViewPlugin.fromClass(
     private unsubscribe: () => void;
     private offReady: () => void;
     private offModifier: () => void;
+    /** Offsets the last pass fetched hints for; a scroll inside them reuses it. */
+    private covered: { first: number; last: number } | null = null;
     constructor(private view: EditorView) {
       this.refresh();
       view.contentDOM.classList.toggle("cm-lsp-navigation-modifier", navigationModifierHeld());
@@ -178,7 +180,19 @@ const inlayPlugin = ViewPlugin.fromClass(
       this.offReady = onLspRefresh("inlayHints", () => this.refresh());
     }
     update(u: ViewUpdate) {
-      if (u.docChanged || u.viewportChanged) this.refresh();
+      if (u.docChanged) {
+        this.covered = null;
+        this.refresh();
+        return;
+      }
+      if (!u.viewportChanged) return;
+      // Hints are fetched for the visible range only; scrolling inside the range
+      // that was already fetched costs another request for nothing.
+      const { from, to } = u.view.viewport;
+      const first = u.view.state.doc.lineAt(from).from;
+      const last = u.view.state.doc.lineAt(to).to;
+      if (this.covered && first >= this.covered.first && last <= this.covered.last) return;
+      this.refresh();
     }
     async run() {
       const view = this.view;
@@ -193,6 +207,7 @@ const inlayPlugin = ViewPlugin.fromClass(
       const { from, to } = view.viewport;
       const first = state.doc.lineAt(from).from;
       const last = state.doc.lineAt(to).to;
+      this.covered = { first, last };
       try {
         const hints = await lspRequest(() => commands.lspInlayHints(doc.doc, offsetsToRange(state.doc, first, last)));
         if (view.state.doc !== state.doc) return this.refresh();
