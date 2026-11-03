@@ -38,6 +38,20 @@ struct Queue {
     started: bool,
 }
 
+/// Threads the scan parses on: every core but one, so interactive queries keep a
+/// thread of their own (the global rayon pool is shared with them).
+fn index_pool() -> rayon::ThreadPool {
+    let cores = std::thread::available_parallelism().map_or(2, |n| n.get());
+    rayon::ThreadPoolBuilder::new()
+        .num_threads(cores.saturating_sub(1).max(1))
+        .thread_name(|i| format!("openclion-index-parse-{i}"))
+        .build()
+        .unwrap_or_else(|e| {
+            tracing::warn!("index parse pool: {e}");
+            rayon::ThreadPoolBuilder::new().num_threads(1).build().expect("one-thread pool")
+        })
+}
+
 pub(crate) struct Shared {
     filter: RwLock<std::sync::Arc<PathFilter>>,
     pub languages: std::sync::Arc<LanguageRegistry>,
@@ -54,6 +68,9 @@ pub(crate) struct Shared {
     queue: Mutex<Queue>,
     wake: Condvar,
     idle: Condvar,
+    /// Parses run on their own threads: a scan used to take every thread of the
+    /// global pool, which is what made queries slow while the index was building.
+    pool: rayon::ThreadPool,
 }
 
 impl Shared {
@@ -78,6 +95,7 @@ impl Shared {
             queue: Mutex::default(),
             wake: Condvar::new(),
             idle: Condvar::new(),
+            pool: index_pool(),
         }
     }
 
@@ -172,11 +190,13 @@ impl Shared {
         let root = filter.root().to_owned();
         match store.load() {
             Ok(records) => {
-                let entries: Vec<FileEntry> = records
-                    .into_par_iter()
-                    .filter(|(rel, _)| !filter.is_excluded(&root.join(rel), false))
-                    .map(|(rel, rec)| FileEntry::new(root.join(&rel), rel, rec))
-                    .collect();
+                let entries: Vec<FileEntry> = self.pool.install(|| {
+                    records
+                        .into_par_iter()
+                        .filter(|(rel, _)| !filter.is_excluded(&root.join(rel), false))
+                        .map(|(rel, rec)| FileEntry::new(root.join(&rel), rel, rec))
+                        .collect()
+                });
                 let mut d = self.data.write();
                 for e in entries {
                     d.insert(e);
@@ -296,27 +316,29 @@ impl Shared {
     fn index_files<'a>(&self, files: impl Iterator<Item = &'a Found>, force: bool) {
         let files: Vec<&Found> = files.collect();
         let filter = self.filter();
-        let extracted: Vec<(String, FileRecord, PathBuf)> = files
-            .par_iter()
-            .filter_map(|f| {
-                if self.is_cancelled() {
-                    return None;
-                }
-                let rel = filter.rel(&f.path)?;
-                let prev_hash = if force { None } else { self.data.read().get(&f.path).map(|e| e.hash) };
-                match self.extract(f, prev_hash) {
-                    Extracted::Unchanged => {
-                        // Same content, new mtime: keep the symbols, refresh metadata.
-                        let d = self.data.read();
-                        let mut rec = d.get(&f.path)?.record();
-                        rec.mtime = f.mtime;
-                        rec.size = f.size;
-                        Some((rel, rec, f.path.clone()))
+        let extracted: Vec<(String, FileRecord, PathBuf)> = self.pool.install(|| {
+            files
+                .par_iter()
+                .filter_map(|f| {
+                    if self.is_cancelled() {
+                        return None;
                     }
-                    Extracted::New(rec) => Some((rel, rec, f.path.clone())),
-                }
-            })
-            .collect();
+                    let rel = filter.rel(&f.path)?;
+                    let prev_hash = if force { None } else { self.data.read().get(&f.path).map(|e| e.hash) };
+                    match self.extract(f, prev_hash) {
+                        Extracted::Unchanged => {
+                            // Same content, new mtime: keep the symbols, refresh metadata.
+                            let d = self.data.read();
+                            let mut rec = d.get(&f.path)?.record();
+                            rec.mtime = f.mtime;
+                            rec.size = f.size;
+                            Some((rel, rec, f.path.clone()))
+                        }
+                        Extracted::New(rec) => Some((rel, rec, f.path.clone())),
+                    }
+                })
+                .collect()
+        });
         if extracted.is_empty() {
             return;
         }
