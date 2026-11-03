@@ -178,16 +178,22 @@ impl Watcher {
         )
         .map_err(|e| io_error(format!("cannot start file watcher: {e}")))?;
         *state.watcher.lock() = Some(watcher);
-        let mut created = Vec::new();
-        state.watch_tree(&root, false, &mut created);
-        if state.watched.lock().is_empty() {
+        // One synchronous watch validates the path; the rest of the tree is walked on
+        // the watcher thread (thousands of inotify registrations would otherwise hold
+        // up `open_project`). Files created before their directory is watched are
+        // found by that directory's own listing, so nothing is lost.
+        if !state.add_watch(&root) {
             return Err(io_error(format!("cannot watch {}", root.display())));
         }
         let thread = {
             let state = state.clone();
+            let root = root.clone();
             std::thread::Builder::new()
                 .name("openclion-fs-watch".into())
-                .spawn(move || state.run(emit))
+                .spawn(move || {
+                    state.watch_tree(&root, false, &mut Vec::new());
+                    state.run(emit)
+                })
                 .map_err(|e| io_error(format!("cannot start file watcher: {e}")))?
         };
         Ok(Inner::PerDirectory { state, thread: Some(thread) })
@@ -793,7 +799,13 @@ mod tests {
             )
             .unwrap()
         };
-        // root, src, src/a, lib, .git, .git/refs, .git/refs/heads
+        // The tree walk runs on the watcher thread now (thousands of inotify
+        // registrations used to block `open_project`), so the watches appear shortly
+        // after start: root, src, src/a, lib, .git, .git/refs, .git/refs/heads.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while watcher.watch_count() != 7 && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
         assert_eq!(watcher.watch_count(), 7);
 
         // A new directory tree created in one go: its contents are reported
