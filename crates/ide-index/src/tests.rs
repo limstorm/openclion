@@ -545,3 +545,56 @@ fn workspace_scope_excludes_state_from_scans_updates_and_cached_results() {
     assert!(idx.wait_idle(WAIT));
     assert!(idx.find_files("", 100).is_empty());
 }
+
+/// Bytes this process has read (`/proc/self/io` `rchar`), Linux only.
+#[cfg(target_os = "linux")]
+fn read_bytes() -> Option<u64> {
+    let text = std::fs::read_to_string("/proc/self/io").ok()?;
+    text.lines().find(|l| l.starts_with("rchar:"))?.split_whitespace().nth(1)?.parse().ok()
+}
+
+/// A cold scan must not read files it cannot index: binaries and symbol-less
+/// text are recognised from an 8 KiB prefix (the read-filter optimization).
+#[cfg(target_os = "linux")]
+#[test]
+fn binaries_and_symbol_less_files_are_not_read_in_full() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir_all(dir.path().join("proj")).unwrap();
+    let root = dunce::canonicalize(dir.path().join("proj")).unwrap();
+    let cache = dir.path().join("cache");
+    // 40 MiB of binary: 80 files of 512 KiB.
+    let block = vec![0x7fu8; 512 * 1024];
+    for i in 0..80 {
+        let mut bytes = block.clone();
+        bytes[0] = 0; // NUL in the prefix, as in a real object file
+        std::fs::write(root.join(format!("lib{i}.o")), &bytes).unwrap();
+    }
+    // Symbol-less text of the same size class: 80 files of 512 KiB of ASCII.
+    let text = "lorem ipsum dolor sit amet ".repeat(512 * 1024 / 28);
+    for i in 0..80 {
+        std::fs::write(root.join(format!("doc{i}.txt")), &text).unwrap();
+    }
+    // A few real sources whose symbols must be indexed.
+    for i in 0..20 {
+        std::fs::write(
+            root.join(format!("src{i}.cpp")),
+            format!("namespace n{i} {{\nstruct Widget{i} {{ int size; }};\n}}\n"),
+        )
+        .unwrap();
+    }
+
+    let before = read_bytes().expect("proc io");
+    let languages = Arc::new(LanguageRegistry::load(None).unwrap());
+    let syntax = Arc::new(Syntax::new());
+    let idx = ProjectIndex::open(&root, &cache, Vec::new(), Vec::new(), languages, syntax, Arc::new(NullSink)).unwrap();
+    assert!(idx.wait_idle(WAIT));
+    let after = read_bytes().expect("proc io");
+    assert_eq!(idx.status().files, 180);
+    assert!(!symbols(&idx, "Widget3", SymbolFilter::All).is_empty());
+
+    let read_mib = (after - before) as f64 / (1024.0 * 1024.0);
+    println!("index read {read_mib:.2} MiB of an 80 MiB tree");
+    // 80 MiB of payload; only the 8 KiB prefixes of the 160 unindexable files
+    // may be read (≈1.25 MiB), plus the small sources and the cache write.
+    assert!(read_mib < 15.0, "read {read_mib:.1} MiB: unindexable files were read in full");
+}
