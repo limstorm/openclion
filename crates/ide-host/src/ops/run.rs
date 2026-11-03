@@ -116,18 +116,6 @@ pub async fn start(host: &Host, window: &str, config: RunConfig, on_output: Emit
     if config.command == ide_sdk::godot::COMMAND {
         return Err(IdeError::unavailable(ide_sdk::godot::NOT_FOUND));
     }
-    if config.kind == "tomcat" {
-        if host.processes.list().iter().any(|r| r.running && r.config_id == config.id) {
-            return Err(IdeError::invalid("This Tomcat configuration is already running"));
-        }
-        let (root, cache) = (root.clone(), project.cache_dir.clone());
-        config = tokio::task::spawn_blocking(move || {
-            ide_run::tomcat::prepare(&root, &cache, &mut config)?;
-            Ok::<_, IdeError>(config)
-        })
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))??;
-    }
     if config.kind == "go" && config.extras.params.get("scope").is_some_and(|s| s == "file") {
         let root = project.root.clone();
         config = host

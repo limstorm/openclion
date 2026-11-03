@@ -110,18 +110,6 @@ pub fn run_system_env(_host: &Host, _window: &str) -> std::collections::BTreeMap
     ide_run::system_env()
 }
 
-/// Writes the Gradle init script that adds `jvm_args` to the JVMs the build forks
-/// (`bootRun`, `run`, tests) and returns its path, for `--init-script`.
-pub async fn run_gradle_jvm_args_script(_host: &Host, _window: &str, jvm_args: Vec<String>) -> IdeResult<String> {
-    tokio::task::spawn_blocking(move || {
-        ide_run::gradle_jvm::write_init_script(&ide_run::gradle_jvm::default_dir(), &jvm_args)
-            .map(|p| p.to_string_lossy().into_owned())
-            .map_err(|e| IdeError::internal(format!("cannot write the Gradle init script: {e}")))
-    })
-    .await
-    .map_err(|e| IdeError::internal(e.to_string()))?
-}
-
 /// Results from one JUnit XML file (CTest's `--output-junit`) written since
 /// `since_ms`; `path` is relative to the project root.
 pub async fn run_test_report_file(
@@ -139,89 +127,6 @@ pub async fn run_test_report_file(
         .map_err(|e| IdeError::internal(e.to_string()))
 }
 
-pub async fn run_tomcat_home(host: &Host, window: &str, home: String) -> IdeResult<ide_run::tomcat::TomcatHome> {
-    host.require_trust(window)?;
-    let root = host.project(window)?.root.clone();
-    tokio::task::spawn_blocking(move || ide_run::tomcat::validate_home(&root.join(home)))
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))?
-}
-
-pub async fn run_tomcat_artifacts(host: &Host, window: &str) -> IdeResult<Vec<ide_build::web::WebArtifact>> {
-    host.require_trust(window)?;
-    let project = host.project(window)?;
-    tokio::task::spawn_blocking(move || {
-        let model = crate::ops::build::load(&project.root, &project.build_cache_dir(), &project.settings.effective());
-        ide_build::web::artifacts(&project.root, &model)
-    })
-    .await
-    .map_err(|e| IdeError::internal(e.to_string()))
-}
-
-pub async fn run_tomcat_build(host: &Host, window: &str, config: RunConfig) -> IdeResult<Option<RunConfig>> {
-    host.require_trust(window)?;
-    if config.extras.params.get("deployment").is_some_and(|v| v != "artifact") {
-        return Ok(None);
-    }
-    let project = host.project(window)?;
-    tokio::task::spawn_blocking(move || {
-        let model = crate::ops::build::load(&project.root, &project.build_cache_dir(), &project.settings.effective());
-        let artifacts = ide_build::web::artifacts(&project.root, &model);
-        let id = config
-            .extras
-            .params
-            .get("artifact")
-            .filter(|s| !s.is_empty())
-            .or_else(|| artifacts.first().map(|a| &a.id))
-            .ok_or_else(|| IdeError::invalid("Choose a WAR artifact"))?;
-        let mut plan = ide_build::web::build(
-            &project.root,
-            &model,
-            id,
-            &ide_run::tomcat::base_dir(&project.cache_dir, &config.id),
-        )?;
-        plan.env.extend(config.env.clone());
-        let mut build = RunConfig {
-            id: format!("tomcat-build:{}", config.id),
-            name: format!("Build {}", config.name),
-            kind: if id.starts_with("maven:") { "maven" } else { "gradle" }.into(),
-            command: plan.command.clone(),
-            args: vec![],
-            cwd: Some(std::path::PathBuf::from(&plan.cwd).into()),
-            env: plan.env.clone(),
-            detected: false,
-            is_test: false,
-            debug_adapter: None,
-            allow_parallel: false,
-            extras: ide_run::RunExtras {
-                include_system_env: config.extras.include_system_env,
-                env_files: config.extras.env_files,
-                ..Default::default()
-            },
-        };
-        plan.resolve_project(
-            &project.root,
-            &ide_run::resolved_env(&project.root, &build)?,
-            &ide_core::CancellationToken::new(),
-        )?;
-        build.args = plan.args;
-        Ok(Some(build))
-    })
-    .await
-    .map_err(|e| IdeError::internal(e.to_string()))?
-}
-
-pub async fn run_tomcat_update(host: &Host, window: &str, config: RunConfig, mode: String) -> IdeResult<()> {
-    host.require_trust(window)?;
-    let project = host.project(window)?;
-    if !host.processes.list().iter().any(|r| r.running && r.config_id == config.id) {
-        return Err(IdeError::invalid("Start this Tomcat configuration before updating it"));
-    }
-    tokio::task::spawn_blocking(move || ide_run::tomcat::update(&project.root, &project.cache_dir, &config, &mode))
-        .await
-        .map_err(|e| IdeError::internal(e.to_string()))?
-}
-
 /// Commands of this module the remote server answers.
 pub(crate) fn register(d: &mut Dispatcher) {
     d.add("run_dotnet_resolve", |c| async move {
@@ -233,18 +138,9 @@ pub(crate) fn register(d: &mut Dispatcher) {
     d.add("run_application_publish", |c| async move {
         run_application_publish(&c.host, &c.window, c.arg("config")?, c.arg("classPaths")?, c.arg("mainClass")?).await
     });
-    d.add("run_tomcat_home", |c| async move { run_tomcat_home(&c.host, &c.window, c.arg("home")?).await });
-    d.add("run_tomcat_artifacts", |c| async move { run_tomcat_artifacts(&c.host, &c.window).await });
-    d.add("run_tomcat_build", |c| async move { run_tomcat_build(&c.host, &c.window, c.arg("config")?).await });
-    d.add("run_tomcat_update", |c| async move {
-        run_tomcat_update(&c.host, &c.window, c.arg("config")?, c.arg("mode")?).await
-    });
     d.add("run_templates", |c| async move { run_templates(&c.host, &c.window) });
     d.add("run_save_templates", |c| async move { run_save_templates(&c.host, &c.window, c.arg("templates")?) });
     d.add("run_system_env", |c| async move { Ok(run_system_env(&c.host, &c.window)) });
-    d.add("run_gradle_jvm_args_script", |c| async move {
-        run_gradle_jvm_args_script(&c.host, &c.window, c.arg("jvmArgs")?).await
-    });
     d.add("run_test_report_file", |c| async move {
         run_test_report_file(&c.host, &c.window, c.arg("path")?, c.arg("sinceMs")?).await
     });

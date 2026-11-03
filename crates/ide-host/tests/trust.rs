@@ -47,7 +47,6 @@ async fn application_commands_work_in_restricted_projects_and_without_a_project(
         "jdk_download_location",
         "jdk_download",
         "run_system_env",
-        "run_gradle_jvm_args_script",
         "proxy_check_connection",
         "docker_settings",
         "docker_save_settings",

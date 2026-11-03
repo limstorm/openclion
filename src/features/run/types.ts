@@ -7,11 +7,10 @@ import type { RunConfig } from "@/platform/ipc";
 import { registerRunConfigType, useRunConfigTypes, type RunConfigTypeContribution } from "@/workbench/contributions";
 import { formatArgs, parseArgs, uid, uniqueName } from "./configs";
 import { commandName } from "./commandName";
-import { gradleForkedJvm, isWindows, mavenForkedJvm, type ForkedJvm } from "./jvmTypes";
+import { isWindows } from "./jvmTypes";
 import { tx } from "@/platform/i18n";
 import { useProject } from "@/platform/project";
 
-import { tomcatType } from "./tomcat";
 import { goBuildType, goTestType } from "./goTypes";
 
 import { dotnetProjectType, dotnetTestType } from "./dotnetTypes";
@@ -228,7 +227,6 @@ function buildToolType(
   icon: string,
   tasks: { label: string; description: string },
   wrapper: { unix: string; windows: string; plain: string; label: string; byDefault: boolean },
-  jvm: ForkedJvm,
 ): RunConfigTypeContribution {
   return {
     id,
@@ -247,7 +245,6 @@ function buildToolType(
         suggestions: (configs) => argsOf(configs, id, 0),
       },
       { key: "arguments", label: "Arguments", mono: true },
-      ...jvm.fields,
       { key: "wrapper", label: wrapper.label, control: "checkbox" },
     ],
     commandLine: (p) => ({
@@ -255,10 +252,9 @@ function buildToolType(
         p.executable && commandName(p.executable) === (on(p.wrapper) ? wrapper.unix : wrapper.plain)
           ? p.executable
           : wrapperCommand(wrapper.unix, wrapper.windows, wrapper.plain, on(p.wrapper)),
-      args: [...parseArgs(p.tasks ?? ""), ...parseArgs(p.arguments ?? ""), ...jvm.args(p)],
+      args: [...parseArgs(p.tasks ?? ""), ...parseArgs(p.arguments ?? "")],
       cwd: p.projectDir?.trim() || null,
     }),
-    ...(jvm.prepareLaunch ? { prepareLaunch: jvm.prepareLaunch } : {}),
     paramsFrom(c) {
       const name = commandName(c.command);
       const usesWrapper = name === wrapper.unix;
@@ -286,7 +282,6 @@ const gradle = buildToolType(
     label: "Use the Gradle wrapper",
     byDefault: true,
   },
-  gradleForkedJvm,
 );
 
 const maven = buildToolType(
@@ -301,7 +296,6 @@ const maven = buildToolType(
     label: "Use the Maven wrapper",
     byDefault: false,
   },
-  mavenForkedJvm,
 );
 
 const compound: RunConfigTypeContribution = {
@@ -394,7 +388,6 @@ export const BUILTIN_TYPES: readonly RunConfigTypeContribution[] = [
   dotnetTestType,
   goBuildType,
   goTestType,
-  tomcatType,
   compound,
 ];
 

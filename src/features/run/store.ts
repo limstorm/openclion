@@ -39,8 +39,6 @@ import { TerminalOutput } from "./terminalOutput";
 import { typeFor } from "./types";
 import { recordRun } from "./services";
 import { startedPort } from "./serverPort";
-import { tomcatBrowserUrl } from "./tomcat";
-import { openUrl } from "./navigate";
 import { tx } from "@/platform/i18n";
 
 /** The permanent "Current File" pseudo-configuration of the chooser (runs the active file's context). */
@@ -587,15 +585,7 @@ export async function startRun(
   const rt = runtimes.get(sessionId)!;
   const generation = rt.generation;
   if (options.onLine) rt.lineListeners.push(options.onLine);
-  let browserOpened = false;
   rt.lineListeners.push((line) => {
-    if (config.kind === "tomcat" && /Server startup in/.test(line)) {
-      patchSession(sessionId, { httpPort: Number(config.params?.httpPort || "8080") });
-      if (!browserOpened && config.params?.openBrowser === "true") {
-        browserOpened = true;
-        void openUrl(tomcatBrowserUrl(config));
-      }
-    }
     const port = startedPort(line);
     if (port !== null && runtimes.get(sessionId)?.generation === generation && getSession(sessionId)?.httpPort !== port)
       patchSession(sessionId, { httpPort: port });

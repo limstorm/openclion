@@ -42,7 +42,6 @@ import {
 import { EnvDialog } from "./EnvDialog";
 import { withTarget } from "./remote";
 import { COMPOUND, formParams, terminalApplies, withParams } from "./types";
-import { TomcatSettings } from "./TomcatSettings";
 import styles from "./Run.module.css";
 
 /**
@@ -371,8 +370,6 @@ export function ConfigForm({ config, all, type, errors, template, onChange, modi
           onClose={() => setModifyOpen(false)}
         />
       </div>
-
-      {config.kind === "tomcat" && <TomcatSettings config={config} onChange={onChange} />}
 
       {compound ? (
         template ? null : (

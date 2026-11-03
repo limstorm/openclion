@@ -578,32 +578,8 @@ export const commands = {
 	runCloseStdin: (id: RunId) => typedError<null, IdeError>(__TAURI_INVOKE("run_close_stdin", { id })),
 	/**  Terminal size of a run started with "Emulate terminal in output console". */
 	runResize: (id: RunId, cols: number, rows: number) => typedError<null, IdeError>(__TAURI_INVOKE("run_resize", { id, cols, rows })),
-	/**  Writes the Gradle init script adding `jvm_args` to the JVMs the build forks; returns its path. */
-	runGradleJvmArgsScript: (jvmArgs: string[]) => typedError<string, IdeError>(__TAURI_INVOKE("run_gradle_jvm_args_script", { jvmArgs })),
-	runTomcatHome: (home: string) => typedError<TomcatHome, IdeError>(__TAURI_INVOKE("run_tomcat_home", { home })),
-	runTomcatArtifacts: () => typedError<WebArtifact[], IdeError>(__TAURI_INVOKE("run_tomcat_artifacts")),
-	runTomcatBuild: (config: RunConfig_Deserialize) => typedError<({
-	/**  Stable id, e.g. `npm:dev`, `cargo:run:app`, or a uuid for user-defined. */
-	id: string,
-	name: string,
-	/**  `npm` | `cargo` | `gradle` | `maven` | `go` | `python` | `pytest` | `make` | `shell` … */
-	kind: string,
-	command: string,
-	args: string[],
-	cwd: IpcPath | null,
-	env: { [key in string]: string },
-	/**  Detected configs are regenerated; user configs persist in `.openclion/run.toml`. */
-	detected: boolean,
-	/**  Test runner configs render results in the test tree. */
-	isTest: boolean,
-	/**  DAP adapter that can debug this config, if any. */
-	debugAdapter: string | null,
-	/**  "Allow multiple instances": Run on a running config starts another one instead of restarting it. */
-	allowParallel?: boolean,
-}) & (RunExtras_Serialize) | null, IdeError>(__TAURI_INVOKE("run_tomcat_build", { config })),
 	runApplicationBuild: (config: RunConfig_Deserialize, module: string) => typedError<RunConfig_Serialize, IdeError>(__TAURI_INVOKE("run_application_build", { config, module })),
 	runApplicationPublish: (config: RunConfig_Deserialize, classPaths: string[], mainClass: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_application_publish", { config, classPaths, mainClass })),
-	runTomcatUpdate: (config: RunConfig_Deserialize, mode: string) => typedError<null, IdeError>(__TAURI_INVOKE("run_tomcat_update", { config, mode })),
 	runTestReportFile: (path: string, sinceMs: number | null) => typedError<TestCaseReport[], IdeError>(__TAURI_INVOKE("run_test_report_file", { path, sinceMs })),
 	/**  Build directories, codemodel targets and presets of the window's CMake project. */
 	cmakeModel: () => typedError<CmakeModel_Serialize, IdeError>(__TAURI_INVOKE("cmake_model")),
@@ -6196,10 +6172,6 @@ export type ThreadInfo = {
 	name: string,
 };
 
-export type TomcatHome = {
-	version: string,
-};
-
 /**  UI-facing state of one tool. */
 export type ToolInfo = {
 	/**  Server / adapter name from `languages/*.toml`. */
@@ -6392,13 +6364,6 @@ export type VirtualDocument = {
 export type Visibility = "public" | "protected" | 
 /**  Package / module / assembly scope (Java default, `internal`, `pub(crate)`, Go unexported). */
 "package" | "private";
-
-export type WebArtifact = {
-	id: string,
-	name: string,
-	module: string,
-	tool: string,
-};
 
 /**
  *  A web reference no language server resolves and where it points: `class="card"` →

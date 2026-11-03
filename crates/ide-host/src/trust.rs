@@ -190,7 +190,6 @@ pub fn restricted_command_allowed(cmd: &str) -> bool {
             | "jdk_download_location"
             | "jdk_download"
             | "run_system_env"
-            | "run_gradle_jvm_args_script"
             | "proxy_check_connection"
             | "docker_settings"
             | "docker_save_settings"
