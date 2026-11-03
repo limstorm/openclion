@@ -30,7 +30,7 @@ body,
   user-select: none;
   cursor: default;
   animation: splash-in 240ms ease-out 120ms both;
-  transition: opacity 160ms ease-out;
+  transition: opacity 120ms ease-out;
 }
 .splash.splash-out {
   opacity: 0;

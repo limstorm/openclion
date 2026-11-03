@@ -13,7 +13,9 @@ const holds: Hold[] = [];
 const MAX_WAIT_MS = 4000;
 /** A project open (index, LSP, git) keeps running behind the workbench, not behind the splash. */
 export const LAUNCH_WAIT_MS = 700;
-const FILL_MS = 120;
+const FILL_MS = 80;
+/** Fade-out and removal are part of the start-up latency too. */
+const FADE_MS = 120;
 
 /** Runs the fake progress bar to 100% from wherever its animation has got to; false if nothing shows yet. */
 function completeBar(el: HTMLElement): boolean {
@@ -48,7 +50,7 @@ export function hideSplash(): void {
         setTimeout(
           () => {
             el.classList.add("splash-out");
-            setTimeout(() => el.remove(), 200);
+            setTimeout(() => el.remove(), FADE_MS + 30);
           },
           completeBar(el) ? FILL_MS : 0,
         );
