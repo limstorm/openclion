@@ -4828,7 +4828,6 @@
   "Choose a Maven WAR module": "请选择 Maven WAR 模块",
   "Choose a Gradle WAR module": "请选择 Gradle WAR 模块",
   "Cannot resolve Maven WAR artifact: {details}": "无法解析 Maven WAR 构件：{details}",
-  "This Tomcat configuration is already running": "此 Tomcat 配置已在运行",
   "Can't rename '{name}' based on syntax: only local variables can be renamed this way": "无法基于语法重命名 '{name}'：这种方式只能重命名局部变量",
   "Returns true when the value is falsey or the variable does not exist. Checking an undefined variable does not emit a warning.": "当值为假值或变量不存在时返回 true。检查未定义的变量不会产生警告。",
   "Returns true only when every supplied variable exists and is not null. Checks stop at the first unset or null variable.": "仅当传入的每个变量都存在且不为 null 时返回 true。遇到第一个未设置或为 null 的变量即停止检查。",
