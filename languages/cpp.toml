@@ -10,7 +10,7 @@ tree-sitter = "cpp"
 [[language-servers]]
 name = "clangd"
 command = "clangd"
-args = ["--background-index", "--header-insertion=never", "--clang-tidy",
+args = ["--background-index", "--background-index-priority=normal", "-j=${cpus}", "--header-insertion=never", "--clang-tidy",
         "--compile-commands-dir=${compileCommands}"]
 root-markers = ["compile_commands.json", "compile_flags.txt", ".clangd", "CMakeLists.txt", "meson.build", "Makefile"]
 install-hint = "Install clangd (LLVM): brew install llvm, apt install clangd, or https://clangd.llvm.org/installation"

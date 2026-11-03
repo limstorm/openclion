@@ -107,11 +107,18 @@ impl Launcher for ProcessLauncher {
 ///   CMake and Meson write it into the build directory, where no language server
 ///   looks on its own (`clangd` gets it as `--compile-commands-dir`); without a
 ///   database this is the root, so servers fall back to searching the tree.
+/// * `${cpus}` — the machine's usable core count, for server flags that size a
+///   worker pool (`clangd -j`: the background index uses that many workers).
 pub fn expand_args(args: &[String], root: &Path) -> Vec<String> {
     let compile_commands = compile_commands_dir(root);
     let root = root.to_string_lossy();
     let compile_commands = compile_commands.to_string_lossy();
-    args.iter().map(|arg| arg.replace("${root}", &root).replace("${compileCommands}", &compile_commands)).collect()
+    let cpus = std::thread::available_parallelism().map_or(1, |n| n.get()).to_string();
+    args.iter()
+        .map(|arg| {
+            arg.replace("${root}", &root).replace("${compileCommands}", &compile_commands).replace("${cpus}", &cpus)
+        })
+        .collect()
 }
 
 /// The directory holding the project's compile database: the first configured
@@ -227,6 +234,15 @@ mod tests {
         std::fs::create_dir_all(root.join("apps/web/node_modules/@angular/core")).unwrap();
         assert_eq!(marked_root(root, &file, &markers), Some(root.join("apps/web")));
         assert_eq!(marked_root(root, &root.join("apps/api/main.ts"), &markers), None);
+    }
+
+    #[test]
+    fn arguments_expand_the_core_count_for_worker_pools() {
+        let tmp = tempfile::tempdir().unwrap();
+        let args = ["-j=${cpus}"].map(str::to_owned);
+        let expanded = expand_args(&args, tmp.path());
+        let cpus = std::thread::available_parallelism().map_or(1, |n| n.get());
+        assert_eq!(expanded[0], format!("-j={cpus}"));
     }
 
     #[test]
