@@ -778,6 +778,36 @@ mod tests {
         b.iter().flat_map(|b| b.created.iter().chain(&b.modified).chain(&b.removed).cloned()).collect()
     }
 
+    /// Manual measurement (`cargo test -p ide-vfs measures_start_latency -- --ignored --nocapture`):
+    /// `Watcher::start` on a 2,000-directory tree must return without walking it.
+    #[test]
+    #[ignore = "measurement: prints start latency"]
+    fn measures_start_latency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = dunce::canonicalize(tmp.path()).unwrap();
+        for i in 0..200 {
+            for j in 0..10 {
+                std::fs::create_dir_all(root.join(format!("pkg{i}/mod{j}"))).unwrap();
+            }
+        }
+        let dirs = 1 + 200 + 2000;
+        let sink: SharedSink = Arc::new(|_e: IdeEvent| {});
+        let started = Instant::now();
+        let watcher = Watcher::start_with(&root, Vec::new(), sink, Box::new(|_b| {}), WatchMode::PerDirectory).unwrap();
+        let elapsed = started.elapsed();
+        let watched = watcher.watch_count();
+        let walked = Instant::now();
+        // Wait for the worker to register the whole tree, to compare with the old cost.
+        while watcher.watch_count() < dirs && walked.elapsed() < Duration::from_secs(30) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        println!(
+            "start returned in {:.1} ms with {watched} watch(es); full tree ({dirs} dirs) registered after {:.0} ms on the worker",
+            elapsed.as_secs_f64() * 1000.0,
+            walked.elapsed().as_secs_f64() * 1000.0
+        );
+    }
+
     #[test]
     fn per_directory_mode_skips_excluded_dirs_and_follows_new_ones() {
         let tmp = tempfile::tempdir().unwrap();
