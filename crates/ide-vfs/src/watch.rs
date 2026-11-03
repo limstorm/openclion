@@ -799,9 +799,10 @@ mod tests {
             )
             .unwrap()
         };
-        // The tree walk runs on the watcher thread now (thousands of inotify
-        // registrations used to block `open_project`), so the watches appear shortly
-        // after start: root, src, src/a, lib, .git, .git/refs, .git/refs/heads.
+        // Only the root is watched when `start` returns: the tree walk (4,181
+        // inotify registrations, ~164 us each on KaiwuDB) runs on the watcher
+        // thread, which is where `open_project` used to block for 0.6-0.8 s.
+        assert_eq!(watcher.watch_count(), 1, "the tree must not be walked synchronously");
         let deadline = Instant::now() + Duration::from_secs(10);
         while watcher.watch_count() != 7 && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(20));
