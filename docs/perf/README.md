@@ -27,6 +27,17 @@
 
 - **大文件跳过语法高亮**：实测长任务来自 623 KB 文件，把阈值降到能让它生效（~500 KB）会让多数真实文件失去高亮；保留 8 MB `large` 阈值。
 
+## 实测后撤回的一项（2026-11-03）
+
+**feature 延迟加载**：把只提供工具窗/设置页的 8 个 feature（database、http-client、notebook、github、coverage、profiler、deployment、libraries）改成 `import()` + 首帧后激活，A/B 实测（Chromium + Vite dev，`performance.getEntriesByType("resource")` 统计 `/src/features/` 模块）：
+
+| 状态   | 首帧加载的 feature 模块数 |
+| ------ | ------------------------- |
+| 改动前 | 91                        |
+| 改动后 | 88                        |
+
+只少 3 个请求——这些 feature 的 `activate()` 内部本来就是懒加载重模块，入口文件很小。报告里「−1.3~1.5 s」是对**全部 40 个 feature**（含 editor/run/search/vcs/debugger 这类重量级）的估算，而那部分会改变首屏行为、风险与收益不匹配。已 revert（`a323a9c`），结论记录在此。
+
 ## 待办
 
 1. **拆分 feature 的 `import`/`activate` 链**（dev −1.3~1.5 s）：`app`（launch barrier）、`editor`、`project-trust` 同步；其余走 `import()` 并在首帧后激活；同步调整调用 `activateFeatures()` 的测试。
