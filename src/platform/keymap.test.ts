@@ -8,12 +8,28 @@ import {
   normalizeBinding,
   parseDoubleModifier,
   strokeOf,
+  effectiveBindings,
   useKeymap,
 } from "./keymap";
 import { executeAction, registerAction } from "./actions";
 import { usePlatform } from "./platformInfo";
 
 describe("keymap", () => {
+  it("caches the effective bindings until the preset or overrides change", () => {
+    const before = useKeymap.getState();
+    try {
+      const first = effectiveBindings();
+      // Called on every keydown: the merged, normalised table is reused as is.
+      expect(effectiveBindings()).toBe(first);
+      useKeymap.setState({ preset: before.preset.endsWith("macos") ? "vscode-windows" : "vscode-macos" });
+      const other = effectiveBindings();
+      expect(other).not.toBe(first);
+      expect(other.length).toBeGreaterThan(0);
+    } finally {
+      useKeymap.setState({ preset: before.preset, overrides: before.overrides });
+    }
+  });
+
   it("normalizes modifier order and case", () => {
     expect(normalizeBinding("Shift+Meta+o")).toBe("Shift+Meta+O");
     expect(normalizeBinding("meta+K  meta+c")).toBe("Meta+K Meta+C");

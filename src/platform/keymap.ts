@@ -193,11 +193,31 @@ export function bindingsFor(actionId: string): string[] {
   return overrides[actionId] ?? PRESETS[preset]?.[actionId] ?? [];
 }
 
-/** Every (binding, actionId) pair of the effective keymap. */
+interface BindingsCache {
+  preset: string;
+  overrides: Keymap;
+  value: Array<[string, string]>;
+}
+
+let bindingsCache: BindingsCache | null = null;
+
+/**
+ * Every (binding, actionId) pair of the effective keymap.
+ *
+ * Called on every keydown, so the merged and normalised table is cached until the
+ * preset or the overrides object changes (the store replaces, never mutates, it).
+ * Callers treat the result as read-only.
+ */
 export function effectiveBindings(): Array<[string, string]> {
   const { preset, overrides } = useKeymap.getState();
+  const cached = bindingsCache;
+  if (cached && cached.preset === preset && cached.overrides === overrides) return cached.value;
   const merged: Keymap = { ...PRESETS[preset], ...overrides };
-  return Object.entries(merged).flatMap(([id, keys]) => keys.map((k) => [normalizeBinding(k), id] as [string, string]));
+  const value = Object.entries(merged).flatMap(([id, keys]) =>
+    keys.map((k) => [normalizeBinding(k), id] as [string, string]),
+  );
+  bindingsCache = { preset, overrides, value };
+  return value;
 }
 
 const MOD_ORDER = MODIFIERS;
