@@ -343,35 +343,70 @@ impl Shared {
 
     fn extract(&self, f: &Found, prev_hash: Option<[u8; 32]>) -> Extracted {
         let mut rec = FileRecord { mtime: f.mtime, size: f.size, ..Default::default() };
-        if f.size > MAX_SYMBOL_FILE {
+        if f.size >= MAX_SYMBOL_FILE {
             return Extracted::New(rec);
         }
-        let mut bytes = Vec::with_capacity(f.size as usize);
-        match std::fs::File::open(&f.path).and_then(|mut file| file.read_to_end(&mut bytes)) {
-            Ok(_) => {}
+        // Files that contribute no symbols (binaries, plain text, images) need no
+        // content hash: their size and modification time are enough to tell whether
+        // anything happened, and reading them would cost most of the scan's IO.
+        let metadata_hash = {
+            let mut h = blake3::Hasher::new();
+            h.update(&f.size.to_le_bytes());
+            h.update(&f.mtime.to_le_bytes());
+            *h.finalize().as_bytes()
+        };
+        let mut file = match std::fs::File::open(&f.path) {
+            Ok(file) => file,
             Err(e) => {
                 tracing::debug!("index: cannot read {}: {e}", f.path.display());
                 return Extracted::New(rec);
             }
+        };
+        // Read a prefix first: it decides binary vs text and the language, and files
+        // that are not worth indexing never get read in full.
+        let prefix_len = 8192.min(usize::try_from(f.size).unwrap_or(usize::MAX));
+        let mut prefix = vec![0u8; prefix_len];
+        let mut filled = 0;
+        while filled < prefix.len() {
+            match file.read(&mut prefix[filled..]) {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => {
+                    tracing::debug!("index: cannot read {}: {e}", f.path.display());
+                    return Extracted::New(rec);
+                }
+            }
+        }
+        prefix.truncate(filled);
+        if prefix.contains(&0) {
+            rec.hash = metadata_hash;
+            return if prev_hash == Some(rec.hash) { Extracted::Unchanged } else { Extracted::New(rec) };
+        }
+        let head = String::from_utf8_lossy(&prefix);
+        let lang = self.languages.detect(&f.path, Some(first_line(&head)));
+        if !self.syntax.has_symbols(&lang) {
+            rec.hash = metadata_hash;
+            return if prev_hash == Some(rec.hash) { Extracted::Unchanged } else { Extracted::New(rec) };
+        }
+        let mut bytes = prefix;
+        // The prefix already told us this is a text file worth indexing: read the rest.
+        if let Err(e) = file.read_to_end(&mut bytes) {
+            tracing::debug!("index: cannot read {}: {e}", f.path.display());
+            return Extracted::New(rec);
         }
         rec.hash = *blake3::hash(&bytes).as_bytes();
         if prev_hash == Some(rec.hash) {
             return Extracted::Unchanged;
         }
         self.parsed.fetch_add(1, Ordering::Relaxed);
-        if bytes[..bytes.len().min(8192)].contains(&0) {
-            return Extracted::New(rec);
-        }
         let text = String::from_utf8_lossy(&bytes);
-        let lang = self.languages.detect(&f.path, Some(first_line(&text)));
-        if self.syntax.has_symbols(&lang) {
-            rec.symbols = self
-                .syntax
-                .tags(&lang, &text)
-                .into_iter()
-                .map(|t| StoredSymbol { name: t.name, kind: t.kind, container: t.container, range: t.range })
-                .collect();
-        }
+        rec.symbols = self
+            .syntax
+            .tags(&lang, &text)
+            .into_iter()
+            .map(|t| StoredSymbol { name: t.name, kind: t.kind, container: t.container, range: t.range })
+            .collect();
         Extracted::New(rec)
     }
 

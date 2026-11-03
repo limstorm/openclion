@@ -196,7 +196,9 @@ fn persistence_skips_unchanged_files_on_reopen() {
     let fx = sample();
     {
         let idx = fx.open();
-        assert_eq!(idx.shared.parsed.load(Ordering::SeqCst), 8);
+        // Binary and symbol-less files are recognised from an 8 KiB prefix and never
+        // read in full, so they do not count as parsed.
+        assert_eq!(idx.shared.parsed.load(Ordering::SeqCst), 6);
         idx.mark_recent(&fx.root.join("web/app.py"));
         assert!(idx.wait_idle(WAIT));
     }

@@ -20,7 +20,7 @@ import {
   useProject,
 } from "@/platform/project";
 import { connectRemote, isRemoteWindow } from "@/platform/remote";
-import { holdSplash } from "@/platform/splash";
+import { holdSplash, LAUNCH_WAIT_MS } from "@/platform/splash";
 import { editorService, maybeEditorService, notifications } from "@/workbench/contributions";
 import { chooseProjectWindow } from "@/workbench/projectWindow";
 import { cycleWindowTab } from "@/platform/windowGroups";
@@ -449,7 +449,8 @@ export function installLaunchHandling(): () => void {
   let unlisten: (() => void) | undefined;
   const launch = consumeLaunch();
   provideStartupLaunch(launch);
-  holdSplash(launch);
+  // The workbench paints once the splash budget is spent; the open continues behind it.
+  holdSplash(launch, LAUNCH_WAIT_MS);
   void import("@tauri-apps/api/webviewWindow").then(async ({ getCurrentWebviewWindow }) => {
     const off = await getCurrentWebviewWindow().listen(LAUNCH_EVENT, () => void consumeLaunch());
     if (disposed) off();
