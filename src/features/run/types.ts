@@ -1,14 +1,13 @@
 /**
- * Built-in run configuration types (Shell Script, Program, npm, Gradle, Maven,
- * Compound) and the helpers that turn a type's params into the launched
- * command line. Other features contribute types with `registerRunConfigType`.
+ * Built-in run configuration types (Shell Script, Program, npm, Godot, pytest,
+ * .NET, Go, Compound) and the helpers that turn a type's params into the
+ * launched command line. Other features contribute types with
+ * `registerRunConfigType`.
  */
 import type { RunConfig } from "@/platform/ipc";
 import { registerRunConfigType, useRunConfigTypes, type RunConfigTypeContribution } from "@/workbench/contributions";
 import { formatArgs, parseArgs, uid, uniqueName } from "./configs";
 import { commandName } from "./commandName";
-import { isWindows } from "./jvmTypes";
-import { tx } from "@/platform/i18n";
 import { useProject } from "@/platform/project";
 
 import { goBuildType, goTestType } from "./goTypes";
@@ -17,7 +16,6 @@ import { dotnetProjectType, dotnetTestType } from "./dotnetTypes";
 
 export const COMPOUND = "compound";
 
-const on = (v: string | undefined) => v === "true";
 const dirOf = (cwd: string | null | undefined) => cwd ?? "";
 
 /** Values of `args[index]` across detected configurations of `kind`. */
@@ -216,88 +214,6 @@ const npm: RunConfigTypeContribution = {
   },
 };
 
-function wrapperCommand(unix: string, windows: string, plain: string, wrapper: boolean): string {
-  if (!wrapper) return plain;
-  return isWindows() ? windows : `./${unix}`;
-}
-
-function buildToolType(
-  id: string,
-  label: string,
-  icon: string,
-  tasks: { label: string; description: string },
-  wrapper: { unix: string; windows: string; plain: string; label: string; byDefault: boolean },
-): RunConfigTypeContribution {
-  return {
-    id,
-    label,
-    icon,
-    description: tasks.description,
-    defaults: wrapper.byDefault ? { wrapper: "true" } : {},
-    ownsWorkingDirectory: true,
-    fields: [
-      { key: "projectDir", label: tx`${label} project`, mono: true, placeholder: "Project root" },
-      {
-        key: "tasks",
-        label: tasks.label,
-        mono: true,
-        required: true,
-        suggestions: (configs) => argsOf(configs, id, 0),
-      },
-      { key: "arguments", label: "Arguments", mono: true },
-      { key: "wrapper", label: wrapper.label, control: "checkbox" },
-    ],
-    commandLine: (p) => ({
-      command:
-        p.executable && commandName(p.executable) === (on(p.wrapper) ? wrapper.unix : wrapper.plain)
-          ? p.executable
-          : wrapperCommand(wrapper.unix, wrapper.windows, wrapper.plain, on(p.wrapper)),
-      args: [...parseArgs(p.tasks ?? ""), ...parseArgs(p.arguments ?? "")],
-      cwd: p.projectDir?.trim() || null,
-    }),
-    paramsFrom(c) {
-      const name = commandName(c.command);
-      const usesWrapper = name === wrapper.unix;
-      if (!usesWrapper && name !== wrapper.plain) return null;
-      return {
-        executable: c.command,
-        projectDir: dirOf(c.cwd),
-        tasks: formatArgs(c.args),
-        arguments: "",
-        ...(usesWrapper ? { wrapper: "true" } : {}),
-      };
-    },
-  };
-}
-
-const gradle = buildToolType(
-  "gradle",
-  "Gradle",
-  "file-gradle",
-  { label: "Tasks", description: "Run Gradle tasks" },
-  {
-    unix: "gradlew",
-    windows: "gradlew.bat",
-    plain: "gradle",
-    label: "Use the Gradle wrapper",
-    byDefault: true,
-  },
-);
-
-const maven = buildToolType(
-  "maven",
-  "Maven",
-  "file-maven",
-  { label: "Goals", description: "Run Maven goals" },
-  {
-    unix: "mvnw",
-    windows: "mvnw.cmd",
-    plain: "mvn",
-    label: "Use the Maven wrapper",
-    byDefault: false,
-  },
-);
-
 const compound: RunConfigTypeContribution = {
   id: COMPOUND,
   label: "Compound",
@@ -380,8 +296,6 @@ export const BUILTIN_TYPES: readonly RunConfigTypeContribution[] = [
   shell,
   program,
   npm,
-  gradle,
-  maven,
   godot,
   pytest,
   dotnetProjectType,

@@ -1,4 +1,3 @@
-import { useProject } from "@/platform/project";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { registerActions } from "@/platform/actions";
@@ -24,7 +23,6 @@ import { pasteRows } from "./EnvDialog";
 import { CURRENT_FILE, resetRuns, selectConfig, sessionsOf, startCompound, startRun, useRun } from "./store";
 import {
   BUILTIN_TYPES,
-  blankTemplate,
   formParams,
   missingParams,
   newConfigOfType,
@@ -75,15 +73,6 @@ describe("configuration types", () => {
   });
 
   it.each([
-    ["maven", "mvn.cmd", ["clean", "test"]],
-    ["maven", "MVN.CMD", ["verify"]],
-    ["maven", "mvn.bat", ["test"]],
-    ["maven", "/opt/maven/bin/mvn", ["package"]],
-    ["maven", String.raw`C:\tools\maven\bin\mvn.cmd`, ["test", "-Dname=two words"]],
-    ["maven", "mvnw.cmd", ["test"]],
-    ["gradle", "gradle.bat", ["build"]],
-    ["gradle", "gradle.cmd", ["test"]],
-    ["gradle", "gradlew.bat", ["test"]],
     ["pytest", "pytest.exe", ["tests/test_app.py", "-q"]],
     ["pytest", String.raw`C:\project\.venv\Scripts\PYTEST.EXE`, ["-q"]],
     ["pytest", "PYTHON.EXE", ["-m", "pytest", "tests"]],
@@ -95,22 +84,12 @@ describe("configuration types", () => {
     const params = formParams(original);
     expect(params).not.toBeNull();
     expect(withParams(original, params!)).toMatchObject({ command, args, cwd: original.cwd });
-    if (kind === "maven" || kind === "gradle") {
-      expect(params!.wrapper === "true").toBe(/^(mvnw|gradlew)/.test(command));
-      expect(withParams(original, { ...params!, tasks: "clean" })).toMatchObject({ command, args: ["clean"] });
-    }
   });
 
   it("switches launchers when the wrapper or package manager selection changes", () => {
-    const maven = cfg("m", { kind: "maven", command: "mvnw.cmd", args: ["test"] });
-    expect(withParams(maven, { ...formParams(maven)!, wrapper: "false" }).command).toBe("mvn");
     const npm = cfg("n", { kind: "npm", command: "NPM.CMD", args: ["test"] });
     expect(formParams(npm)!.packageManager).toBe("npm");
     expect(withParams(npm, { ...formParams(npm)!, packageManager: "pnpm" }).command).toBe("pnpm");
-  });
-
-  it.each(["mvn.cmd.sh", "other.exe", "/bin/MVN"])("does not accept unrelated Maven commands: %s", (command) => {
-    expect(formParams(cfg("m", { kind: "maven", command, args: ["test"] }))).toBeNull();
   });
 
   it("old run.toml entries edit as a Shell Script command line", () => {
@@ -271,10 +250,6 @@ describe("configuration types", () => {
       arguments: "--port 3000",
       packageDir: "web",
     });
-    const gradle = cfg("gradle:test", { kind: "gradle", command: "./gradlew", args: ["test"], detected: true });
-    expect(formParams(gradle)).toMatchObject({ tasks: "test", wrapper: "true" });
-    // An unrelated executable stays a plain command.
-    expect(formParams(cfg("m", { kind: "maven", command: "/opt/tools/custom-build", args: ["package"] }))).toBeNull();
     expect(withParams(npm, { packageManager: "npm", command: "test", packageDir: "" })).toMatchObject({
       command: "npm",
       args: ["test"],
@@ -316,7 +291,6 @@ describe("configuration types", () => {
     expect(rows.filter((r) => r.kind === "type").map((r) => (r.kind === "type" ? r.type.label : ""))).toContain(
       "Compound",
     );
-    expect(typeRows(types, "grad").map((r) => r.key)).toEqual(["gradle"]);
     expect(typeRows(types, "dock").map((r) => r.key)).toEqual(["group:Docker", "docker-image"]);
   });
 });
@@ -530,24 +504,4 @@ describe("Current File", () => {
     selectConfig(CURRENT_FILE);
     expect(useRun.getState().selectedId).toBe(CURRENT_FILE);
   });
-});
-
-describe("new Gradle wrapper default", () => {
-  it.each(["wrapper", "local"] as const)(
-    "follows %s distribution without changing existing choices",
-    (distribution) => {
-      const previous = useProject.getState().settings;
-      useProject.setState({ settings: { languages: { java: { gradle: { distribution } } } } as never });
-      try {
-        const type = BUILTIN_TYPES.find((t) => t.id === "gradle")!;
-        const config = newConfigOfType(type, [], blankTemplate(type));
-        expect(config.params?.wrapper).toBe(distribution === "local" ? "false" : "true");
-        expect(type.fields.some((f) => f.key === "wrapper")).toBe(true);
-        const template = { ...config, params: { wrapper: "true" } };
-        expect(newConfigOfType(type, [], template).params?.wrapper).toBe("true");
-      } finally {
-        useProject.setState({ settings: previous });
-      }
-    },
-  );
 });
