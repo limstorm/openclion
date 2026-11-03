@@ -37,10 +37,27 @@ export function unfoldAround(state: EditorState, pos: number): StateEffect<unkno
   return out;
 }
 
+interface LaneRow {
+  top: number;
+  height: number;
+  mark: ScrollbarMark;
+}
+
+/** Marks and geometry the rows were built from: a scroll alone reuses them. */
+interface RowCache {
+  marks: readonly ScrollbarMark[];
+  len: number;
+  contentHeight: number;
+  unit: string;
+  rows: LaneRow[];
+}
+
 class OverviewLane {
   dom: HTMLElement;
   private scheduled = false;
   private lastKey = "";
+  private cache: RowCache | null = null;
+  private caretEl: HTMLElement | null = null;
 
   constructor(private view: EditorView) {
     this.dom = document.createElement("div");
@@ -81,33 +98,50 @@ class OverviewLane {
         const unit = fit ? "px" : "%";
         const pos = (y: number) => (fit ? Math.floor(y) : +((y / contentHeight) * 100).toFixed(3));
         const marks = view.state.facet(scrollbarMarks);
-        const rows = new Map<string, { top: number; height: number; mark: ScrollbarMark }>();
-        for (const m of marks) {
-          if (rows.size > MAX_RENDERED) break;
-          const from = Math.min(Math.max(0, m.from), len);
-          const to = Math.min(Math.max(from, m.to ?? from), len);
-          const a = view.lineBlockAt(from);
-          const b = to === from ? a : view.lineBlockAt(to);
-          // Marks landing on the same lane pixel collapse into one.
-          const px = Math.floor(a.top * scale);
-          const top = pos(a.top);
-          const height = fit ? Math.round(b.bottom - a.top) : +(((b.bottom - a.top) / contentHeight) * 100).toFixed(3);
-          const key = `${px}:${m.color}:${m.kind ?? "line"}`;
-          const prev = rows.get(key);
-          if (!prev || (m.priority ?? 0) > (prev.mark.priority ?? 0) || height > prev.height)
-            rows.set(key, { top: prev?.top ?? top, height: Math.max(height, prev?.height ?? 0), mark: m });
+        // Scrolling changes neither the marks nor the layout: walking every mark (two
+        // `lineBlockAt` each) on each scroll frame is what made big files stutter.
+        let rows: LaneRow[];
+        const cached = this.cache;
+        if (
+          cached &&
+          cached.marks === marks &&
+          cached.len === len &&
+          cached.contentHeight === contentHeight &&
+          cached.unit === unit
+        ) {
+          rows = cached.rows;
+        } else {
+          const buckets = new Map<string, LaneRow>();
+          for (const m of marks) {
+            if (buckets.size > MAX_RENDERED) break;
+            const from = Math.min(Math.max(0, m.from), len);
+            const to = Math.min(Math.max(from, m.to ?? from), len);
+            const a = view.lineBlockAt(from);
+            const b = to === from ? a : view.lineBlockAt(to);
+            // Marks landing on the same lane pixel collapse into one.
+            const px = Math.floor(a.top * scale);
+            const top = pos(a.top);
+            const height = fit
+              ? Math.round(b.bottom - a.top)
+              : +(((b.bottom - a.top) / contentHeight) * 100).toFixed(3);
+            const key = `${px}:${m.color}:${m.kind ?? "line"}`;
+            const prev = buckets.get(key);
+            if (!prev || (m.priority ?? 0) > (prev.mark.priority ?? 0) || height > prev.height)
+              buckets.set(key, { top: prev?.top ?? top, height: Math.max(height, prev?.height ?? 0), mark: m });
+          }
+          rows = [...buckets.values()].sort((x, y) => (x.mark.priority ?? 0) - (y.mark.priority ?? 0));
+          this.cache = { marks, len, contentHeight, unit, rows };
         }
         const caret = pos(view.lineBlockAt(view.state.selection.main.head).top);
-        return {
-          rows: [...rows.values()].sort((x, y) => (x.mark.priority ?? 0) - (y.mark.priority ?? 0)),
-          caret,
-          unit,
-        };
+        return { rows, caret, unit };
       },
       write: ({ rows, caret, unit }) => {
-        const key =
-          rows.map((r) => `${r.top},${r.height},${r.mark.color},${r.mark.kind}`).join("|") + `#${caret}${unit}`;
-        if (key === this.lastKey) return;
+        // The caret moves on every key press: never rebuild the marks for it.
+        const key = rows.map((r) => `${r.top},${r.height},${r.mark.color},${r.mark.kind}`).join("|") + unit;
+        if (key === this.lastKey) {
+          if (this.caretEl) this.caretEl.style.top = `${caret}${unit}`;
+          return;
+        }
         this.lastKey = key;
         const frag = document.createDocumentFragment();
         for (const r of rows) {
@@ -126,6 +160,7 @@ class OverviewLane {
         const c = document.createElement("div");
         c.className = "cm-openclion-overviewCaret";
         c.style.top = `${caret}${unit}`;
+        this.caretEl = c;
         frag.appendChild(c);
         this.dom.replaceChildren(frag);
       },
