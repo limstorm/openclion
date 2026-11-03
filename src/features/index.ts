@@ -18,6 +18,8 @@ import { activate as run } from "./run";
 import { activate as runAnything } from "./run-anything";
 import { activate as macros } from "./macros";
 import { activate as debuggerFeature } from "./debugger";
+import { activate as coverage } from "./coverage";
+import { activate as profiler } from "./profiler";
 import { activate as valgrind } from "./valgrind";
 import { activate as sanitizers } from "./sanitizers";
 import { activate as build } from "./build";
@@ -30,10 +32,16 @@ import { activate as perf } from "./perf";
 import { activate as plugins, activateSettingsPages as pluginsPages } from "./plugins";
 import { activate as tools, activateSettingsPages as toolsPages } from "./tools";
 import { activate as scratch } from "./scratch";
+import { activate as libraries } from "./libraries";
 import { activate as viewers } from "./viewers";
+import { activate as notebook } from "./notebook";
 import { activate as web } from "./web";
 import { activate as analysis } from "./analysis";
 import { activate as services } from "./services";
+import { activate as github } from "./github";
+import { activate as httpClient } from "./http-client";
+import { activate as database } from "./database";
+import { activate as deployment } from "./deployment";
 import { activate as agents, activateSettingsPages as agentsPages } from "./agents";
 import { activate as vim, activateSettingsPages as vimPages } from "./vim";
 import { activate as ssh } from "./ssh";
@@ -57,6 +65,8 @@ const features: Array<[string, Activate]> = [
   ["run-anything", runAnything],
   ["macros", macros],
   ["debugger", debuggerFeature],
+  ["coverage", coverage],
+  ["profiler", profiler],
   ["valgrind", valgrind],
   ["sanitizers", sanitizers],
   ["build", build],
@@ -65,33 +75,23 @@ const features: Array<[string, Activate]> = [
   ["todo", todo],
   ["settings", settings],
   ["perf", perf],
+  ["plugins", plugins],
+  ["tools", tools],
   ["scratch", scratch],
+  ["libraries", libraries],
+  ["notebook", notebook],
   ["viewers", viewers],
   ["web", web],
   ["analysis", analysis],
   ["services", services],
+  ["github", github],
+  ["http-client", httpClient],
+  ["database", database],
+  ["deployment", deployment],
   ["agents", agents],
-  ["plugins", plugins],
-  ["tools", tools],
   ["vim", vim],
   ["ssh", ssh],
   ["remote-dev", remoteDev],
-];
-
-/**
- * Tool-window and settings features that the first paint does not need: their
- * modules load after the workbench is on screen (`import()` in dev keeps them
- * out of the blocking module graph, which cost ~2 s of start-up there).
- */
-const deferredFeatures: Array<[string, () => Promise<{ activate: () => void | (() => void) }>]> = [
-  ["database", () => import("./database")],
-  ["http-client", () => import("./http-client")],
-  ["notebook", () => import("./notebook")],
-  ["github", () => import("./github")],
-  ["coverage", () => import("./coverage")],
-  ["profiler", () => import("./profiler")],
-  ["deployment", () => import("./deployment")],
-  ["libraries", () => import("./libraries")],
 ];
 
 export function activateFeatures(): () => void {
@@ -104,24 +104,7 @@ export function activateFeatures(): () => void {
       console.error(`feature ${name} failed to activate`, e);
     }
   }
-  const deferred: Array<() => void> = [];
-  // After the first frame: the workbench is interactive before these register.
-  requestAnimationFrame(() => {
-    void (async () => {
-      for (const [name, load] of deferredFeatures) {
-        try {
-          const d = (await load()).activate();
-          if (d) deferred.push(d);
-        } catch (e) {
-          console.error(`feature ${name} failed to activate`, e);
-        }
-      }
-    })();
-  });
-  return () => {
-    deferred.reverse().forEach((d) => d());
-    disposers.reverse().forEach((d) => d());
-  };
+  return () => disposers.reverse().forEach((d) => d());
 }
 
 export { SettingsWindow, settingsWindowParent } from "./settings";
