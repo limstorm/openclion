@@ -1,27 +1,30 @@
 # 性能：测量结论与已实施修复
 
-三个方向的实测报告与代码修复记录。重新测量时按各报告里「测量方法」一节操作。
+实测报告与代码修复记录。重新测量时按各报告里「测量方法」一节操作。
 
-| 报告                     | 内容                                                                                   |
-| ------------------------ | -------------------------------------------------------------------------------------- |
-| [startup.md](startup.md) | 启动链路：splash gate、`open_project` 各阶段（`opened … {laps}` 日志）、dev ESM 图开销 |
-| [index.md](index.md)     | 索引：walk/read/parse/persist 阶段耗时、cold vs warm、符号与 RSS、查询延迟             |
-| [editor.md](editor.md)   | 编辑器：滚动帧时间、长任务、概览轨道、keymap/光标路径、视口 LSP 请求                   |
+| 报告                                   | 内容                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| [startup.md](startup.md)               | 启动链路：splash gate、`open_project` 各阶段（`opened … {laps}` 日志）、dev ESM 图开销     |
+| [index.md](index.md)                   | 索引：walk/read/parse/persist 阶段耗时、cold vs warm、符号与 RSS、查询延迟                 |
+| [editor.md](editor.md)                 | 编辑器：滚动帧时间、长任务、概览轨道、keymap/光标路径、视口 LSP 请求                       |
+| [webkit-wayland.md](webkit-wayland.md) | 真实 WebKitGTK：合成路径在软件 GL 上的代价、resize 与文档长度、每帧 DOM 操作、Wayland 复现 |
 
 ## 已实施（按提交）
 
-| 提交      | 改动                                                                | 依据 / 预期                                                        |
-| --------- | ------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `505f05a` | splash 只等 launch 700 ms，项目在后台继续打开                       | gate 是 `holdSplash(launch)`；warm −0.7~0.9 s                      |
-| `505f05a` | 索引读前过滤：8 KiB 前缀判二进制/语言，无符号文件用 size+mtime 哈希 | 读取字节 71% 是二进制；cold −0.5~1.5 s、RSS −150~200 MB            |
-| `2c8c2bb` | watch 树注册移到 `openclion-fs-watch` 线程                          | `Watcher::start` 635–771 ms / 4,181 个 watch；每次 open −0.6~0.8 s |
-| `5103ce3` | clangd `-j=${cpus}` + `--background-index-priority=normal`          | 首开 clangd 索引 102 s；默认 `low` 只用空闲 CPU                    |
-| `6fe6905` | 索引解析走自有线程池（`cores-1`），查询留全局池                     | 索引期间查询 p95 75–111 ms → <10 ms                                |
-| `9ba09dc` | 概览轨道分桶结果缓存 + 光标独立元素                                 | 每帧 7.4–9.1 ms（4,000 marks），光标移动不再重建 DOM               |
-| `e9d6bfe` | `effectiveBindings()` 按 `(preset, overrides)` 缓存                 | 每键 5–8 ms → ~1 ms                                                |
-| `47527cb` | codeLens 只在视口越出已取窗口时刷新                                 | 每滚动停止 ≤40 `lspReferences`，合计 ≤101 请求                     |
-| `2233dfc` | inlay hints 同样只在视口越界时刷新                                  | 同上，去掉重复请求                                                 |
-| `115e359` | splash 动画尾巴 320–480 ms → ~230 ms                                | 补条 80 ms + 淡出 120 ms + 30 ms 移除                              |
+| 提交      | 改动                                                                | 依据 / 预期                                                          |
+| --------- | ------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `505f05a` | splash 只等 launch 700 ms，项目在后台继续打开                       | gate 是 `holdSplash(launch)`；warm −0.7~0.9 s                        |
+| `505f05a` | 索引读前过滤：8 KiB 前缀判二进制/语言，无符号文件用 size+mtime 哈希 | 读取字节 71% 是二进制；cold −0.5~1.5 s、RSS −150~200 MB              |
+| `2c8c2bb` | watch 树注册移到 `openclion-fs-watch` 线程                          | `Watcher::start` 635–771 ms / 4,181 个 watch；每次 open −0.6~0.8 s   |
+| `5103ce3` | clangd `-j=${cpus}` + `--background-index-priority=normal`          | 首开 clangd 索引 102 s；默认 `low` 只用空闲 CPU                      |
+| `6fe6905` | 索引解析走自有线程池（`cores-1`），查询留全局池                     | 索引期间查询 p95 75–111 ms → <10 ms                                  |
+| `9ba09dc` | 概览轨道分桶结果缓存 + 光标独立元素                                 | 每帧 7.4–9.1 ms（4,000 marks），光标移动不再重建 DOM                 |
+| `e9d6bfe` | `effectiveBindings()` 按 `(preset, overrides)` 缓存                 | 每键 5–8 ms → ~1 ms                                                  |
+| `47527cb` | codeLens 只在视口越出已取窗口时刷新                                 | 每滚动停止 ≤40 `lspReferences`，合计 ≤101 请求                       |
+| `2233dfc` | inlay hints 同样只在视口越界时刷新                                  | 同上，去掉重复请求                                                   |
+| `115e359` | splash 动画尾巴 320–480 ms → ~230 ms                                | 补条 80 ms + 淡出 120 ms + 30 ms 移除                                |
+| _本次_    | 软件 GL 上关掉 WebKit 加速合成（`linux_rendering.rs`）              | resize 23→97 帧、max 668→49 ms；滚动 65→104~115 帧、p95 130→50~74 ms |
+| _本次_    | `symbolChain()` 线性扫描改二分（`view/outline.ts`）                 | 8,000 个顶层符号：每光标移动 87.5 µs → 1.5 µs                        |
 
 ## 有意不做
 
