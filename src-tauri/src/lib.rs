@@ -9,6 +9,8 @@ mod commands;
 mod dev;
 mod events;
 #[cfg(any(target_os = "linux", test))]
+pub mod linux_rendering;
+#[cfg(any(target_os = "linux", test))]
 mod linux_window_state;
 mod logging;
 #[cfg(target_os = "macos")]

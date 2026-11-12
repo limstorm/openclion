@@ -6,5 +6,8 @@ fn main() {
     if let Some(code) = ide_ssh::askpass::run_helper() {
         std::process::exit(code);
     }
+    // Before GTK and WebKit start: pick the WebView rendering path this host can carry.
+    #[cfg(target_os = "linux")]
+    openclion_lib::linux_rendering::tune();
     openclion_lib::run()
 }
