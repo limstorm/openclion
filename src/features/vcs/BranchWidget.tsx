@@ -98,7 +98,8 @@ export function BranchWidget() {
     <>
       <BarButton
         ref={ref}
-        variant="title"
+        // Status-bar widget: the branch lives in the right-hand group next to the editor state.
+        variant="status"
         className={styles.widget}
         tooltip={tooltip}
         aria-haspopup="dialog"

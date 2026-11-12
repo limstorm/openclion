@@ -11,7 +11,7 @@ import {
   registerMenuGroup,
   registerOverlay,
   registerSettingsPage,
-  registerTitleItem,
+  registerStatusItem,
   registerToolWindow,
 } from "@/workbench/contributions";
 import { executeAction } from "@/platform/actions";
@@ -42,15 +42,20 @@ import { installGitLog, selectGitTab, useGitLog } from "./logStore";
 import { installVcsStore, onConflictsAppeared, onConflictsCleared, useVcs } from "./store";
 import { tx } from "@/platform/i18n";
 
-function trackTitleItem(): () => void {
+/**
+ * The current branch, in the status bar's right-hand group (it used to sit in the
+ * main toolbar's left group). Same widget and popup; the status bar keeps it next to
+ * the editor's own state, where the branch is watched while editing.
+ */
+function trackBranchWidget(): () => void {
   let dispose: (() => void) | null = null;
   const sync = (available: boolean) => {
     if (available && !dispose) {
-      dispose = registerTitleItem({
+      dispose = registerStatusItem({
         id: "vcs.branch",
-        title: "VCS Widget",
-        align: "left",
-        priority: 10,
+        title: "Git Branch",
+        align: "right",
+        priority: 80,
         component: BranchWidget,
       });
     } else if (!available && dispose) {
@@ -178,7 +183,7 @@ export function activate(): () => void {
     installChangelists(),
     trackOperationContext(),
     registerCompareActions(),
-    trackTitleItem(),
+    trackBranchWidget(),
     installHunkPopup(),
     registerOverlay({ id: "vcs.dialogs", component: VcsDialogHost }),
     trackCommitWindow(),
