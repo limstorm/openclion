@@ -820,7 +820,13 @@ pub fn spec(os: Os) -> Vec<Entry> {
         act("help.showLog", show_log),
     ];
     if !mac {
-        help.extend([act("app.checkForUpdates", "Check for Updates…"), SEP, act("app.about", "About OpenCLion")]);
+        help.extend([
+            act("app.createShortcut", "Create Shortcut…"),
+            SEP,
+            act("app.checkForUpdates", "Check for Updates…"),
+            SEP,
+            act("app.about", "About OpenCLion"),
+        ]);
     }
     menus.push(sub("help", "Help", help));
     menus

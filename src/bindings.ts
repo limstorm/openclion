@@ -79,6 +79,7 @@ export const commands = {
 	cancelTask: (id: TaskId) => __TAURI_INVOKE<boolean>("cancel_task", { id }),
 	/**  Routes frontend logs into the backend `tracing` pipeline. */
 	logFrontend: (level: LogLevel, message: string) => __TAURI_INVOKE<void>("log_frontend", { level, message }),
+	createShortcut: () => typedError<Shortcut, IdeError>(__TAURI_INVOKE("create_shortcut")),
 	/**  Streams the project's agent events to this window; returns every task. */
 	agentSubscribe: (onEvent: Channel<AgentEvent>) => typedError<AgentTask[], IdeError>(__TAURI_INVOKE("agent_subscribe", { onEvent })),
 	agentProviders: () => typedError<AgentProvider[], IdeError>(__TAURI_INVOKE("agent_providers")),
@@ -5722,6 +5723,13 @@ export type ShelvedChangeList = {
 	branch: string | null,
 	/**  Repository-relative paths. */
 	files: ChangedFile[],
+};
+
+export type Shortcut = {
+	/**  Launchers written, menu entry first. */
+	paths: IpcPath[],
+	/**  The executable the launchers start. */
+	target: IpcPath,
 };
 
 export type Signature = {

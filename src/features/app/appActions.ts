@@ -26,6 +26,30 @@ export async function showLog(): Promise<void> {
 }
 
 /**
+ * Help › Create Shortcut…: a launcher for this application outside the package manager
+ * (a `.desktop` entry in the desktop and applications folders, a `.lnk` on Windows).
+ */
+export async function createShortcut(): Promise<void> {
+  if (!isTauri()) return;
+  try {
+    const shortcut = await call(commands.createShortcut());
+    notifications().notify({
+      level: "info",
+      title: t("app.shortcut.created"),
+      body: shortcut.paths.join("\n"),
+      key: "app.createShortcut",
+    });
+  } catch (e) {
+    notifications().notify({
+      level: "error",
+      title: t("app.shortcut.failed"),
+      body: errorText(e),
+      key: "app.createShortcut",
+    });
+  }
+}
+
+/**
  * Edit menu items on Windows/Linux (macOS uses native roles). They act on the
  * focused element like the native commands would. Undo / Redo in an editor go
  * to its own history: the native stack misses programmatic edits (templates,
@@ -87,6 +111,14 @@ export function appActions(): Action[] {
       icon: "keyboard",
       keywords: ["shortcuts", "keyboard", "keymap", "cheat sheet"],
       run: showKeymapReference,
+    },
+    {
+      id: "app.createShortcut",
+      title: t("app.action.createShortcut"),
+      category: t("app.category.help"),
+      icon: "external-link",
+      keywords: ["desktop", "launcher", "shortcut", "menu entry"],
+      run: createShortcut,
     },
     {
       id: "help.showLog",

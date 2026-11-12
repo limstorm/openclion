@@ -38,6 +38,7 @@ pub mod refactor;
 pub mod run;
 pub mod sdk;
 pub mod search;
+pub mod shortcut;
 pub mod spell;
 pub mod ssh;
 pub mod syntax;
@@ -94,6 +95,7 @@ pub fn builder() -> tauri_specta::Builder<tauri::Wry> {
         app::cancel_request,
         app::cancel_task,
         app::log_frontend,
+        shortcut::create_shortcut,
         agent::agent_subscribe,
         agent::agent_providers,
         agent::agent_registry_list,
