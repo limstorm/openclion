@@ -8,7 +8,7 @@
   "app.about.platform": "平台",
   "app.about.runtime": "运行时",
   "app.about.showConfig": "打开配置目录",
-  "app.about.tagline": "受 IntelliJ IDEA 启发的开源 IDE",
+  "app.about.tagline": "延续 IntelliJ CLion 传统的开源 C/C++ IDE",
   "app.about.thirdParty": "包含来自 IntelliJ Platform 的图标（Apache-2.0）。",
   "app.about.title": "关于 OpenCLion",
   "app.about.version": "版本",

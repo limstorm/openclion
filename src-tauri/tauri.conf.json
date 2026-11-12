@@ -35,10 +35,10 @@
     "createUpdaterArtifacts": false,
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "DeveloperTool",
-    "copyright": "Copyright \u00a9 2026 OpenCLion contributors. Fork of OpenIDEA (Apache-2.0).",
+    "copyright": "Copyright \u00a9 2026 OpenCLion contributors.",
     "license": "Apache-2.0",
     "shortDescription": "An open-source C/C++ IDE in the CLion tradition",
-    "longDescription": "OpenCLion is an open-source C/C++ IDE built on the OpenIDEA core: CMake projects, clangd code insight, LLDB debugging. UI inspired by JetBrains IDEs. Not affiliated with JetBrains.",
+    "longDescription": "OpenCLion is an open-source C/C++ IDE: CMake projects, clangd code insight, LLDB debugging. UI in the IntelliJ CLion tradition. Not affiliated with JetBrains.",
     "macOS": {
       "entitlements": "./Entitlements.plist",
       "minimumSystemVersion": "11.0"

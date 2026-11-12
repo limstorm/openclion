@@ -2,7 +2,7 @@ id = "hello"
 name = "Hello"
 version = "0.1.0"
 description = "Sample plugin: inserts today's date and counts words in the active file."
-authors = ["OpenIDEA contributors"]
+authors = ["OpenCLion contributors"]
 change-notes = """
 0.1.0 — first release: Insert Date and Word Count of Active File commands.
 """

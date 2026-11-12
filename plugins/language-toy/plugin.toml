@@ -4,7 +4,7 @@ id = "language-toy"
 name = "Toy Language"
 version = "0.1.0"
 description = "Language support for .toy files: detection, comments and indentation."
-authors = ["OpenIDEA contributors"]
+authors = ["OpenCLion contributors"]
 change-notes = "0.1.0 — .toy file detection, line comments and indentation."
 openclion-api = "0.1"
 

@@ -8,7 +8,7 @@
   "app.about.platform": "Platform",
   "app.about.runtime": "Runtime",
   "app.about.showConfig": "Open Configuration Folder",
-  "app.about.tagline": "An open-source IDE inspired by IntelliJ IDEA",
+  "app.about.tagline": "An open-source C/C++ IDE in the IntelliJ CLion tradition",
   "app.about.thirdParty": "Includes icons from the IntelliJ Platform (Apache-2.0).",
   "app.about.title": "About OpenCLion",
   "app.about.version": "Version",
