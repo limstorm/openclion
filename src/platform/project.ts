@@ -11,6 +11,11 @@ interface ProjectState {
   opening: boolean;
   /** LightEdit: this window edits loose files without a project (`project` stays null). */
   lightEdit: boolean;
+  /**
+   * Start-up is reopening the project this window had at exit (`features/welcome/session.ts`).
+   * The welcome screen stays hidden while it runs, so the window never flashes it.
+   */
+  restoring: boolean;
 }
 
 export const useProject = create<ProjectState>(() => ({
@@ -18,6 +23,7 @@ export const useProject = create<ProjectState>(() => ({
   settings: null,
   opening: false,
   lightEdit: false,
+  restoring: false,
 }));
 
 let leaveGuard: (() => Promise<boolean>) | null = null;

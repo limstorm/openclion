@@ -42,6 +42,8 @@ export function Workbench() {
   const banners = useContributions((s) => s.workbenchBanners);
   const project = useProject((s) => s.project);
   const lightEdit = useProject((s) => s.lightEdit);
+  // Start-up restores the last project behind the splash; don't flash the welcome screen meanwhile.
+  const restoring = useProject((s) => s.restoring);
   const root = project?.root ?? null;
   const distractionFree = useDistractionFree((s) => s.active);
   const frame = project ? styles.framed : lightEdit ? styles.lightEditFrame : undefined;
@@ -64,7 +66,7 @@ export function Workbench() {
         </>
       ) : lightEdit ? (
         <LightEditFrame />
-      ) : (
+      ) : restoring ? null : (
         <Welcome />
       )}
       <OverlayHost />

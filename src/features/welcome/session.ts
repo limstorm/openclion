@@ -87,6 +87,18 @@ let attempted = false;
 export async function reopenLastProject(): Promise<void> {
   if (attempted || !isTauri()) return;
   attempted = true;
+  // Hide the welcome screen (and hold the splash) while the restore runs, so the window
+  // never flashes "Welcome to OpenCLion" before the last project appears.
+  const remembered = lastSessionProject();
+  if (remembered && useSession.getState().reopenPref) useProject.setState({ restoring: true });
+  try {
+    await reopenSessionProject();
+  } finally {
+    useProject.setState({ restoring: false });
+  }
+}
+
+async function reopenSessionProject(): Promise<void> {
   // An explicit launch wins over both this window's and the last session's project.
   await startupLaunchHandled();
   const startup = useProject.getState();
