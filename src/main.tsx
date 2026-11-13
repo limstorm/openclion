@@ -36,7 +36,12 @@ if (settingsParent !== null) {
   }
   // Order matters: features (e.g. the terminal) install capture-phase key handlers
   // that must run before the global dispatcher.
-  activateFeatures();
+  //
+  // The perf bundle keeps the eager path: its entry has a top-level `await`, and
+  // loading a deferred feature chunk from an idle callback while that entry is still
+  // evaluating wedges the module graph (the page never leaves the splash). The
+  // harness measures start-up without the split; releases and dev builds get it.
+  activateFeatures({ deferOptional: !perfBuild });
   installKeyboardDispatcher();
 }
 

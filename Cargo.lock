@@ -4697,6 +4697,7 @@ dependencies = [
  "ide-text",
  "ide-vfs",
  "parking_lot",
+ "rayon",
  "semver",
  "serde",
  "serde_json",
