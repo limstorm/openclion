@@ -146,18 +146,24 @@ resize 用 `xdotool windowsize $W $((1200+i*8)) $((700+i*6))`，30 步、每步 
 openclion_lib::linux_rendering::tune();
 ```
 
-判定顺序（纯函数 `decide()`，7 个单测覆盖）：
+判定顺序（纯函数 `decide()`，10 个单测覆盖）：
 
 1. `OPENCLION_WEBKIT_COMPOSITING=off|on` —— 显式覆盖，优先。
 2. 环境里已经有 `WEBKIT_DISABLE_COMPOSITING_MODE` —— 尊重用户的设置，不动。
 3. `LIBGL_ALWAYS_SOFTWARE` 为真值，或 `GALLIUM_DRIVER` 是 `llvmpipe`/`softpipe`/`swrast`/`lavapipe` —— 关。
 4. `/dev/dri` 下没有 `renderD*` 渲染节点（VM、容器、远程桌面、驱动回退）—— 关。
-5. 其余（真有 GPU）—— 保持 WebKit 默认（合成开）。
+5. 有渲染节点、但 `/sys/class/drm/renderD*` 背后的 DRM 驱动**全是只显示不渲染**的适配器
+   （`ast`/`aspeed`、`vkms`、`vboxvideo`、`bochs`、`cirrus`、`qxl`、`mgag200`、`simpledrm`）—— 关。
+   这一条区分「有核显/独显」（`i915`/`xe`、`amdgpu`、`radeon`、`nouveau`、`nvidia`，以及带 virgl 的
+   `virtio_gpu`，都保持合成开）和「只有虚拟显示卡」。
+6. 其余（真有 GPU）—— 保持 WebKit 默认（合成开）。
 
-命中时打印一行，便于用户确认：
+两种结果都打印一行，便于用户和 issue 确认：
 
 ```
+openclion: GPU i915 (renderD128): WebKit accelerated compositing on
 openclion: no /dev/dri/renderD* render node (software GL): WebKit accelerated compositing disabled for this session
+openclion: only display-only DRM adapters (no GPU renderer): WebKit accelerated compositing disabled for this session
 ```
 
 验证（本机，未设任何环境变量）：resize 23 帧 / max 668 ms → **97 帧 / max 49 ms**；
