@@ -520,6 +520,7 @@ describe("custom editor document lifetime", () => {
     const doc = await open();
     doc.text = doc.saved;
     await ctrl.openInput({ kind: "read-only-test", key: "new-tab" }, { focus: false });
+    await ctrl.whenRemovalsIdle();
     expect(findTab(useTabs.getState(), input().key)).toBeNull();
     expect(findTab(useTabs.getState(), "new-tab")).not.toBeNull();
     expect(doc.releases).toBe(1);
@@ -537,6 +538,7 @@ describe("custom editor document lifetime", () => {
     useProject.setState({ project: { root: "/p", name: "replacement", settings: {} } as never });
     useProject.setState({ opening: false });
     await ctrl.openInput({ kind: "read-only-test", key: "replacement-tab" }, { focus: false });
+    await ctrl.whenRemovalsIdle();
     expect(doc.releases).toBe(1);
     expect(findTab(useTabs.getState(), input().key)).toBeNull();
     expect(findTab(useTabs.getState(), "replacement-tab")).not.toBeNull();
@@ -611,6 +613,7 @@ describe("custom editor document lifetime", () => {
     await vi.waitFor(() => expect(doc.frozen).toBe(true));
     drain();
     await opening;
+    await ctrl.whenRemovalsIdle();
     expect(doc.text).toBe("original\nfinal output");
     expect(doc.saved).toBe("original");
     expect(doc.closed).toBe(false);

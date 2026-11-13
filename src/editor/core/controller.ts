@@ -957,7 +957,12 @@ export class EditorController implements SlotHost {
       resolution?.admit();
       useTabs.setState(s, true);
       const tabPrefs = editorPrefs().tabs;
-      await this.removeGuarded(
+      // Closing the tab this open displaced (a replaced preview tab) waits for the old
+      // document's flush and its `doc_close` IPC. The editor being opened does not depend on
+      // it, and the tab limit protects `tabId`, so the removal queue finishes behind the open
+      // instead of delaying every click in the project tree by that round trip. The tab itself
+      // is already gone from the state above; `whenRemovalsIdle()` awaits the rest.
+      void this.removeGuarded(
         (current) =>
           current.panes[paneId]
             ? enforceTabLimit(
@@ -973,7 +978,7 @@ export class EditorController implements SlotHost {
               )
             : current,
         { protect: (tab) => inputDirty(tab.input, useContributions.getState().editorKinds) === true },
-      );
+      ).catch((e: unknown) => this.documentError(e));
       if (!isTextInput(input)) {
         if (o.focus !== false) requestAnimationFrame(() => this.focus());
         return;
@@ -1058,6 +1063,11 @@ export class EditorController implements SlotHost {
   }
 
   /** Close exactly the originally selected tabs, evaluating references after every await. */
+  /** Resolves once every queued tab removal (and its document release) finished. */
+  whenRemovalsIdle(): Promise<unknown> {
+    return this.removalTail;
+  }
+
   private removeGuarded(
     select: (s: TabsState) => TabsState,
     options: { protect?: (tab: Tab) => boolean; clearHistory?: boolean; beforeRemove?: () => Promise<boolean> } = {},
