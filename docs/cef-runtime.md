@@ -129,9 +129,9 @@ control:
 
 ```bash
 CEF_PATH=/opt/cef cargo build --release -p openclion    # ~21 min, LTO
-scripts/cef-package.sh --bundle deb                     # stripped libcef   -> 142 MB (502 MB installed)
-scripts/cef-package.sh --bundle deb --keep-symbols      # full symbols      -> 282 MB (1.6 GB installed)
-scripts/cef-package.sh --bundle appimage                # -> 197 MB AppImage
+scripts/cef-package.sh --bundle deb                     # stripped libcef   -> 136 MiB (502 MiB installed)
+scripts/cef-package.sh --bundle deb --keep-symbols      # full symbols      -> 269 MiB (1.6 GiB installed)
+scripts/cef-package.sh --bundle appimage                # -> 188 MiB AppImage
 ```
 
 | Bundle                            | Contents                                                                                                                                                                             |
@@ -142,6 +142,20 @@ scripts/cef-package.sh --bundle appimage                # -> 197 MB AppImage
 
 All three were installed/started on this machine: the app opens the project, edits files, and
 commits `你好` from IBus at the caret.
+
+### A note on killing the app
+
+Chromium starts zygote processes that outlive their parent. Killing the main process leaves them
+holding the browser singleton, and the next launch fails with
+`Runtime(WebviewRuntimeNotInstalled)` and Chromium's `Opening in existing browser session.` line
+in the log. Stop everything the process spawned before relaunching:
+
+```bash
+ps -eo pid,comm,args | awk '$2=="openclion" || $2=="chrome-sandbox" {print $1}' | xargs -r sudo kill -9
+```
+
+Stripping `libcef.so` is _not_ the problem there — the 136 MiB package starts exactly like the
+1.6 GiB one once those processes are gone.
 
 ## Remaining work on this branch
 
