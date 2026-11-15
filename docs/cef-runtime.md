@@ -98,30 +98,50 @@ bug.
 
 ## Packaging
 
-`tauri build --bundles deb` cannot finish a CEF bundle with the 3.0.0-alpha.6 CLI yet: its
-bundler expects `libEGL.so`/`libGLESv2.so` beside `libcef.so` (CEF 154 for Linux ships ANGLE
-inside `libcef.so` and only `libvk_swiftshader.so` + `libvulkan.so.1` next to it), so it fails with
-`No such file or directory` while copying the runtime. `scripts/cef-deb.sh` assembles the same
-package layout by hand:
+`tauri build --bundles deb|appimage` does not bundle a CEF app out of the box with the
+3.0.0-alpha.6 CLI:
+
+- its CEF copy list still names `libEGL.so`/`libGLESv2.so`, which CEF stopped shipping for Linux
+  by 154 (ANGLE lives inside `libcef.so`; only SwiftShader and the Vulkan loader sit beside it),
+  so the copy loop stops with `No such file or directory`;
+- its AppImage path downloads `linuxdeploy` at build time, which needs network access the build
+  host may not have;
+- it always `strip`s `libcef.so`, which throws the symbol table of a 1.45 GiB library away.
+
+### The official bundler, made to work
+
+`scripts/cef-bundle-prep.sh` drops two empty files named `libEGL.so`/`libGLESv2.so` into the CEF
+distribution: presence is all the copy loop checks, Chromium never opens them on Linux, and an
+empty file is as good as absent to `dlopen`. After that:
 
 ```bash
-CEF_PATH=/opt/cef cargo build --release -p openclion   # ~21 min, LTO
-scripts/cef-deb.sh /opt/cefnew/cef_linux_x86_64        # -> target/release/bundle/deb/OpenCLion_0.1.33_amd64.deb
+scripts/cef-bundle-prep.sh
+node scripts/tauri.ts build --bundles deb     # -> target/release/bundle/deb/OpenCLion_0.1.33_amd64.deb (186 MB)
 ```
 
-What it produces, and why:
+That package installs and runs, but it carries the _stripped_ `libcef.so` (272 MiB) and the two
+placeholder files.
 
-| Piece                   | Note                                                                                                                                    |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `/usr/share/OpenCLion/` | the binary and the whole CEF runtime; the binary is linked with `-rpath,$ORIGIN`, so `libcef.so` loads from its own directory           |
-| `/usr/bin/openclion`    | symlink into that directory                                                                                                             |
-| `chrome-sandbox`        | installed `4755 root:root` in the archive itself, and `postinst` re-applies it (dpkg does keep the bit here, but a build tree does not) |
-| `libcef.so`             | `strip --strip-unneeded`: 1.45 GiB → 272 MiB installed (`CEF_DEB_KEEP_SYMBOLS=1` keeps the symbols)                                     |
-| `Depends:`              | GTK4 + the Chromium runtime libraries; the bundler's defaults still name WebKitGTK                                                      |
+### The package we ship
 
-Result: **142 MB** compressed, **502 MB** installed. Installing it and launching `openclion` starts
-the app, opens the project, and typing works — including the IBus path (`nihao` + space commits
-`你好` in the editor).
+`scripts/cef-package.sh` assembles the layout by hand so both sizes and the AppImage are under
+control:
+
+```bash
+CEF_PATH=/opt/cef cargo build --release -p openclion    # ~21 min, LTO
+scripts/cef-package.sh --bundle deb                     # stripped libcef   -> 142 MB (502 MB installed)
+scripts/cef-package.sh --bundle deb --keep-symbols      # full symbols      -> 282 MB (1.6 GB installed)
+scripts/cef-package.sh --bundle appimage                # -> 197 MB AppImage
+```
+
+| Bundle                            | Contents                                                                                                                                                                             |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OpenCLion_<v>_amd64.deb`         | `/usr/share/OpenCLion/` (binary + runtime), `/usr/bin/openclion` symlink, `4500 root:root` sandbox + `postinst`, GTK4/Chromium `Depends:`                                            |
+| `OpenCLion_<v>_amd64-symbols.deb` | the same with the unstripped `libcef.so`, for builds that must symbolize Chromium crashes                                                                                            |
+| `OpenCLion_<v>_amd64.AppImage`    | `AppDir/usr/bin/` holds the binary and the runtime next to it (`-rpath,$ORIGIN`), `AppRun` execs it; the runtime disables the Chromium sandbox inside an AppImage and warns about it |
+
+All three were installed/started on this machine: the app opens the project, edits files, and
+commits `你好` from IBus at the caret.
 
 ## Remaining work on this branch
 
