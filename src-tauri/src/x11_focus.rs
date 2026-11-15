@@ -12,6 +12,8 @@
 //! this finds this process's own window through `_NET_WM_PID`, walks down to Chromium's
 //! window and focuses it.
 
+use std::ffi::CString;
+
 use x11_dl::xlib::{Display, Window, Xlib};
 
 type Pid = u64;
@@ -37,12 +39,46 @@ pub fn focus_browser() -> bool {
             .filter_map(|(toplevel, area)| browser_under(&xlib, display, toplevel).map(|b| (b, area)))
             .max_by_key(|(_, area)| *area)
             .map(|(browser, _)| browser);
+        let _ = set_wm_class();
         if let Some(browser) = browser {
             (xlib.XSetInputFocus)(display, browser, x11_dl::xlib::RevertToParent, x11_dl::xlib::CurrentTime);
             (xlib.XSync)(display, 0);
         }
         (xlib.XCloseDisplay)(display);
         browser.is_some()
+    }
+}
+
+/// Marks the windows as `openclion`/`OpenCLion`, which is what a taskbar matches against
+/// its `.desktop` entry (`StartupWMClass`).
+///
+/// CEF's window is created by the runtime outside GTK's own window tracking and ends up with
+/// an empty `WM_CLASS`, so the shell shows a generic icon and cannot group the window with the
+/// launcher. GTK may set (or clear) the hint while the surface is being realised, so this is
+/// re-applied together with the focus.
+pub fn set_wm_class() -> bool {
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() && std::env::var_os("DISPLAY").is_none() {
+        return false;
+    }
+    let Ok(xlib) = Xlib::open() else { return false };
+    // SAFETY: as in `focus_browser`; the strings outlive the call.
+    unsafe {
+        let display = (xlib.XOpenDisplay)(std::ptr::null());
+        if display.is_null() {
+            return false;
+        }
+        let name = CString::new("openclion").expect("static string");
+        let class = CString::new("OpenCLion").expect("static string");
+        let mut hint =
+            x11_dl::xlib::XClassHint { res_name: name.as_ptr().cast_mut(), res_class: class.as_ptr().cast_mut() };
+        let mut applied = false;
+        for (toplevel, _) in our_windows(&xlib, display) {
+            (xlib.XSetClassHint)(display, toplevel, &mut hint);
+            applied = true;
+        }
+        (xlib.XSync)(display, 0);
+        (xlib.XCloseDisplay)(display);
+        applied
     }
 }
 

@@ -61,6 +61,14 @@ executable on every build, and writes a profile under `~/.cache/<identifier>/cef
 - Mouse: hover, clicks and wheel reach the page.
 - `cargo test -p openclion --lib` (73) and the frontend suite (477 files, 5125 tests) pass.
 
+## Window identity (taskbar icon)
+
+CEF's window is created outside GTK's own window tracking and ends up with an empty
+`WM_CLASS` (`"", ""`), so a shell cannot match it to the `.desktop` entry and shows a generic
+icon. `x11_focus::set_wm_class()` sets the hint to `openclion`/`OpenCLion` on this process's
+top-level windows (re-applied together with the focus, because GTK rewrites it while the surface
+is realised), which matches `StartupWMClass=openclion` in the packaged desktop entry.
+
 ## Keyboard and IME
 
 Chromium's browser lives in an **override-redirect X11 child window** of the GTK window
