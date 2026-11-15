@@ -96,11 +96,35 @@ Without the fix the same keystrokes produce no `keydown` at all while `document.
 already `true` — that asymmetry is what identified the missing X focus rather than a CEF input
 bug.
 
+## Packaging
+
+`tauri build --bundles deb` cannot finish a CEF bundle with the 3.0.0-alpha.6 CLI yet: its
+bundler expects `libEGL.so`/`libGLESv2.so` beside `libcef.so` (CEF 154 for Linux ships ANGLE
+inside `libcef.so` and only `libvk_swiftshader.so` + `libvulkan.so.1` next to it), so it fails with
+`No such file or directory` while copying the runtime. `scripts/cef-deb.sh` assembles the same
+package layout by hand:
+
+```bash
+CEF_PATH=/opt/cef cargo build --release -p openclion   # ~21 min, LTO
+scripts/cef-deb.sh /opt/cefnew/cef_linux_x86_64        # -> target/release/bundle/deb/OpenCLion_0.1.33_amd64.deb
+```
+
+What it produces, and why:
+
+| Piece                   | Note                                                                                                                                    |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `/usr/share/OpenCLion/` | the binary and the whole CEF runtime; the binary is linked with `-rpath,$ORIGIN`, so `libcef.so` loads from its own directory           |
+| `/usr/bin/openclion`    | symlink into that directory                                                                                                             |
+| `chrome-sandbox`        | installed `4755 root:root` in the archive itself, and `postinst` re-applies it (dpkg does keep the bit here, but a build tree does not) |
+| `libcef.so`             | `strip --strip-unneeded`: 1.45 GiB → 272 MiB installed (`CEF_DEB_KEEP_SYMBOLS=1` keeps the symbols)                                     |
+| `Depends:`              | GTK4 + the Chromium runtime libraries; the bundler's defaults still name WebKitGTK                                                      |
+
+Result: **142 MB** compressed, **502 MB** installed. Installing it and launching `openclion` starts
+the app, opens the project, and typing works — including the IBus path (`nihao` + space commits
+`你好` in the editor).
+
 ## Remaining work on this branch
 
-- **Release packaging**: a bundle now has to ship `libcef.so` (1.45 GiB) plus `icudtl.dat`,
-  `locales/`, `resources.pak` and the setuid `chrome-sandbox`; `tauri build` with the v2 CLI does
-  not know about CEF yet, so the deb/appimage layout needs its own step.
-- **JavaScript packages**: `@tauri-apps/api` 2 works unchanged over the Tauri 3 IPC, but the CLI
-  and any plugin JS that must match the v3 alpha are still on v2.
-- **`@tauri-apps/cli` 3 alpha** would let `node scripts/tauri.ts build` drive a CEF bundle.
+- The `--mode perf` harness keeps the eager feature path (see `perf(startup)`), unchanged here.
+- `tauri build` itself should work again once the bundler's CEF file list matches what CEF ships;
+  the script above is the stand-in until then.

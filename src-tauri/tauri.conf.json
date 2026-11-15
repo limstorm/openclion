@@ -35,13 +35,40 @@
     "createUpdaterArtifacts": false,
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
     "category": "DeveloperTool",
-    "copyright": "Copyright \u00a9 2026 OpenCLion contributors.",
+    "copyright": "Copyright © 2026 OpenCLion contributors.",
     "license": "Apache-2.0",
     "shortDescription": "An open-source C/C++ IDE in the CLion tradition",
     "longDescription": "OpenCLion is an open-source C/C++ IDE: CMake projects, clangd code insight, LLDB debugging. UI in the IntelliJ CLion tradition. Not affiliated with JetBrains.",
     "macOS": {
       "entitlements": "./Entitlements.plist",
       "minimumSystemVersion": "11.0"
+    },
+    "linux": {
+      "deb": {
+        "postInstallScript": "linux/postinst.sh",
+        "depends": [
+          "libgtk-4-1",
+          "libglib2.0-0 | libglib2.0-0t64",
+          "libnss3",
+          "libnspr4",
+          "libgbm1",
+          "libdrm2",
+          "libxkbcommon0",
+          "libxcomposite1",
+          "libxdamage1",
+          "libxrandr2",
+          "libx11-6",
+          "libxcb1",
+          "libexpat1",
+          "libdbus-1-3",
+          "libatk-bridge2.0-0 | libatk-bridge2.0-0t64",
+          "libatspi2.0-0 | libatspi2.0-0t64",
+          "libpango-1.0-0",
+          "libcairo2",
+          "libasound2 | libasound2t64",
+          "libcups2 | libcups2t64"
+        ]
+      }
     }
   },
   "mainBinaryName": "openclion",

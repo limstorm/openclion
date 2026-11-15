@@ -80,13 +80,11 @@ pub fn run() {
     // every activation, so a watchdog keeps it there (see `x11_focus`).
     #[cfg(target_os = "linux")]
     crate::x11_focus::focus_browser_watchdog();
-    let mut cef = tauri_runtime_cef::Cef::default();
+    let cef = tauri_runtime_cef::Cef::default();
+    // Debug builds expose CDP so the harness can drive the page and inspect focus/IME.
     #[cfg(debug_assertions)]
-    {
-        // Debug builds expose CDP so the harness can drive the page and inspect focus/IME.
-        cef =
-            cef.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port { port: 9222, allowed_origins: Vec::new() });
-    }
+    let cef =
+        cef.remote_debugging(tauri_runtime_cef::RemoteDebugging::Port { port: 9222, allowed_origins: Vec::new() });
     let app = tauri::Builder::default().runtime(cef);
     // Single instance first: a second launch focuses this one and opens its path argument.
     // Debug builds have a separate identifier per worktree.
