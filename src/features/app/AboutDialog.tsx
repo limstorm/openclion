@@ -111,7 +111,7 @@ function AboutDialog({ onClose }: { onClose: () => void }) {
               <button
                 type="button"
                 className={styles.link}
-                onClick={() => void import("@tauri-apps/plugin-opener").then((o) => o.revealItemInDir(app.configDir))}
+                onClick={() => void import("@tauri-apps/plugin-opener").then((o) => o.revealItemsInDir(app.configDir))}
               >
                 {t("app.about.showConfig")}
               </button>

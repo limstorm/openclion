@@ -21,8 +21,8 @@ export function filePathChain(path: string): string[] {
 
 async function reveal(path: string) {
   try {
-    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-    await revealItemInDir(path);
+    const { revealItemsInDir } = await import("@tauri-apps/plugin-opener");
+    await revealItemsInDir(path);
   } catch (e) {
     const fileManager = revealLabel();
     notifications().notify({

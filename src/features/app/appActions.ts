@@ -18,8 +18,8 @@ export async function showLog(): Promise<void> {
   if (!isTauri()) return;
   try {
     const loc = await call(commands.appLogLocation());
-    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-    await revealItemInDir(loc.file ?? loc.dir);
+    const { revealItemsInDir } = await import("@tauri-apps/plugin-opener");
+    await revealItemsInDir(loc.file ?? loc.dir);
   } catch (e) {
     notifications().notify({ level: "error", title: t("app.log.failed"), body: errorText(e) });
   }

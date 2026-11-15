@@ -81,7 +81,7 @@ async function afterPatchSaved(path: string) {
     if (r.checked) await rememberSetting("vcs.confirmation.onPatchCreated", show ? "reveal" : "no");
     if (!show) return;
   }
-  void import("@tauri-apps/plugin-opener").then((m) => m.revealItemInDir(path)).catch(() => undefined);
+  void import("@tauri-apps/plugin-opener").then((m) => m.revealItemsInDir(path)).catch(() => undefined);
 }
 
 function CreatePatchDialog({ origin, onClose }: { origin: PatchOrigin; onClose: () => void }) {

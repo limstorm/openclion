@@ -739,8 +739,8 @@ export async function revealInFinder(nodes: ProjectNode[] = selectedNodes()) {
   const paths = nodes.map((n) => n.path);
   if (!paths.length) return;
   try {
-    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-    await revealItemInDir(paths.length === 1 ? paths[0]! : paths);
+    const { revealItemsInDir } = await import("@tauri-apps/plugin-opener");
+    await revealItemsInDir(paths.length === 1 ? paths[0]! : paths);
   } catch (e) {
     fail("Cannot reveal in Finder", e);
   }

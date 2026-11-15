@@ -64,7 +64,7 @@ export function recentMenu(project: RecentProject, onOpened?: () => void): MenuI
       label: "Show in Finder",
       icon: "external-link",
       run: () =>
-        void import("@tauri-apps/plugin-opener").then((m) => m.revealItemInDir(project.path)).catch(() => undefined),
+        void import("@tauri-apps/plugin-opener").then((m) => m.revealItemsInDir(project.path)).catch(() => undefined),
     },
     {
       id: "copy",
