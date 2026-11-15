@@ -44,10 +44,11 @@ cargo build -p openclion
 GTK4 development headers are now required (`libgtk-4-dev`); WebKitGTK is not.
 
 Chromium's setuid sandbox helper must be owned by root with mode 4755 or the process aborts at
-start-up (`The SUID sandbox helper binary was found, but is not configured correctly`):
+start-up (`The SUID sandbox helper binary was found, but is not configured correctly`). Every
+build copies a fresh helper without the setuid bit, so re-run this after each build:
 
 ```bash
-sudo chown root:root target/debug/chrome-sandbox && sudo chmod 4755 target/debug/chrome-sandbox
+scripts/cef-sandbox.sh            # chown root:root + chmod 4755 on target/debug/chrome-sandbox
 ```
 
 Chromium copies its runtime (~1.5 GiB: `libcef.so`, `icudtl.dat`, `locales/`, …) next to the
@@ -60,31 +61,46 @@ executable on every build, and writes a profile under `~/.cache/<identifier>/cef
 - Mouse: hover, clicks and wheel reach the page.
 - `cargo test -p openclion --lib` (73) and the frontend suite (477 files, 5125 tests) pass.
 
-## Known blocker: keyboard and IME
+## Keyboard and IME
 
-**Keyboard input does not reach the page.** Typing produces no `keydown` on the page even though
-`document.hasFocus()` is `true` and `Input.dispatchKeyEvent` over DevTools works.
+Chromium's browser lives in an **override-redirect X11 child window** of the GTK window
+(`CefBrowserHost` in windowed mode), and it handles pointer and key input itself. X delivers key
+events only to the window that holds the input focus; a window manager never focuses an
+override-redirect child, so the focus stays on the GTK toplevel (or on GTK's own 1×1 focus
+window) and **every keystroke is lost** — typing, IME composition and all shortcuts.
 
-Why: `tauri-runtime-cef` runs CEF in windowed mode and reparents Chromium's browser into an
-override-redirect X11 child window of the GTK4 toplevel. X delivers key events only to the window
-that holds the input focus; the window manager cannot focus an override-redirect child, and the
-runtime contains no `SendKeyEvent` forwarding (`grep send_key_event` finds nothing in
-3.0.0-alpha.7). Pointer events work because X routes them to the window under the cursor.
+`Webview::set_focus()` is not enough: it calls `CefBrowserHost::SetFocus`, which makes Chromium
+believe it is focused (`document.hasFocus()` reports `true`) but does not move the X focus. The
+runtime has no `SendKeyEvent` forwarding either, so nothing else delivers the keys.
 
-Evidence gathered on this machine (X11/xrdp, GTK 4.14):
+`src-tauri/src/x11_focus.rs` closes the gap:
 
-- A minimal Tauri 3 + CEF app with a focused `<textarea>` shows no typed text.
-- The same keystrokes type into the WebKit build of the same app (`main` branch binary).
-- Over DevTools: `document.hasFocus() === true`, `document.activeElement` is the search input, and
-  a `keydown` listener records nothing while `xdotool key a` runs.
-- `XSetInputFocus` on Chromium's child window succeeds and is accepted, but no key event reaches
-  the renderer.
+- it finds this process's own top-level windows through `_NET_WM_PID`, follows the largest mapped
+  child down to Chromium's window, and calls `XSetInputFocus` on it;
+- `focus_browser_soon()` retries for six seconds after a window is created (the browser window
+  appears about a second later);
+- `focus_browser_watchdog()` re-applies it while this process owns `_NET_ACTIVE_WINDOW`, because
+  GTK takes the X focus back on every activation — a change Tauri's own focus events do not
+  report.
 
-Until upstream forwards key events (or switches Linux to offscreen rendering with input
-forwarding), the "typing and Chinese IME work" acceptance criterion cannot be met on this branch.
-The two ways forward:
+Verified on this machine (X11/xrdp, GTK 4.14, IBus):
 
-1. Wait for a `tauri-runtime-cef` release that forwards `KeyboardInput` (winit → `SendKeyEvent`),
-   which is also what IBus/fcitx integration needs for `compositionstart/update/end`.
-2. Vendor the runtime and add that forwarding here — key mapping tables (winit → CEF key codes,
-   modifiers, character text) plus the IBus path, which is a substantial change.
+| Check                                            | Result                                                                     |
+| ------------------------------------------------ | -------------------------------------------------------------------------- |
+| ASCII typing in the editor                       | `Building protobuf` → `Building protobXYZuf`, caret where the click put it |
+| Chinese IME (IBus libpinyin, `nihao` + space)    | commits `你好` at the caret; the status bar column advances by two         |
+| `document.hasFocus()` / `document.activeElement` | `true` / the focused `cm-content`                                          |
+| Keyboard shortcuts (arrows, Enter, Ctrl+Z)       | work                                                                       |
+
+Without the fix the same keystrokes produce no `keydown` at all while `document.hasFocus()` is
+already `true` — that asymmetry is what identified the missing X focus rather than a CEF input
+bug.
+
+## Remaining work on this branch
+
+- **Release packaging**: a bundle now has to ship `libcef.so` (1.45 GiB) plus `icudtl.dat`,
+  `locales/`, `resources.pak` and the setuid `chrome-sandbox`; `tauri build` with the v2 CLI does
+  not know about CEF yet, so the deb/appimage layout needs its own step.
+- **JavaScript packages**: `@tauri-apps/api` 2 works unchanged over the Tauri 3 IPC, but the CLI
+  and any plugin JS that must match the v3 alpha are still on v2.
+- **`@tauri-apps/cli` 3 alpha** would let `node scripts/tauri.ts build` drive a CEF bundle.

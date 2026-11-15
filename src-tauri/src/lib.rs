@@ -17,6 +17,8 @@ mod logging;
 mod macos;
 mod menu;
 mod remote_dev;
+#[cfg(target_os = "linux")]
+pub mod x11_focus;
 
 mod state;
 mod theme_frame;
@@ -74,6 +76,10 @@ pub fn run() {
 
     // The shell runs on Chromium (CEF) instead of WebKitGTK. `Builder::default` is
     // type-erased over the runtime, so the rest of this crate stays runtime-agnostic.
+    // Chromium's window gets the keyboard from `x11_focus`; GTK takes the X focus back on
+    // every activation, so a watchdog keeps it there (see `x11_focus`).
+    #[cfg(target_os = "linux")]
+    crate::x11_focus::focus_browser_watchdog();
     let mut cef = tauri_runtime_cef::Cef::default();
     #[cfg(debug_assertions)]
     {
@@ -178,11 +184,14 @@ pub fn run() {
             // window manager never focuses: without this the keystrokes stop at the GTK
             // toplevel and the page (editor, IME) sees none of them.
             #[cfg(target_os = "linux")]
-            if let Some(webview) = window.app_handle().get_webview(window.label()) {
-                // Question: does CEF need this? See docs/cef-runtime.md: keyboard input does
-                // not reach the page either way in 3.0.0-alpha.7, but this is the state the
-                // browser should be in, and it is what a future release will build on.
-                let _ = webview.set_focus();
+            {
+                // CEF keeps input in Chromium's own override-redirect X11 window, which the
+                // window manager never focuses: hand it the keyboard, or the page never sees
+                // a keystroke (see `x11_focus`).
+                if let Some(webview) = window.app_handle().get_webview(window.label()) {
+                    let _ = webview.set_focus();
+                }
+                crate::x11_focus::focus_browser_soon();
             }
             application_focus::changed(window.app_handle(), true);
             if let Some(w) = window.try_state::<WindowsState>() {

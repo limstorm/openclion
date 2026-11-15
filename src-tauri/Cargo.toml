@@ -70,6 +70,10 @@ ide-plugin = { path = "../crates/ide-plugin" }
 ide-docker = { path = "../crates/ide-docker" }
 ide-github = { path = "../crates/ide-github" }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# Input focus for Chromium's X11 window, see `src/x11_focus.rs`.
+x11-dl = "2.21"
+
 # The CEF runtime: Tauri 3's default builder is type-erased (`DynRuntime`), so the
 # application keeps its runtime-agnostic types and this crate supplies the engine.
 tauri-runtime-cef = { version = "3.0.0-alpha.7", features = ["unstable"] }
