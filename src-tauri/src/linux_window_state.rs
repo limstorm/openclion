@@ -378,7 +378,7 @@ mod runtime {
         }
     }
 
-    pub fn plugin() -> TauriPlugin<tauri::Wry> {
+    pub fn plugin() -> TauriPlugin<tauri::DynRuntime> {
         tauri::plugin::Builder::new("linux-window-state")
             .setup(|app, _| {
                 let saved = app

@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "e2e-bridge",
-  "description": "Debug-only automation bridge",
+  "description": "Automation bridge capability placeholder (see Tauri 3 CEF branch notes)",
   "windows": ["main", "project-*", "settings-*"],
-  "permissions": ["mcp-bridge:default"]
+  "permissions": ["core:default"]
 }

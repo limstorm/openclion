@@ -52,7 +52,7 @@ mod native {
 
     const SUBCLASS: usize = 0x410;
 
-    pub fn init() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    pub fn init() -> tauri::plugin::TauriPlugin<tauri::DynRuntime> {
         tauri::plugin::Builder::new("window-work-area")
             .on_window_ready(|window| {
                 if window.is_decorated().unwrap_or(true) {

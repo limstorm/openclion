@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
+  "$schema": "https://schema.tauri.app/config/3",
   "productName": "OpenCLion",
   "version": "0.1.33",
   "identifier": "ai.openclion.ide",

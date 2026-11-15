@@ -1,6 +1,6 @@
 //! Development identity is tied to the compiled worktree, never the launch cwd.
 
-pub fn configure(mut context: tauri::Context<tauri::Wry>) -> tauri::Context<tauri::Wry> {
+pub fn configure(mut context: tauri::Context<tauri::DynRuntime>) -> tauri::Context<tauri::DynRuntime> {
     context.config_mut().identifier = identifier(env!("OPENCLION_WORKTREE_ROOT"));
     context
 }

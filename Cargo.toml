@@ -122,3 +122,8 @@ opt-level = 3
 panic = "unwind"
 # Keep the symbol table: crash reports and logged backtraces name functions.
 strip = "debuginfo"
+
+# `tauri-specta` 2.0.0-rc.29 is the newest release and still names Tauri 2; the vendored
+# copy only moves its `tauri` dependency to the 3.0 alpha the CEF runtime needs.
+[patch.crates-io]
+tauri-specta = { path = "vendor/tauri-specta" }

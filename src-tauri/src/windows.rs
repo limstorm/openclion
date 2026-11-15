@@ -304,6 +304,12 @@ fn build_project_window(app: &AppHandle, mut config: WindowConfig) -> IdeResult<
         .and_then(|b| dev_font_preferences(b).build())
         .map_err(|e| IdeError::internal(format!("cannot create window: {e}")))?;
     apply_zoom(app, &window);
+    // Chromium's browser is a child X11 window that the WM does not focus; give it the
+    // input focus once so typing works before the first focus change arrives.
+    #[cfg(target_os = "linux")]
+    if focused && let Some(webview) = app.get_webview(window.label()) {
+        let _ = webview.set_focus();
+    }
     #[cfg(target_os = "macos")]
     align_titlebar(app, &window);
     // "Sync with OS" needs the OS mode, known once the window exists.
@@ -931,8 +937,8 @@ fn centered(px: f64, py: f64, pw: f64, ph: f64, w: f64, h: f64) -> (f64, f64) {
 /// private selector and environment override are absent from release builds.
 #[cfg(all(debug_assertions, target_os = "macos"))]
 fn dev_font_preferences(
-    builder: WebviewWindowBuilder<'_, tauri::Wry, AppHandle>,
-) -> WebviewWindowBuilder<'_, tauri::Wry, AppHandle> {
+    builder: WebviewWindowBuilder<'_, tauri::DynRuntime, AppHandle>,
+) -> WebviewWindowBuilder<'_, tauri::DynRuntime, AppHandle> {
     if std::env::var("OPENCLION_DEV_DISALLOW_USER_FONTS").as_deref() == Ok("1") {
         use objc2::{MainThreadMarker, msg_send, sel};
         use objc2_foundation::NSObjectProtocol;
@@ -955,8 +961,8 @@ fn dev_font_preferences(
 
 #[cfg(not(all(debug_assertions, target_os = "macos")))]
 fn dev_font_preferences(
-    builder: WebviewWindowBuilder<'_, tauri::Wry, AppHandle>,
-) -> WebviewWindowBuilder<'_, tauri::Wry, AppHandle> {
+    builder: WebviewWindowBuilder<'_, tauri::DynRuntime, AppHandle>,
+) -> WebviewWindowBuilder<'_, tauri::DynRuntime, AppHandle> {
     builder
 }
 
