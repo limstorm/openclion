@@ -137,10 +137,15 @@ control:
 
 ```bash
 CEF_PATH=/opt/cef cargo build --release -p openclion    # ~21 min, LTO
-scripts/cef-package.sh --bundle deb                     # stripped libcef   -> 136 MiB (502 MiB installed)
-scripts/cef-package.sh --bundle deb --keep-symbols      # full symbols      -> 269 MiB (1.6 GiB installed)
-scripts/cef-package.sh --bundle appimage                # -> 188 MiB AppImage
+scripts/cef-package.sh --bundle deb                     # -> 133 MB deb (439 MiB installed)
+scripts/cef-package.sh --bundle appimage                # -> 183 MB AppImage
+scripts/cef-package.sh --bundle deb --keep-symbols      # debugging variant -> 275 MB (1.6 GiB installed)
 ```
+
+Everything is stripped by default — the build tree strips `libcef.so` in `build.rs`, the package
+strips the application binary on its way in, and `locales/` keeps `en-US`, `zh-CN` and `zh-TW`
+instead of the 220 `.pak` files CEF ships (49 MiB). `CEF_LOCALES=all` ships every locale,
+`--keep-symbols` (or `CEF_KEEP_SYMBOLS=1` for a build) is the only way to get symbols.
 
 | Bundle                            | Contents                                                                                                                                                                             |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

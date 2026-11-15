@@ -46,6 +46,9 @@ populate() {
   local dir="$1"
   install -d "$dir"
   install -m 0755 "$binary" "$dir/openclion"
+  # The symbol table of the application binary is 17 MiB; a package does not need it.
+  # The build tree keeps it, so local backtraces still name functions.
+  [[ "$keep_symbols" != "1" ]] && strip --strip-all "$dir/openclion" 2>/dev/null || true
   local f
   for f in libcef.so libvk_swiftshader.so libvulkan.so.1 vk_swiftshader_icd.json \
            icudtl.dat v8_context_snapshot.bin resources.pak chrome_100_percent.pak \
@@ -54,7 +57,20 @@ populate() {
   done
   [[ -x "$cef_dir/chrome-sandbox" ]] && install -m 4755 "$cef_dir/chrome-sandbox" "$dir/chrome-sandbox"
   if [[ -d "$cef_dir/locales" ]]; then
-    cp -a "$cef_dir/locales" "$dir/locales"
+    # Chromium ships one .pak per UI language (~49 MiB for 220 of them) and loads only the
+    # ones it needs. Keep the languages this IDE is used in; CEF_LOCALES=all ships every pak.
+    local wanted="${CEF_LOCALES:-en-US zh-CN zh-TW}"
+    install -d "$dir/locales"
+    if [[ "$wanted" == "all" ]]; then
+      cp -a "$cef_dir/locales/." "$dir/locales/"
+    else
+      local lang
+      for lang in $wanted; do
+        for pak in "$cef_dir/locales/$lang.pak" "$cef_dir/locales/${lang}"_*.pak; do
+          [[ -f "$pak" ]] && cp -a "$pak" "$dir/locales/"
+        done
+      done
+    fi
     chmod -R a+rX "$dir/locales"
   fi
   if [[ "$keep_symbols" != "1" && -f "$dir/libcef.so" ]]; then
