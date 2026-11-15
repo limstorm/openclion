@@ -4,11 +4,12 @@
 //! adapter from IPC to a backend crate; no domain logic lives here.
 
 mod application_focus;
+#[cfg(any(target_os = "linux", test))]
+pub mod cef_sandbox;
 mod commands;
 #[cfg(debug_assertions)]
 mod dev;
 mod events;
-#[cfg(any(target_os = "linux", test))]
 pub mod linux_rendering;
 #[cfg(any(target_os = "linux", test))]
 mod linux_window_state;
@@ -80,7 +81,10 @@ pub fn run() {
     // every activation, so a watchdog keeps it there (see `x11_focus`).
     #[cfg(target_os = "linux")]
     crate::x11_focus::focus_browser_watchdog();
-    let cef = tauri_runtime_cef::Cef::default();
+    let mut cef = tauri_runtime_cef::Cef::default();
+    if let Some(policy) = crate::cef_sandbox::policy() {
+        cef = cef.sandbox(policy);
+    }
     // Debug builds expose CDP so the harness can drive the page and inspect focus/IME.
     #[cfg(debug_assertions)]
     let cef =

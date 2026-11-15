@@ -143,6 +143,35 @@ scripts/cef-package.sh --bundle appimage                # -> 188 MiB AppImage
 All three were installed/started on this machine: the app opens the project, edits files, and
 commits `你好` from IBus at the caret.
 
+### Running from a build tree
+
+Two things make `./target/release/openclion` awkward before packaging, and both are handled in
+the build now:
+
+- **The sandbox helper.** Chromium requires `chrome-sandbox` to be `root:root 4755`; a build copies
+  a fresh one `0755`, and Chromium aborts instead of falling back (`The SUID sandbox helper binary
+  was found, but is not configured correctly`). `src-tauri/src/cef_sandbox.rs` checks the helper
+  and, when it is not root-owned 4755, asks the runtime for `SandboxPolicy::Disabled` and says so:
+
+  ```
+  openclion: …/target/release/chrome-sandbox is not root-owned 4755, so Chromium's sandbox cannot
+  start: running without it (an installed package sets this up, see scripts/cef-sandbox.sh)
+  ```
+
+  Packages are unaffected: `postinst` installs the helper correctly, so the sandbox stays on.
+  `scripts/cef-sandbox.sh` still exists for anyone who wants the sandbox in a dev tree.
+
+- **The size of `libcef.so`.** `cef-dll-sys` copies the distribution as published, symbol table
+  included: 1.45 GiB per build profile. `src-tauri/build.rs` now strips it after the copy
+  (1.45 GiB → 272 MiB) and prints a warning saying how to keep the symbols:
+
+  ```
+  warning: openclion@0.1.33: stripping …/target/release/libcef.so (set CEF_KEEP_SYMBOLS=1 to keep its symbols)
+  ```
+
+  `CEF_KEEP_SYMBOLS=1 cargo build …` keeps them; the `--keep-symbols` package build is unaffected
+  because `scripts/cef-package.sh` copies from `CEF_PATH`, not from the build tree.
+
 ### A note on killing the app
 
 Chromium starts zygote processes that outlive their parent. Killing the main process leaves them
