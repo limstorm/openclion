@@ -42,6 +42,9 @@ pub struct App {
     pub active_tab: usize,
     /// One active tool window per dock, like the web workbench stripes.
     pub left: Option<&'static str>,
+    /// Panel width in pixels. The web stores this per window; a fresh session there is 403px
+    /// wide, which is what the comparison screenshots use.
+    pub left_width: f32,
     pub right: Option<&'static str>,
     pub bottom: Option<&'static str>,
     pub palette: Option<String>,
@@ -104,6 +107,7 @@ impl App {
                 tabs: vec![welcome],
                 active_tab: 0,
                 left: Some("project"),
+                left_width: 403.0,
                 right: None,
                 bottom: None,
                 palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),

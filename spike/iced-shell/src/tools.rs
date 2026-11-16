@@ -41,9 +41,35 @@ fn icon(bytes: &'static [u8], opacity: f32) -> Element<'static, Message> {
     Svg::new(Handle::from_memory(bytes)).width(16).height(16).opacity(opacity).into()
 }
 
+/// `$HOME` abbreviated to `~`, the way the web tree renders a project path.
+fn display_path(path: &std::path::Path) -> String {
+    let text = path.to_string_lossy().into_owned();
+    match std::env::var("HOME").ok().filter(|home| !home.is_empty()) {
+        Some(home) if text.starts_with(&home) => format!("~{}", &text[home.len()..]),
+        _ => text,
+    }
+}
+
 pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
     let tokens = app.tokens();
-    let mut list = column![].spacing(1);
+    let mut list = column![].spacing(0);
+
+    // The tree toolbar the web shows under the tool window header: collapse, actions, settings.
+    list = list.push(
+        container(
+            row![
+                Space::new().width(crate::metrics::TREE_PADDING),
+                text("⌄").size(crate::metrics::FONT_TINY).color(tokens.fg_muted),
+                text("⋯").size(crate::metrics::FONT_SMALL).color(tokens.fg_muted),
+                Space::new().width(Length::Fill),
+                text("⛭").size(crate::metrics::FONT_SMALL).color(tokens.fg_muted),
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        )
+        .height(Length::Fixed(crate::metrics::FIELD))
+        .width(Length::Fill),
+    );
 
     // The web tree paints the project root as its first row.
     if let Some(project) = &app.project {
@@ -57,6 +83,10 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
                         .size(crate::metrics::FONT_UI)
                         .color(tokens.fg)
                         .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::default() }),
+                    text(display_path(&project.root))
+                        .size(crate::metrics::FONT_SMALL)
+                        .color(tokens.fg_muted)
+                        .wrapping(iced::widget::text::Wrapping::None),
                 ]
                 .spacing(crate::metrics::TREE_GAP)
                 .align_y(Alignment::Center),
@@ -77,6 +107,14 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
             tokens.fg_muted
         } else {
             tokens.fg
+        };
+        // The web tints an excluded folder's whole row instead of dimming only its text.
+        let background = if selected {
+            Some(tokens.tree_selected)
+        } else if entry.excluded {
+            Some(tokens.excluded_row)
+        } else {
+            None
         };
         let icon_opacity = if entry.excluded {
             0.5
@@ -114,7 +152,7 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
             .height(Length::Fixed(crate::metrics::ROW))
             .width(Length::Fill)
             .style(move |_theme, _status| button::Style {
-                background: selected.then(|| tokens.selected.into()),
+                background: background.map(Into::into),
                 border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
                 text_color: color,
                 ..button::Style::default()
@@ -123,7 +161,39 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         );
     }
 
-    scrollable(list).height(Length::Fill).into()
+    scrollable(list).height(Length::Fill).style(quiet_scrollbar).into()
+}
+
+/// The web tree's scrollbar is an overlay: no rail, a thin scroller.
+fn quiet_scrollbar(_theme: &iced::Theme, _status: iced::widget::scrollable::Status) -> iced::widget::scrollable::Style {
+    use iced::widget::scrollable::{Rail, Scroller, Style};
+
+    Style {
+        container: iced::widget::container::Style::default(),
+        gap: None,
+        auto_scroll: iced::widget::scrollable::AutoScroll {
+            background: iced::Background::Color(iced::Color::TRANSPARENT),
+            border: iced::Border::default(),
+            shadow: iced::Shadow::default(),
+            icon: iced::Color::TRANSPARENT,
+        },
+        vertical_rail: Rail {
+            background: None,
+            border: iced::Border::default(),
+            scroller: Scroller {
+                background: iced::Background::Color(iced::Color::TRANSPARENT),
+                border: iced::Border::default(),
+            },
+        },
+        horizontal_rail: Rail {
+            background: None,
+            border: iced::Border::default(),
+            scroller: Scroller {
+                background: iced::Background::Color(iced::Color::TRANSPARENT),
+                border: iced::Border::default(),
+            },
+        },
+    }
 }
 
 pub fn search_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
@@ -191,24 +261,4 @@ pub fn text_panel<'a>(tokens: &'a Tokens, label: &'a str) -> Element<'a, Message
         .width(Length::Fill)
         .height(Length::Fill)
         .into()
-}
-
-/// A tab strip inside a dock, for the tools that share a dock in the web workbench.
-pub fn dock_tabs<'a>(tokens: &'a Tokens, tabs: &[(&'static str, &'a str)], active: usize) -> Element<'a, Message> {
-    let mut row_of_tabs = row![].spacing(1);
-    for (index, (id, title)) in tabs.iter().enumerate() {
-        let selected = index == active;
-        row_of_tabs = row_of_tabs.push(
-            button(text(*title).size(crate::metrics::FONT_TINY))
-                .padding([3, 8])
-                .style(move |_theme, _status| button::Style {
-                    background: selected.then(|| tokens.selected.into()),
-                    border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
-                    text_color: if selected { tokens.fg } else { tokens.fg_muted },
-                    ..button::Style::default()
-                })
-                .on_press(Message::ShowTool(id)),
-        );
-    }
-    container(row_of_tabs).width(Length::Fill).into()
 }

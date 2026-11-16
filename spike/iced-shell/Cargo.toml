@@ -13,7 +13,6 @@ publish = false
 [dependencies]
 iced = { version = "0.14", default-features = false, features = [
     "tiny-skia",
-    "crisp",
     "web-colors",
     "thread-pool",
     "linux-theme-detection",

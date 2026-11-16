@@ -13,7 +13,7 @@ use crate::tokens::Tokens;
 use crate::{i18n, tools};
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let base = column![title_bar(app), row![strip(app), left_dock(app), centre(app), right_dock(app)]];
+    let base = column![title_bar(app), row![strip(app), left_dock(app), splitter(app), centre(app), right_dock(app)]];
 
     if app.palette.is_some() { stack![base, palette(app)].into() } else { base.into() }
 }
@@ -69,12 +69,24 @@ fn strip(app: &App) -> Element<'_, Message> {
         .into()
 }
 
+/// The 6px band the web puts between a tool window and the editor (`--splitter`), where a drag
+/// resizes the dock. Same width here; the drag comes with the resizable docks.
+fn splitter<'a>(app: &'a App) -> Element<'a, Message> {
+    let tokens = app.tokens();
+    let width = if app.left.is_some() { 6.0 } else { 0.0 };
+    container(Space::new().width(Length::Fixed(width)))
+        .width(Length::Fixed(width))
+        .height(Length::Fill)
+        .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
+        .into()
+}
+
 fn is_active(app: &App, id: &str) -> bool {
     app.left == Some(id) || app.right == Some(id) || app.bottom == Some(id)
 }
 
 fn left_dock(app: &App) -> Element<'_, Message> {
-    dock(app, Dock::Left, 260.0)
+    dock(app, Dock::Left, app.left_width)
 }
 
 fn right_dock(app: &App) -> Element<'_, Message> {
@@ -92,17 +104,26 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
         return Space::new().width(0).into();
     };
 
-    let titles = App::dock_titles(dock, app.language());
-    let tabs = tools::dock_tabs(tokens, &titles, titles.iter().position(|(tool_id, _)| *tool_id == id).unwrap_or(0));
+    let title =
+        i18n::t(app.language(), crate::registry::ToolWindow::by_id(id).map_or("tool.project", |tool| tool.title_key));
 
+    // `--h-header: 40px`: one tool window per dock, its title and the actions affordance.
     let header = row![
-        tabs,
-        button(text("×").size(13).color(tokens.fg_muted))
-            .padding([0, 6])
+        text(title).size(FONT_UI).color(tokens.fg),
+        text("⌄").size(FONT_TINY).color(tokens.fg_muted),
+        Space::new().width(Length::Fill),
+        // The web reveals these on hover; until hover state exists they stay visible but muted.
+        button(text("⋯").size(FONT_UI).color(tokens.fg_muted))
+            .padding([0, 4])
+            .style(|_theme, _status| button::Style { background: None, ..button::Style::default() }),
+        button(text("×").size(FONT_UI).color(tokens.fg_muted))
+            .padding([0, 4])
             .style(|_theme, _status| button::Style { background: None, ..button::Style::default() })
             .on_press(Message::HideTool(dock)),
     ]
-    .align_y(Alignment::Center);
+    .spacing(6)
+    .align_y(Alignment::Center)
+    .padding([0, 12]);
 
     let body = tool_body(app, id);
 
@@ -115,7 +136,6 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
             .width(Length::Fill)
             .style(move |_theme| container::Style {
                 background: Some(tokens.elev.into()),
-                border: tokens.border_style(),
                 ..container::Style::default()
             })
             .into()
@@ -125,7 +145,6 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
             .height(Length::Fill)
             .style(move |_theme| container::Style {
                 background: Some(tokens.elev.into()),
-                border: tokens.border_style(),
                 ..container::Style::default()
             })
             .into()
@@ -195,9 +214,11 @@ fn tabs(app: &App) -> Element<'_, Message> {
         );
     }
 
+    // Measured from the web build: the tab strip occupies 39px and a 1px border follows it,
+    // so the editor starts exactly 40px below the title bar.
     container(tabs)
         .padding([5, 4])
-        .height(Length::Fixed(TABBAR))
+        .height(Length::Fixed(TABBAR + 1.0))
         .width(Length::Fill)
         .style(move |_theme| container::Style { background: Some(tokens.elev.into()), ..container::Style::default() })
         .into()
@@ -231,6 +252,8 @@ fn editor_area(app: &App) -> Element<'_, Message> {
         caret: tokens.caret,
         preedit: tokens.warning,
         preedit_underline: tokens.warning,
+        gutter_text: tokens.gutter_text,
+        gutter_text_current: tokens.gutter_text_current,
     };
 
     container(iced_editor::Editor::new(tab.editor.clone(), app.editor_id()).palette(palette))

@@ -38,6 +38,12 @@ impl Shared {
     }
 }
 
+/// Where the line numbers end, measured from the editor's left edge in the web build: the
+/// digits "87" sit at x=471..485 with the editor at 453, so their right edge is 32px in.
+const GUTTER_NUMBERS_RIGHT: f32 = 32.0;
+/// Where the code column starts: the first glyph of `func reserve…` is at 550, i.e. 97px in.
+const TEXT_ORIGIN: f32 = 97.0;
+
 pub struct EditorState {
     rope: Rope,
     /// Caret position in `char` indices (not bytes, not graphemes: enough for the prototype).
@@ -52,6 +58,8 @@ pub struct EditorState {
     /// `(content, selection within the content)` for the IME composition.
     preedit: Option<(String, Option<Range<usize>>)>,
     dragging: bool,
+    /// Draw the line-number gutter (the web editor always has one).
+    pub gutter: bool,
 }
 
 impl EditorState {
@@ -66,6 +74,7 @@ impl EditorState {
             focused: false,
             preedit: None,
             dragging: false,
+            gutter: true,
         }
     }
 
@@ -108,7 +117,11 @@ impl EditorState {
         let line = self.scroll + (point.y / self.line_height).max(0.0) as usize;
         let line = line.min(self.line_count().saturating_sub(1));
         let paragraph = paragraph(&self.line_text(line), self.font_size, self.line_height);
-        let column = column_at_x(&paragraph, self.line_text(line).chars().count(), point.x.max(0.0));
+        let column = column_at_x(
+            &paragraph,
+            self.line_text(line).chars().count(),
+            (point.x - if self.gutter { TEXT_ORIGIN } else { 0.0 }).max(0.0),
+        );
         (self.rope.line_to_char(line) + column).min(self.rope.len_chars())
     }
 
@@ -189,6 +202,10 @@ pub struct Palette {
     pub caret: Color,
     pub preedit: Color,
     pub preedit_underline: Color,
+    /// `--fg-line-number`
+    pub gutter_text: Color,
+    /// `--fg-line-number-current`
+    pub gutter_text_current: Color,
 }
 
 impl Default for Palette {
@@ -200,6 +217,8 @@ impl Default for Palette {
             caret: Color::from_rgb(0.98, 0.98, 0.98),
             preedit: Color::from_rgb(0.98, 0.78, 0.35),
             preedit_underline: Color::from_rgb(0.95, 0.70, 0.30),
+            gutter_text: Color::from_rgb(0.294, 0.314, 0.349),
+            gutter_text_current: Color::from_rgb(0.631, 0.639, 0.671),
         }
     }
 }
@@ -412,6 +431,35 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         let first = state.scroll;
         let visible = (bounds.height / line_height).ceil() as usize + 1;
         let last = (first + visible).min(state.line_count());
+        let origin = if state.gutter { TEXT_ORIGIN } else { 0.0 };
+
+        // `--fg-line-number` numbers; the caret's line uses `--fg-line-number-current`.
+        // Monospace, so padding to three columns right-aligns the digits deterministically —
+        // no dependence on how the backend anchors aligned text.
+        if state.gutter {
+            let caret_line = state.line();
+            for line in first..last {
+                let y = bounds.y + (line - first) as f32 * line_height;
+                let color =
+                    if line == caret_line { self.palette.gutter_text_current } else { self.palette.gutter_text };
+                renderer.fill_text(
+                    text::Text {
+                        content: format!("{:>3}", line + 1),
+                        bounds: Size::new(GUTTER_NUMBERS_RIGHT, line_height),
+                        size,
+                        line_height: text::LineHeight::Absolute(Pixels::from(line_height)),
+                        font,
+                        align_x: text::Alignment::Left,
+                        align_y: iced::alignment::Vertical::Top,
+                        shaping: text::Shaping::Advanced,
+                        wrapping: text::Wrapping::None,
+                    },
+                    Point::new(bounds.x + 6.0, y),
+                    color,
+                    bounds,
+                );
+            }
+        }
 
         if let Some((start, end)) = state.selection() {
             for line in first..last {
@@ -424,8 +472,8 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 }
                 let text = state.line_text(line);
                 let paragraph = paragraph(&text, state.font_size, state.line_height);
-                let x0 = column_x(&paragraph, from - line_start);
-                let x1 = column_x(&paragraph, (to - line_start).min(length));
+                let x0 = origin + column_x(&paragraph, from - line_start);
+                let x1 = origin + column_x(&paragraph, (to - line_start).min(length));
                 let y = bounds.y + (line - first) as f32 * line_height;
                 let width = if to - line_start > length {
                     bounds.x + bounds.width - (bounds.x + x0)
@@ -460,7 +508,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     shaping: text::Shaping::Advanced,
                     wrapping: text::Wrapping::None,
                 },
-                Point::new(bounds.x, y),
+                Point::new(bounds.x + origin, y),
                 self.palette.text,
                 bounds,
             );
@@ -504,7 +552,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             let line = state.line();
             let text = state.line_text(line);
             let paragraph = paragraph(&text, state.font_size, state.line_height);
-            let x = bounds.x + column_x(&paragraph, state.column());
+            let x = bounds.x + origin + column_x(&paragraph, state.column());
             let y = bounds.y + (line - state.scroll) as f32 * line_height;
             renderer.fill_quad(
                 renderer::Quad {
