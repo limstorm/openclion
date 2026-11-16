@@ -112,7 +112,10 @@ unsafe fn our_windows(xlib: &Xlib, display: *mut Display) -> Vec<(Window, i64)> 
 /// `_NET_WM_PID` of `window`, if the window sets it.
 unsafe fn window_pid(xlib: &Xlib, display: *mut Display, window: Window, atom: x11_dl::xlib::Atom) -> Option<Pid> {
     unsafe {
-        if atom == 0 {
+        // A zero window id is what an unset `_NET_ACTIVE_WINDOW` holds; asking the
+        // server for a property of it raises `BadWindow`, which libX11's default error
+        // handler turns into `exit(1)`.
+        if atom == 0 || window == 0 {
             return None;
         }
         let (mut actual_type, mut actual_format) = (0, 0);
@@ -136,7 +139,8 @@ unsafe fn window_pid(xlib: &Xlib, display: *mut Display, window: Window, atom: x
             return None;
         }
         // A 32-bit CARDINAL comes back as one `long`.
-        let value = (actual_format == 32 && nitems >= 1).then(|| *(data as *const Pid));
+        let value = (actual_type == x11_dl::xlib::XA_CARDINAL && actual_format == 32 && nitems == 1)
+            .then(|| *(data as *const Pid));
         (xlib.XFree)(data.cast());
         value
     }
@@ -213,7 +217,7 @@ fn active_window_is_ours() -> bool {
             let (mut actual_type, mut actual_format) = (0, 0);
             let (mut nitems, mut bytes_after) = (0u64, 0u64);
             let mut data: *mut u8 = std::ptr::null_mut();
-            if atom != 0
+            let status = atom != 0
                 && (xlib.XGetWindowProperty)(
                     display,
                     root,
@@ -227,12 +231,21 @@ fn active_window_is_ours() -> bool {
                     &mut nitems,
                     &mut bytes_after,
                     &mut data,
-                ) == 0
-                && !data.is_null()
-            {
-                let active = *(data as *const Window);
-                let pid_atom = (xlib.XInternAtom)(display, c"_NET_WM_PID".as_ptr(), 0);
-                ours = window_pid(&xlib, display, active, pid_atom) == Some(std::process::id() as Pid);
+                ) == 0;
+            if status && !data.is_null() {
+                // Only a single 32-bit WINDOW is a window id. `_NET_ACTIVE_WINDOW`
+                // legitimately holds 0 when no window has focus (and the root window
+                // reports it as an empty list); requesting a property of window 0 makes
+                // the server raise `BadWindow`, which libX11's default error handler
+                // turns into `exit(1)` — the whole IDE dies because nothing is focused.
+                let usable = actual_type == x11_dl::xlib::XA_WINDOW && actual_format == 32 && nitems == 1;
+                if usable {
+                    let active = *(data as *const Window);
+                    if active != 0 {
+                        let pid_atom = (xlib.XInternAtom)(display, c"_NET_WM_PID".as_ptr(), 0);
+                        ours = window_pid(&xlib, display, active, pid_atom) == Some(std::process::id() as Pid);
+                    }
+                }
                 (xlib.XFree)(data.cast());
             }
             (xlib.XCloseDisplay)(display);
