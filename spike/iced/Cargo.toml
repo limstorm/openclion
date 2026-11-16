@@ -1,0 +1,33 @@
+# Standalone spike: can iced run this IDE's UI on a GPU-less Linux box?
+#
+# Deliberately outside the workspace (its own `[workspace]` table) so the 962-package
+# iced tree never becomes a dependency of the real build.
+[package]
+name = "iced-spike"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+# Default features minus `wgpu`: the target machine has no GPU, so the spike must run on
+# iced's `tiny-skia` software renderer — the same choice the migration plan makes (ADR-2).
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "crisp",
+    "web-colors",
+    "thread-pool",
+    "linux-theme-detection",
+    "x11",
+    "wayland",
+    "advanced-shaping",
+    "svg",
+    "markdown",
+    "highlighter",
+    "image",
+] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
