@@ -61,10 +61,12 @@
 ## 结论
 
 1. **可行**：iced 0.14 + tiny-skia 在这台无 GPU 的机器上能跑，帧开销与现有 CEF 持平，内存/体积/启动全面占优。
-2. **风险点收敛到两处**：软件光栅的天花板（1440×900 约 50 fps，与 CEF 持平，靠减少重绘区域或 GPU 后端改善），
-   以及 IME 预编辑显示（iced 0.14 的 `window::Event` 没有 Ime 变体，`Event::Ime` 只在 widget 层交付，
-   `text_editor` 只处理 Commit —— 必须自研输入层）。
-3. 计划里 M0 的验收（≥50fps、中文提交与光标正确）**通过**；建议继续 M1。
+2. **风险点收敛到两处**：软件光栅的天花板（每帧 ~16–18 ms CPU，与窗口内容量无关；换 GPU 后端或更小的
+   窗口才能进一步改善），以及 IME 预编辑显示（iced 0.14 的 `window::Event` 没有 Ime 变体，
+   `Event::Ime` 只在 widget 层交付，`text_editor` 只处理 Commit —— 必须自研输入层）。
+3. **决定性优势在 CPU**：同一段滚动，iced 910 ms vs CEF 7380 ms。内存 28 MB vs 742 MB，
+   二进制 20 MB vs 133 MB deb + 272 MB `libcef.so`。
+4. 计划里 M0 的验收（≥50fps、中文提交与光标正确）**通过**；建议继续 M1。
 
 ## 复现
 

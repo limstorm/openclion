@@ -231,7 +231,8 @@ impl Spike {
             (0, total)
         } else {
             let first = ((self.scrolled / ROW_HEIGHT).floor() as usize).saturating_sub(8);
-            let visible = (self.viewport_height / ROW_HEIGHT).ceil() as usize + 16;
+            let rows_per_frame = std::env::var("SPIKE_ROWS").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(62);
+            let visible = rows_per_frame.min((self.viewport_height / ROW_HEIGHT).ceil() as usize + 16);
             (first.min(total), (first + visible).min(total))
         };
         let visible_rows = last - first;
