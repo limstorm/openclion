@@ -25,6 +25,14 @@ iced = { version = "0.14", default-features = false, features = [
 ] }
 ropey = "1.6"
 
+[lib]
+name = "iced_editor"
+path = "src/lib.rs"
+
+[[bin]]
+name = "iced-editor"
+path = "src/main.rs"
+
 [profile.release]
 opt-level = 3
 lto = "thin"

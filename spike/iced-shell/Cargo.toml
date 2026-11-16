@@ -1,0 +1,30 @@
+# M1 slice: the workbench chrome — tool window strip, tabs, status bar, command palette.
+#
+# Reuses the editor widget from `../iced-editor` (path dependency) instead of copying it,
+# which is also the shape the real `openclion-ui` crate would take.
+[package]
+name = "iced-shell"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "crisp",
+    "web-colors",
+    "thread-pool",
+    "linux-theme-detection",
+    "x11",
+    "wayland",
+    "advanced-shaping",
+    "advanced",
+] }
+iced-editor = { path = "../iced-editor" }
+ropey = "1.6"
+
+[profile.release]
+opt-level = 3
+lto = "thin"

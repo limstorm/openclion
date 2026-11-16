@@ -179,8 +179,34 @@ impl EditorState {
     }
 }
 
+/// Colours the widget draws with; the shell passes its tokens in so the editor follows the
+/// workbench theme instead of hardcoding one.
+#[derive(Debug, Clone, Copy)]
+pub struct Palette {
+    pub background: Color,
+    pub text: Color,
+    pub selection: Color,
+    pub caret: Color,
+    pub preedit: Color,
+    pub preedit_underline: Color,
+}
+
+impl Default for Palette {
+    fn default() -> Self {
+        Self {
+            background: Color::from_rgb(0.11, 0.12, 0.14),
+            text: Color::from_rgb(0.84, 0.86, 0.90),
+            selection: Color::from_rgba(0.30, 0.45, 0.75, 0.35),
+            caret: Color::from_rgb(0.98, 0.98, 0.98),
+            preedit: Color::from_rgb(0.98, 0.78, 0.35),
+            preedit_underline: Color::from_rgb(0.95, 0.70, 0.30),
+        }
+    }
+}
+
 pub struct Editor {
     state: Shared,
+    palette: Palette,
     /// iced routes `Event::InputMethod` through the focus machinery, which needs an `Id`.
     /// It must be the *same* id every frame — a fresh `Id::unique()` per view loses focus
     /// (and with it every IME event) on the next redraw.
@@ -189,7 +215,12 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(state: Shared, id: Id) -> Self {
-        Self { state, id }
+        Self { state, id, palette: Palette::default() }
+    }
+
+    pub fn palette(mut self, palette: Palette) -> Self {
+        self.palette = palette;
+        self
     }
 }
 
@@ -313,11 +344,15 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     state.focused = true;
                 }
                 input_method::Event::Preedit(content, selection) => {
-                    eprintln!("ime: preedit {content:?} {selection:?}");
+                    if std::env::var_os("EDITOR_TRACE").is_some() {
+                        eprintln!("ime: preedit {content:?} {selection:?}");
+                    }
                     state.preedit = (!content.is_empty()).then(|| (content.clone(), selection.clone()));
                 }
                 input_method::Event::Commit(content) => {
-                    eprintln!("ime: commit {content:?}");
+                    if std::env::var_os("EDITOR_TRACE").is_some() {
+                        eprintln!("ime: commit {content:?}");
+                    }
                     state.insert(content);
                 }
                 input_method::Event::Closed => {
@@ -334,9 +369,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         // Request the input method on every event, not only the ones that changed
         // something: `text_editor` does the same, and XIM appears to attach lazily.
         {
-            if std::env::var_os("EDITOR_TRACE").is_some() {
-                eprintln!("request_input_method: enabled (focused={})", state.focused);
-            }
             shell.request_redraw();
             // Keep the candidate window at the caret, and let the runtime show the
             // composition if we ever decide not to draw it inline.
@@ -405,7 +437,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                         bounds: Rectangle::new(Point::new(bounds.x + x0, y), Size::new(width, line_height)),
                         ..renderer::Quad::default()
                     },
-                    Color::from_rgba(0.30, 0.45, 0.75, 0.35),
+                    self.palette.selection,
                 );
             }
         }
@@ -429,7 +461,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     wrapping: text::Wrapping::None,
                 },
                 Point::new(bounds.x, y),
-                Color::from_rgb(0.84, 0.86, 0.90),
+                self.palette.text,
                 bounds,
             );
         }
@@ -448,7 +480,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     bounds: Rectangle::new(Point::new(x, y + line_height - 2.0), Size::new(preedit_width, 1.0)),
                     ..renderer::Quad::default()
                 },
-                Color::from_rgb(0.95, 0.70, 0.30),
+                self.palette.preedit_underline,
             );
             renderer.fill_text(
                 text::Text {
@@ -463,7 +495,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     wrapping: text::Wrapping::None,
                 },
                 Point::new(x, y),
-                Color::from_rgb(0.98, 0.78, 0.35),
+                self.palette.preedit,
                 bounds,
             );
         }
@@ -479,7 +511,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     bounds: Rectangle::new(Point::new(x, y), Size::new(1.5, line_height)),
                     ..renderer::Quad::default()
                 },
-                Color::from_rgb(0.98, 0.98, 0.98),
+                self.palette.caret,
             );
         }
     }

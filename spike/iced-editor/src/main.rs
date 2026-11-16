@@ -6,11 +6,9 @@
 //! through `Paragraph::grapheme_position`; a real editor uses the latter, and that is the
 //! one line in `caret_x` that would change.
 
-mod editor;
-
-use editor::{Editor, Shared};
 use iced::widget::{column, container, row, text};
 use iced::{Alignment, Element, Length, Task, Theme};
+use iced_editor::{Editor, Shared, editor};
 
 fn main() -> iced::Result {
     iced::application(App::boot, App::update, App::view)
