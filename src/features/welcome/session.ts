@@ -1,7 +1,9 @@
 /**
  * "Reopen last project on startup" (IDEA: Settings › Appearance & Behavior ›
- * System Settings). The project open when the app last quit is remembered;
- * closing a project explicitly forgets it, so the next start shows the welcome screen.
+ * System Settings). The project open when the app last quit is remembered — closing a
+ * project keeps it too (closing quits the IDE, and the next start reopens it), so the
+ * welcome screen only appears when no project was ever opened here (or the remembered one
+ * is gone: that path clears the entry).
  */
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
@@ -59,7 +61,8 @@ export function reopenEnabled(settings: Settings | null | undefined, pref: boole
   return typeof general?.reopenLastProject === "boolean" ? general.reopenLastProject : pref;
 }
 
-/** Keeps the remembered project in sync: set while a project is open, cleared on explicit close. */
+/// Keeps the remembered project in sync: set while a project is open, and kept when one
+/// closes so the next start reopens it.
 export function trackSession(): () => void {
   const root = projectLocation(useProject.getState().project?.root);
   if (root) {
@@ -72,7 +75,6 @@ export function trackSession(): () => void {
     const before = projectLocation(prev.project?.root);
     if (now === before) return;
     if (now) write(SESSION_KEY, now);
-    else if (before && !useSession.getState().reopening) write(SESSION_KEY, null);
     if (now || !useSession.getState().reopening) windowProject(now);
   });
 }

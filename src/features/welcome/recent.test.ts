@@ -66,14 +66,15 @@ describe("session restore", () => {
     expect(reopenEnabled({ general: { reopenLastProject: true } } as never, false)).toBe(true);
   });
 
-  it("remembers the open project and forgets it on explicit close", () => {
+  it("remembers the open project, also across a close", () => {
     const stop = trackSession();
     useProject.setState({ project: { root: "/w/a", name: "a", trusted: true, isGit: false, settings: {} } });
     expect(lastSessionProject()).toBe("/w/a");
     useProject.setState({ project: { root: "/w/b", name: "b", trusted: true, isGit: false, settings: {} } });
     expect(lastSessionProject()).toBe("/w/b");
+    // Closing a project quits the IDE: the next start has to reopen it, not show Welcome.
     useProject.setState({ project: null });
-    expect(lastSessionProject()).toBeNull();
+    expect(lastSessionProject()).toBe("/w/b");
     stop();
   });
 });
