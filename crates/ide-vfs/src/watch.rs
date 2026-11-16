@@ -168,6 +168,12 @@ impl Watcher {
                 let Some(state) = weak.upgrade() else { return };
                 match event {
                     Ok(event) => {
+                        // The inotify watch reports opens and accesses as well; the filter drops
+                        // them, so queueing them only makes the debounce loop chew through
+                        // thousands of no-op events.
+                        if event.kind.is_access() {
+                            return;
+                        }
                         state.queue.lock().push((event, Instant::now()));
                         state.wake.notify_one();
                     }
@@ -519,7 +525,13 @@ impl EventFilter {
                 rule_dirs.insert(dir.to_path_buf());
             }
         }
-        if events.iter().flat_map(|e| &e.event.paths).any(|p| p.ends_with(".git/info/exclude")) {
+        // Reading the file is enough to produce an open/access event; only a real write or a
+        // removal may change the rules. Access events used to re-read and re-walk the whole tree
+        // on every iteration, which pinned the watcher thread at ~60% CPU.
+        let exclude_changed = events
+            .iter()
+            .any(|e| !e.event.kind.is_access() && e.event.paths.iter().any(|p| p.ends_with(".git/info/exclude")));
+        if exclude_changed {
             self.gitignore.reload_repo_level();
             rule_dirs.insert(self.root.clone());
         }
@@ -928,5 +940,36 @@ mod tests {
         assert!(wait_for(&batches, |b| all_paths(b).contains(&root.join("a.txt"))), "{:?}", batches.lock());
         std::thread::sleep(Duration::from_millis(300));
         assert!(!all_paths(&batches.lock()).contains(&root.join("sub/deep.txt")));
+    }
+
+    #[test]
+    fn reads_of_the_exclude_file_do_not_resync_ignore_rules() {
+        use notify::Event;
+        use notify::event::{AccessKind, AccessMode, DataChange, ModifyKind};
+
+        let root = std::env::temp_dir().join(format!("ide-vfs-exclude-{}", std::process::id()));
+        let exclude = root.join(".git/info/exclude");
+        std::fs::create_dir_all(exclude.parent().unwrap()).unwrap();
+        std::fs::write(&exclude, "ignored/\n").unwrap();
+        let filter = EventFilter::new(root.clone(), &[]);
+        let now = Instant::now();
+
+        // Reading the file produces an open event; it must not reload the ignore rules (that
+        // reloads and re-walks the tree, and the walk reads the file again).
+        let access = DebouncedEvent::new(
+            Event::new(EventKind::Access(AccessKind::Open(AccessMode::Any))).add_path(exclude.clone()),
+            now,
+        );
+        let (_, rules) = filter.batch_detailed(std::slice::from_ref(&access));
+        assert!(rules.is_empty(), "a read must not reload the ignore rules");
+
+        // A real write does reload them.
+        let write = DebouncedEvent::new(
+            Event::new(EventKind::Modify(ModifyKind::Data(DataChange::Any))).add_path(exclude),
+            now,
+        );
+        let (_, rules) = filter.batch_detailed(std::slice::from_ref(&write));
+        assert_eq!(rules, vec![root.clone()]);
+        std::fs::remove_dir_all(&root).ok();
     }
 }
