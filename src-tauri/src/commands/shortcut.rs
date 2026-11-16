@@ -2,10 +2,13 @@
 //! through the package manager.
 //!
 //! Linux writes freedesktop `.desktop` entries — one in the applications menu
-//! (`~/.local/share/applications`) and one on the desktop when there is one. Windows
-//! writes a `.lnk` on the desktop through WScript.Shell. macOS has no equivalent to
-//! add (the bundle lives in /Applications and the Dock is the launcher), so the menu
-//! item is not shown there.
+//! (`~/.local/share/applications`) and one on the desktop when there is one. Both are
+//! named `OpenCLion.desktop`, the file name the package installs, so this shadows the
+//! packaged entry instead of appearing next to it as a second launcher of the same app
+//! (earlier releases wrote `openclion.desktop` and left users with two entries; that file
+//! is removed when it is ours). Windows writes a `.lnk` on the desktop through
+//! WScript.Shell. macOS has no equivalent to add (the bundle lives in /Applications and
+//! the Dock is the launcher), so the menu item is not shown there.
 
 use ide_core::{IdeError, IdeResult};
 use serde::{Deserialize, Serialize};
@@ -31,6 +34,15 @@ fn executable() -> IdeResult<PathBuf> {
     std::env::current_exe().map_err(|e| IdeError::internal(format!("Cannot locate the running application: {e}")))
 }
 
+/// The launcher's file name, matching the one the package installs so a user-level copy
+/// shadows the system entry instead of duplicating it.
+#[cfg(target_os = "linux")]
+const LAUNCHER: &str = "OpenCLion.desktop";
+/// The name releases before this one wrote; removed, or it keeps showing up as a second
+/// entry for the same application.
+#[cfg(target_os = "linux")]
+const LEGACY_LAUNCHER: &str = "openclion.desktop";
+
 #[cfg(target_os = "linux")]
 fn create() -> IdeResult<Shortcut> {
     let exe = executable()?;
@@ -38,17 +50,30 @@ fn create() -> IdeResult<Shortcut> {
         dirs::data_dir().ok_or_else(|| IdeError::unavailable("No data directory for this user"))?.join("applications");
     let body = desktop_entry(&exe);
     let mut paths = Vec::new();
-    let menu = applications.join("openclion.desktop");
+    let menu = applications.join(LAUNCHER);
     write_launcher(&menu, &body, &mut paths)?;
+    remove_legacy_launcher(&applications);
     // The desktop copy is separate from the menu entry (GNOME needs both), but not when
     // the desktop directory *is* the applications directory.
     if let Some(desktop) = dirs::desktop_dir() {
-        let file = desktop.join("openclion.desktop");
+        let file = desktop.join(LAUNCHER);
         if file != menu {
             write_launcher(&file, &body, &mut paths)?;
+            remove_legacy_launcher(&desktop);
         }
     }
     Ok(Shortcut { paths: paths.into_iter().map(Into::into).collect(), target: exe.into() })
+}
+
+/// Drops the launcher name older releases wrote, but only when it is one of ours (it names
+/// this application), so a file the user made with that name survives.
+#[cfg(target_os = "linux")]
+fn remove_legacy_launcher(dir: &Path) {
+    let legacy = dir.join(LEGACY_LAUNCHER);
+    let ours = std::fs::read_to_string(&legacy).is_ok_and(|body| body.contains("Name=OpenCLion"));
+    if ours {
+        let _ = std::fs::remove_file(&legacy);
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
