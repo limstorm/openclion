@@ -45,6 +45,9 @@ struct Spike {
     viewport_height: f32,
     /// Render every row instead of windowing, to show what that costs.
     unvirtualized: bool,
+    /// Draw the same 62 strings whatever the scroll offset is: separates text shaping
+    /// from rasterisation (what a re-shaping cache would buy).
+    frozen_content: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -56,6 +59,7 @@ enum Message {
     FilterChanged(String),
     Scrolled(scrollable::Viewport),
     ToggleVirtualization,
+    ToggleFrozenContent,
     Tick,
     Window(iced::window::Event),
 }
@@ -104,6 +108,8 @@ impl Spike {
             scrolled: 0.0,
             viewport_height: 600.0,
             unvirtualized: false,
+            // SPIKE_FROZEN=1 starts with fixed row content, for a scripted A/B.
+            frozen_content: std::env::var_os("SPIKE_FROZEN").is_some(),
         };
         (state, Task::none())
     }
@@ -146,7 +152,11 @@ impl Spike {
                 self.viewport_height = viewport.bounds().height;
             }
             Message::ToggleVirtualization => self.unvirtualized = !self.unvirtualized,
+            Message::ToggleFrozenContent => self.frozen_content = !self.frozen_content,
             Message::Window(event) => {
+                // IME does not travel as a window event in 0.14: `text_editor` consumes
+                // `Event::Ime` at the widget level, which is why showing the preedit string
+                // needs our own widget (M2).
                 if std::env::var_os("SPIKE_TRACE").is_some() {
                     eprintln!("window: {event:?}");
                 }
@@ -212,7 +222,12 @@ impl Spike {
             self.list.iter().filter(|name| self.filter.is_empty() || name.contains(&self.filter)).collect();
         let total = rows.len();
         // Only the rows the viewport shows, unless the toggle asks for the naive version.
-        let (first, last) = if self.unvirtualized {
+        let (first, last) = if self.frozen_content {
+            // Same 62 strings every frame, moved to wherever the viewport is: identical
+            // text at the same place, so the only difference from the live mode is that
+            // shaping can be reused.
+            (0, self.list.len().min(62))
+        } else if self.unvirtualized {
             (0, total)
         } else {
             let first = ((self.scrolled / ROW_HEIGHT).floor() as usize).saturating_sub(8);
@@ -220,8 +235,13 @@ impl Spike {
             (first.min(total), (first + visible).min(total))
         };
         let visible_rows = last - first;
-        let above = first as f32 * ROW_HEIGHT;
-        let below = (total.saturating_sub(last)) as f32 * ROW_HEIGHT;
+        let (above, below) = if self.frozen_content {
+            let drawn = (last - first) as f32 * ROW_HEIGHT;
+            let above = self.scrolled.clamp(0.0, (total as f32 * ROW_HEIGHT - drawn).max(0.0));
+            (above, (total as f32 * ROW_HEIGHT - drawn - above).max(0.0))
+        } else {
+            (first as f32 * ROW_HEIGHT, (total.saturating_sub(last)) as f32 * ROW_HEIGHT)
+        };
 
         let mut list_column = column![].spacing(0);
         if above > 0.0 {
@@ -257,6 +277,8 @@ impl Spike {
             Space::new().height(Length::Fixed(8.0)),
             button(if self.unvirtualized { "Virtualize list" } else { "Render all rows" })
                 .on_press(Message::ToggleVirtualization),
+            button(if self.frozen_content { "Live content" } else { "Frozen content" })
+                .on_press(Message::ToggleFrozenContent),
             button("Print statistics").on_press(Message::Tick),
         ]
         .spacing(2)

@@ -61,7 +61,9 @@
 ## 结论
 
 1. **可行**：iced 0.14 + tiny-skia 在这台无 GPU 的机器上能跑，帧开销与现有 CEF 持平，内存/体积/启动全面占优。
-2. **风险点收敛到两处**：滚动路径的文本 shaping 成本（有明确解法：布局缓存），以及 IME 预编辑显示（要自研输入层）。
+2. **风险点收敛到两处**：软件光栅的天花板（1440×900 约 50 fps，与 CEF 持平，靠减少重绘区域或 GPU 后端改善），
+   以及 IME 预编辑显示（iced 0.14 的 `window::Event` 没有 Ime 变体，`Event::Ime` 只在 widget 层交付，
+   `text_editor` 只处理 Commit —— 必须自研输入层）。
 3. 计划里 M0 的验收（≥50fps、中文提交与光标正确）**通过**；建议继续 M1。
 
 ## 复现
@@ -72,5 +74,6 @@ cargo build --release
 DISPLAY=:10.0 ./target/release/iced-spike          # SPIKE_TRACE=1 打印每条消息与窗口事件
 ```
 
-界面里「Render all rows / Virtualize list」切换窗口化，用来复现上面的对照组数字；
+界面里「Render all rows / Virtualize list」切换窗口化，「Frozen content」切换内容冻结，
+用来复现上面的对照组；`SPIKE_FROZEN=1` 直接以冻结模式启动（脚本化 A/B 用）。
 「Print statistics」把当前帧统计打到 stderr。
