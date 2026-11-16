@@ -9,7 +9,7 @@
  */
 import { commands, isTauri, onIdeEvent, type Settings } from "@/platform/ipc";
 import { t } from "@/platform/i18n";
-import { closeProject, provideLeaveProjectGuard, useProject } from "@/platform/project";
+import { provideLeaveProjectGuard, useProject } from "@/platform/project";
 import { maybeEditorService, notifications, type EditorCloseSession } from "@/workbench/contributions";
 import { ask, type Ask } from "@/workbench/messages";
 
@@ -109,10 +109,12 @@ async function onCloseRequested(deps: CloseDeps): Promise<boolean> {
   try {
     const ctx = await commands.windowCloseContext();
     const s = useProject.getState();
-    // Closing the last project (or LightEdit) window closes its project and shows the welcome
-    // screen (to open another one); closing the welcome screen, or quitting, closes the window.
-    if (!ctx.quitting && ctx.windows <= 1 && (s.project || s.lightEdit)) {
-      if (await confirmLeave(deps)) await closeProject();
+    // The X on the last window quits the IDE. It used to close the project and leave the
+    // window on the welcome screen, which also meant the next launch had no project to
+    // reopen; now the project is only *left* (unsaved changes first) and the app exits.
+    if (!ctx.quitting && ctx.windows <= 1) {
+      if ((s.project || s.lightEdit) && !(await confirmLeave(deps))) return false;
+      await quitApp(deps);
       return false;
     }
     const ok = await decideClose(
