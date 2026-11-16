@@ -199,6 +199,28 @@ ps -eo pid,comm,args | awk '$2=="openclion" || $2=="chrome-sandbox" {print $1}' 
 Stripping `libcef.so` is _not_ the problem there — the 136 MiB package starts exactly like the
 1.6 GiB one once those processes are gone.
 
+## The idle CPU spin (`vendor/tauri-runtime-cef`)
+
+CEF runs with `external_message_pump: 1`, and CEF does call
+`OnScheduleMessagePumpWork` — but libcef still attaches Chromium's
+`MessagePumpGlib` work source to the default GLib context. Its `prepare` reports
+immediate work forever (so GLib polls with timeout 0), and winit's blocking
+`g_main_context_iteration` therefore never blocks: the main thread spins at
+~320k iterations/s, one core at 100%, even on the welcome screen.
+
+`tauri-runtime-cef` is vendored under `vendor/` so the host side is maintained
+here. After `cef::initialize` the runtime names its own pump source
+(`openclion-cef-pump`) and destroys any other source on the default context that
+has `G_PRIORITY_DEFAULT_IDLE` priority and allows recursion. That source only
+drives a message loop this integration never runs; with it gone the app idles at
+0–1% CPU and the window, project open, typing/IME and closing keep working. The
+spin disappears only for sources this heuristic can recognise; drop the
+workaround once a CEF/tauri-runtime-cef release selects the external pump for
+the main thread (see CEF issue #2809 for the family of bugs).
+
+The suppression is visible on stderr as
+`[glib] suppressed foreign idle GLib source(s): [<id>]`.
+
 ## Remaining work on this branch
 
 - The `--mode perf` harness keeps the eager feature path (see `perf(startup)`), unchanged here.

@@ -127,3 +127,4 @@ strip = "debuginfo"
 # copy only moves its `tauri` dependency to the 3.0 alpha the CEF runtime needs.
 [patch.crates-io]
 tauri-specta = { path = "vendor/tauri-specta" }
+tauri-runtime-cef = { path = "vendor/tauri-runtime-cef" }
