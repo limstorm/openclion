@@ -1,5 +1,5 @@
 import { executeAction, getAction, registerActions } from "@/platform/actions";
-import { isTauri } from "@/platform/ipc";
+import { commands, isTauri } from "@/platform/ipc";
 import { closeProject, confirmLeaveProject, openProject, useProject } from "@/platform/project";
 import { runSearchFieldCommand, showContextMenu } from "@/ui";
 import { showCustomizeToolbar } from "./MainToolbarDialog";
@@ -73,6 +73,15 @@ export function registerShellActions(): () => void {
         } catch (e) {
           maybeEditorService()?.cancelClose?.();
           throw e;
+        }
+        // Closing the project quits the IDE: without a project the window would fall back
+        // to the welcome screen, which is exactly what the next start has to skip. The
+        // remembered project stays (features/welcome/session.ts), so the next launch opens
+        // it directly; `restoring` keeps the workbench blank instead of flashing Welcome
+        // while the windows close.
+        if (isTauri()) {
+          useProject.setState({ restoring: true });
+          await commands.appQuit();
         }
       },
     },
