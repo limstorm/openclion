@@ -80,6 +80,9 @@ pub(crate) struct GitignoreStack {
     /// `.git/info/exclude` and the global excludes file, rooted at the repo root.
     repo_level: RwLock<Vec<Gitignore>>,
     cache: Mutex<HashMap<PathBuf, Option<Arc<Gitignore>>>>,
+    /// One stack per nested repository root, shared by every directory below it.
+    nested_stacks: Mutex<HashMap<PathBuf, Arc<GitignoreStack>>>,
+    /// The nested stack (if any) each parent directory resolves to.
     nested: Mutex<HashMap<PathBuf, Option<Arc<GitignoreStack>>>>,
 }
 
@@ -87,7 +90,13 @@ impl GitignoreStack {
     pub fn new(near: &Path) -> Self {
         let repo_root = find_repo_root(near);
         let repo_level = RwLock::new(Self::load_repo_level(repo_root.as_deref()));
-        Self { repo_root, repo_level, cache: Mutex::default(), nested: Mutex::default() }
+        Self {
+            repo_root,
+            repo_level,
+            cache: Mutex::default(),
+            nested_stacks: Mutex::default(),
+            nested: Mutex::default(),
+        }
     }
 
     fn load_repo_level(repo_root: Option<&Path>) -> Vec<Gitignore> {
@@ -120,12 +129,28 @@ impl GitignoreStack {
     /// Re-reads `.git/info/exclude` and the global excludes file.
     pub fn reload_repo_level(&self) {
         self.nested.lock().clear();
+        self.nested_stacks.lock().clear();
         *self.repo_level.write() = Self::load_repo_level(self.repo_root.as_deref());
+    }
+
+    /// The shared nested stacks, so invalidations reach their own caches too.
+    fn shared_stacks(&self) -> Vec<Arc<GitignoreStack>> {
+        self.nested_stacks.lock().values().cloned().collect()
     }
 
     /// Forgets the cached rules of `dir` and every directory below it.
     pub fn invalidate_tree(&self, dir: &Path) {
-        self.nested.lock().clear();
+        for stack in self.shared_stacks() {
+            stack.invalidate_tree(dir);
+        }
+        {
+            let mut nested = self.nested.lock();
+            // Directory membership can change (a nested repository appears or goes away);
+            // entries below `dir` were resolved against the old tree.
+            if nested.contains_key(dir) {
+                nested.retain(|k, _| !k.starts_with(dir));
+            }
+        }
         let mut cache = self.cache.lock();
         // Lookups always populate every ancestor, so no key below `dir` exists without `dir`.
         if cache.contains_key(dir) {
@@ -139,7 +164,9 @@ impl GitignoreStack {
 
     /// Forgets the cached rules of `dir` (after its `.gitignore` changed).
     pub fn invalidate(&self, dir: &Path) {
-        self.nested.lock().clear();
+        for stack in self.shared_stacks() {
+            stack.invalidate(dir);
+        }
         self.cache.lock().remove(dir);
     }
 
@@ -174,24 +201,41 @@ impl GitignoreStack {
         matcher
     }
 
+    /// The stack for the nested repository `parent` belongs to, if that is not this
+    /// stack's own repository.
+    ///
+    /// One stack per *directory* used to be built instead: every `Self::new` runs
+    /// `gix::discover` and rebuilds the global excludes matcher, so a vendored tree
+    /// (this project has five nested repositories with thousands of directories)
+    /// spent seconds to minutes of CPU in the watcher's first walk. The rules are the
+    /// same for every directory of a repository, and the stack keeps its own
+    /// per-directory `.gitignore` cache, so one stack per repository root suffices.
+    fn nested_stack(&self, parent: &Path) -> Option<Arc<GitignoreStack>> {
+        let mut nested = self.nested.lock();
+        if let Some(cached) = nested.get(parent) {
+            return cached.clone();
+        }
+        let found = find_repo_root(parent).filter(|root| self.repo_root.as_ref() != Some(root)).map(|root| {
+            let mut stacks = self.nested_stacks.lock();
+            if let Some(stack) = stacks.get(&root) {
+                return stack.clone();
+            }
+            let stack = Arc::new(Self::new(&root));
+            stacks.insert(root, stack.clone());
+            stack
+        });
+        nested.insert(parent.to_path_buf(), found.clone());
+        found
+    }
+
     /// Whether `path` (absolute) is ignored. `is_dir` refers to `path` itself.
     pub fn is_ignored(&self, path: &Path, is_dir: bool) -> bool {
         // A project's watcher can span independent nested repositories. Their local
         // excludes and ignore ancestry must stop at their own repository boundary.
-        if let Some(parent) = path.parent() {
-            let nested = self
-                .nested
-                .lock()
-                .entry(parent.to_path_buf())
-                .or_insert_with(|| {
-                    find_repo_root(parent)
-                        .filter(|root| self.repo_root.as_ref() != Some(root))
-                        .map(|_| Arc::new(Self::new(parent)))
-                })
-                .clone();
-            if let Some(nested) = nested {
-                return nested.is_ignored(path, is_dir);
-            }
+        if let Some(parent) = path.parent()
+            && let Some(nested) = self.nested_stack(parent)
+        {
+            return nested.is_ignored(path, is_dir);
         }
         if self.repo_root.as_deref() == Some(path) {
             return false;
@@ -230,20 +274,10 @@ impl GitignoreStack {
     /// ignored) still emit its own create/remove so the tree can show it
     /// appearing marked as ignored, while files inside it stay filtered out.
     pub fn is_ignored_self(&self, path: &Path, is_dir: bool) -> bool {
-        if let Some(parent) = path.parent() {
-            let nested = self
-                .nested
-                .lock()
-                .entry(parent.to_path_buf())
-                .or_insert_with(|| {
-                    find_repo_root(parent)
-                        .filter(|root| self.repo_root.as_ref() != Some(root))
-                        .map(|_| Arc::new(Self::new(parent)))
-                })
-                .clone();
-            if let Some(nested) = nested {
-                return nested.is_ignored_self(path, is_dir);
-            }
+        if let Some(parent) = path.parent()
+            && let Some(nested) = self.nested_stack(parent)
+        {
+            return nested.is_ignored_self(path, is_dir);
         }
         if self.repo_root.as_deref() == Some(path) {
             return false;
@@ -281,6 +315,32 @@ impl GitignoreStack {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_stack_per_nested_repository() {
+        let root = std::env::temp_dir().join(format!("ide-vfs-nested-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join(".git")).unwrap();
+        let nested = root.join("vendor");
+        std::fs::create_dir_all(nested.join(".git")).unwrap();
+        std::fs::write(nested.join(".gitignore"), "ignored/\n").unwrap();
+        std::fs::create_dir_all(nested.join("ignored")).unwrap();
+        for i in 0..50 {
+            std::fs::create_dir_all(nested.join(format!("pkg{i}/src"))).unwrap();
+        }
+        let stack = GitignoreStack::new(&root);
+        for i in 0..50 {
+            assert!(!stack.is_ignored(&nested.join(format!("pkg{i}/src")), true));
+            assert!(!stack.is_ignored(&nested.join(format!("pkg{i}/src/main.rs")), false));
+        }
+        // The nested repository's own rules still win.
+        assert!(stack.is_ignored(&nested.join("ignored"), true));
+        // Every directory below the nested repository shares its one stack; building one
+        // per directory rediscovered the repository and rebuilt the global matcher each
+        // time, which is what made the first watch walk crawl.
+        assert_eq!(stack.nested_stacks.lock().len(), 1);
+        std::fs::remove_dir_all(&root).ok();
+    }
 
     #[test]
     fn exclude_patterns() {
