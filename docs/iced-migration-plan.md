@@ -121,8 +121,10 @@
 M0 之后需要修正的两条：
 
 - **不做**「行布局 shaping 缓存」——冻结内容的对照实验证明 shaping 不是瓶颈；
-- **IME 预编辑可以实现**：`Event::InputMethod(Preedit(String, Range))` 会到达 `Widget::update`，
+- **IME 预编辑可以实现**：`Event::InputMethod(Preedit(String, Range))` 存在，
   `text_editor` 只是丢掉了它；自研输入层需要处理它并用 `Shell::request_input_method` 定位候选窗。
+  M2.0 原型（[`spike/iced-editor`](../spike/iced-editor)）确认：**裸 `Widget` 收不到 IME 事件**，
+  焦点必须通过 `operation::Focusable` + `Id` 注册才会被投递 —— 这是 M2 的第一项工作。
 
 **验收**：打开 1 MB C++ 文件 ≤ 100 ms；按键到上屏 ≤ 16 ms（软件渲染）；10 万行文件滚动不掉帧越界；与 CodeMirror 版行为对照清单逐项通过。
 

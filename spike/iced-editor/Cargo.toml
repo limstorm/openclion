@@ -1,0 +1,30 @@
+# M2.0 prototype: can we write the editor ourselves in iced?
+#
+# Proves the three things the migration plan still assumed: a rope-backed buffer, a caret
+# and selection drawn by our own widget, and the IME preedit string rendered on the spot
+# (which `text_editor` throws away).
+[package]
+name = "iced-editor"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+iced = { version = "0.14", default-features = false, features = [
+    "tiny-skia",
+    "crisp",
+    "web-colors",
+    "thread-pool",
+    "linux-theme-detection",
+    "x11",
+    "wayland",
+    "advanced-shaping",
+    "advanced",
+] }
+ropey = "1.6"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
