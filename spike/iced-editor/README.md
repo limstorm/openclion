@@ -19,26 +19,31 @@ DISPLAY=:10.0 ./target/release/iced-editor    # EDITOR_TRACE=1 打印 IME 事件
 | 中文渲染（字体回退）                    | ✅            |
 | IME 预编辑串                            | ❌ 见下       |
 
-## IME 为什么还没显示出来
+## IME：三个坑，都填上了
 
-原型能把 `Event::InputMethod(Preedit)` 画成"下划线 + 橙色"，但 **`update()` 根本收不到 IME 事件**，
-`EDITOR_TRACE` 只看到一次 `ime: Closed`。原因不是 iced 没有这个能力，而是：
+原型最初收不到任何 `Event::InputMethod`。逐个排查后，能显示"你好"的完整条件是这样三条：
 
-> iced 把 `Event::InputMethod` **只投递给"获得焦点"的 widget**，而焦点是
-> `operation::Focusable` + `Widget::operate` 注册的（见 `iced_widget::text_editor` 里的
-> `state.focus` 与 `operation.focusable(...)`）。裸 `Widget` 没有 `Id`、不参与这套注册，
-> 就永远收不到 IME 事件。
+1. **必须在 iced 的焦点体系里注册**：`Widget::state()` 返回一个实现 `operation::Focusable` 的
+   状态，`Widget::operate()` 里 `operation.focusable(Some(&id), bounds, state)`。
+   裸 `Widget` 不注册就永远收不到 IME 事件。
+2. **`Id` 必须跨帧稳定**：`Id::unique()` 每帧新建一个，焦点会丢、IME 随之中断
+   （最初就是这个症状：事件来了但下一帧又没了）。
+3. **不要在 key 事件里清空 preedit**：IBus 会同时发 `Keyboard` 和 `Preedit`，
+   如果键盘分支把 `preedit` 置空，候选串就永远不显示。`preedit` 只该由
+   `Commit` / `Closed` 清掉，且组合期间要把键盘的 `text` 交给 IME，不能自己插入。
 
-所以修法明确，且不涉及 fork：
+填完之后：`Preedit("你好", 6..6)` 到达 `Widget::update`，我们自己画成"橙色 + 下划线"，
+空格提交时 `Commit("你好")` 插入 rope，光标跟到后面。
 
-1. 给编辑器一个 `Id`，实现 `operation::Focusable`，在 `operate()` 里转发
-   （`operation.focusable(id, bounds, state)`）；
-2. 点击时通过 `iced::advanced::widget::operate::focus(id)` 之类的操作把焦点给自己；
-3. 焦点到手后，`Shell::request_input_method(&InputMethod::Enabled { cursor: caret_rect, .. })`
-   才会真正下发到 winit（`set_ime_allowed(true)` + `set_ime_cursor_area`），
-   `Preedit` / `Commit` 随即可用；
-4. 也可以把 `preedit` 交给 `InputMethod::Enabled` 里的 `preedit` 字段，让运行时以
-   "over-the-spot" 方式画在光标处——两条路都行。
+另一条备选路径（未采用，但可用）：把 preedit 塞进
+`InputMethod::Enabled { preedit: Some(..), .. }`，由 `iced_winit` 以
+"over-the-spot" 方式画在光标处——`iced_winit/src/window.rs` 里已实现。
+
+| 能力                            | 状态 |
+| ------------------------------- | ---- |
+| IME 组合串显示（橙字 + 下划线） | ✅   |
+| 组合期间不误插入拼音字母        | ✅   |
+| 空格/回车提交中文               | ✅   |
 
 ## 与真实编辑器的差距
 

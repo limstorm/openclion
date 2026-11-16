@@ -23,6 +23,7 @@ fn main() -> iced::Result {
 
 struct App {
     editor: Shared,
+    editor_id: iced::advanced::widget::Id,
     /// Set while the widget has focus, so the window title can show it.
     focused: bool,
 }
@@ -52,7 +53,10 @@ struct Greeter {
 ";
         let mut state = editor::EditorState::new(sample);
         state.line_height = 20.0;
-        (Self { editor: Shared::new(state), focused: false }, Task::none())
+        (
+            Self { editor: Shared::new(state), editor_id: iced::advanced::widget::Id::unique(), focused: false },
+            Task::none(),
+        )
     }
 
     fn update(&mut self, message: Message) -> Task<Message> {
@@ -71,7 +75,7 @@ struct Greeter {
     }
 
     fn view(&self) -> Element<'_, Message> {
-        let editor = Editor::new(self.editor.clone());
+        let editor = Editor::new(self.editor.clone(), self.editor_id.clone());
 
         let state = self.editor.borrow();
         let position = format!("line {} · col {} · {} chars", state.line() + 1, state.column() + 1, state.len_chars());

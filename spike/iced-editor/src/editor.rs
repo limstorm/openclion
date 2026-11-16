@@ -11,7 +11,8 @@ use std::rc::Rc;
 use iced::advanced::input_method::{self, InputMethod, Preedit, Purpose};
 use iced::advanced::renderer::Renderer as _;
 use iced::advanced::text::{self, Renderer as _};
-use iced::advanced::widget::Tree;
+use iced::advanced::widget::operation::Focusable as _;
+use iced::advanced::widget::{Id, Tree, operation, tree::State as TreeState};
 use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse, renderer};
 use iced::keyboard::key;
 use iced::{Color, Element, Event, Font, Length, Pixels, Point, Rectangle, Size};
@@ -205,11 +206,35 @@ impl EditorState {
 
 pub struct Editor {
     state: Shared,
+    /// iced routes `Event::InputMethod` through the focus machinery, which needs an `Id`.
+    /// It must be the *same* id every frame — a fresh `Id::unique()` per view loses focus
+    /// (and with it every IME event) on the next redraw.
+    id: Id,
 }
 
 impl Editor {
-    pub fn new(state: Shared) -> Self {
-        Self { state }
+    pub fn new(state: Shared, id: Id) -> Self {
+        Self { state, id }
+    }
+}
+
+/// The focus state iced's `operation::focusable` hands to us.
+#[derive(Debug, Default)]
+pub struct EditorFocus {
+    focused: bool,
+}
+
+impl operation::Focusable for EditorFocus {
+    fn is_focused(&self) -> bool {
+        self.focused
+    }
+
+    fn focus(&mut self) {
+        self.focused = true;
+    }
+
+    fn unfocus(&mut self) {
+        self.focused = false;
     }
 }
 
@@ -222,9 +247,23 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         layout::atomic(limits, Length::Fill, Length::Fill)
     }
 
+    fn state(&self) -> TreeState {
+        TreeState::new(EditorFocus::default())
+    }
+
+    fn operate(
+        &mut self,
+        tree: &mut Tree,
+        layout: Layout<'_>,
+        _renderer: &iced::Renderer,
+        operation: &mut dyn operation::Operation,
+    ) {
+        operation.focusable(Some(&self.id), layout.bounds(), tree.state.downcast_mut::<EditorFocus>());
+    }
+
     fn update(
         &mut self,
-        _tree: &mut Tree,
+        tree: &mut Tree,
         event: &Event,
         layout: Layout<'_>,
         cursor: mouse::Cursor,
@@ -241,6 +280,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
                 if let Some(point) = cursor.position_in(bounds) {
                     state.focused = true;
+                    tree.state.downcast_mut::<EditorFocus>().focus();
                     state.caret = state.position_at(point);
                     state.anchor = state.caret;
                     state.dragging = true;
@@ -298,10 +338,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 changed = true;
             }
             Event::InputMethod(ime) => match ime {
-                // spike: what does the platform actually deliver?
-                other if std::env::var_os("EDITOR_TRACE").is_some() => {
-                    eprintln!("ime: {other:?}");
-                }
                 input_method::Event::Opened => {
                     state.focused = true;
                 }
@@ -319,10 +355,19 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     state.preedit = None;
                 }
             },
-            _ => {}
+            other => {
+                if std::env::var_os("EDITOR_TRACE").is_some() {
+                    eprintln!("event: {other:?}");
+                }
+            }
         }
 
-        if changed {
+        // Request the input method on every event, not only the ones that changed
+        // something: `text_editor` does the same, and XIM appears to attach lazily.
+        {
+            if std::env::var_os("EDITOR_TRACE").is_some() {
+                eprintln!("request_input_method: enabled (focused={})", state.focused);
+            }
             shell.request_redraw();
             // Keep the candidate window at the caret, and let the runtime show the
             // composition if we ever decide not to draw it inline.
