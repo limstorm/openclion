@@ -48,15 +48,33 @@
 
 ### 中文输入
 
-| 检查                     | 结果                                                                     |
-| ------------------------ | ------------------------------------------------------------------------ |
-| ASCII                    | `EditorAction(Edit(Insert('a')))` ×3，正常插入                           |
-| IBus 拼音 `nihao` + 空格 | `EditorAction(Edit(Paste("你好")))`，在光标处提交（见截图第一行）        |
-| 中日韩字形回退           | `中文（IBus你好abc）` 正常渲染，无豆腐块                                 |
-| 组合过程显示             | iced 只交付 `Ime::Commit`（映射成 paste）；**预编辑串（preedit）不显示** |
+| 检查                     | 结果                                                              |
+| ------------------------ | ----------------------------------------------------------------- |
+| ASCII                    | `EditorAction(Edit(Insert('a')))` ×3，正常插入                    |
+| IBus 拼音 `nihao` + 空格 | `EditorAction(Edit(Paste("你好")))`，在光标处提交（见截图第一行） |
+| 中日韩字形回退           | `中文（IBus你好abc）` 正常渲染，无豆腐块                          |
+| 组合过程显示             | **预编辑串不显示**（`text_editor` 只消费 Commit）                 |
 
-最后一条是需要在 M2 里补的：真正的编辑器要自己处理 `Ime::Preedit` 才能显示候选串和光标矩形，
-`text_editor` 这一层做不到。
+### IME 的 API 在哪一层
+
+读 iced 0.14 源码确认（`iced_core/src/input_method.rs`、`iced_winit/src/conversion.rs`）：
+
+```rust
+pub enum input_method::Event {
+    Opened,
+    Preedit(String, Range<usize>),   // 组合中的字符串 + 光标区间
+    Commit(String),
+    Closed,
+}
+```
+
+winit 的 `WindowEvent::Ime` 被 `iced_winit` 原样转换成 `iced::Event::InputMethod(..)`，
+**所以 preedit 是能拿到的** —— 只是 `iced_widget::text_editor` 内部只处理 `Commit`，
+把它当 paste 应用（实测日志 `EditorAction(Edit(Paste("你好")))`）。
+
+结论：M2 的自研编辑器可以显示候选串与光标矩形，**不需要 fork iced**；要做的只是
+在 `Widget::update` 里处理 `Event::InputMethod`，并在获得焦点时用
+`Shell::request_input_method` 把候选窗放到光标处。
 
 ## 结论
 
