@@ -54,3 +54,27 @@ test("breadcrumbs follow the caret into the symbol under it", async ({ workbench
   await page.keyboard.press("Escape");
   await expect(bar).toBeHidden();
 });
+
+test("accepts English typing and a Chinese IME commit", async ({ workbench: page }) => {
+  const editor = await openFromTree(page, "CMakeLists.txt");
+  await editor.locator(".cm-content").click();
+  await page.keyboard.press("Meta+ArrowDown");
+  await page.keyboard.press("Enter");
+
+  // English arrives as ordinary key events.
+  await page.keyboard.type("hello ");
+  await expect(editor.locator(".cm-content")).toContainText("hello");
+
+  // Chinese arrives the way an input method delivers it: Chromium composes a preedit
+  // ("nihao") and then commits the chosen characters. The preedit must not be inserted
+  // as document text; only the commit is.
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.imeSetComposition", { text: "nihao", selectionStart: 5, selectionEnd: 5 });
+  // While composing, the preedit is in the DOM (the browser renders it inline) …
+  await expect(editor.locator(".cm-content")).toContainText("nihao");
+  // … and committing replaces it with the chosen characters.
+  await cdp.send("Input.insertText", { text: "你好" });
+  await expect(editor.locator(".cm-content")).toContainText("hello 你好");
+  await expect(editor.locator(".cm-content")).not.toContainText("nihao");
+  await cdp.detach();
+});
