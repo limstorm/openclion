@@ -337,6 +337,11 @@ export function ContextMenuHost() {
       offset={2}
       role="presentation"
       autoFocus={false}
+      // CEF moves the X input focus between GTK's toplevel and Chromium's child window,
+      // which makes the webview report a transient blur right after a context menu opens.
+      // Closing on that blur made right-click menus flash or never appear (mostly under
+      // XWayland); they still close on Escape, an outside click, or an action.
+      closeOnDeactivate={false}
       onClose={hideContextMenu}
       className={styles.popup}
     >
