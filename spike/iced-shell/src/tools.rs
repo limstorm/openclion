@@ -2,6 +2,7 @@
 //! shape (tree, list, table) from sample data so the chrome can be exercised before the
 //! backends are wired.
 
+use iced::widget::svg::{Handle, Svg};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
 use iced::{Alignment, Element, Length};
 
@@ -35,21 +36,9 @@ pub fn visible_rows<'a>(app: &'a crate::app::App) -> Vec<TreeRow<'a>> {
     rows
 }
 
-/// File icon by extension, in the same spirit as the web icon set (16 px glyphs for now).
-fn icon_for(entry: &crate::fs::Entry, open: bool) -> &'static str {
-    if entry.directory {
-        return if open { "▾" } else { "▸" };
-    }
-    match entry.name.rsplit_once('.').map(|(_, extension)| extension) {
-        Some("rs") => "🦀",
-        Some("go") => "◆",
-        Some("c" | "h" | "cc" | "cpp" | "cxx" | "hpp") => "▪",
-        Some("json") => "{}",
-        Some("md") => "¶",
-        Some("toml" | "yaml" | "yml") => "⚙",
-        Some("ts" | "tsx" | "js" | "mjs") => "◆",
-        _ => "·",
-    }
+/// One 16 px icon from the embedded SVG set.
+fn icon(bytes: &'static [u8], opacity: f32) -> Element<'static, Message> {
+    Svg::new(Handle::from_memory(bytes)).width(16).height(16).opacity(opacity).into()
 }
 
 pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
@@ -61,7 +50,8 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         list = list.push(
             row![
                 Space::new().width(4.0),
-                text("▾").size(11).color(tokens.accent),
+                icon(crate::icons::chevron(true, app.light), 1.0),
+                icon(crate::icons::folder_icon(app.light), 1.0),
                 text(project.name.clone())
                     .size(12)
                     .color(tokens.text)
@@ -77,16 +67,23 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         let entry = row.entry;
         let selected = app.selected.as_deref() == Some(entry.path.as_path());
         // Parity with the web tree: git-ignored entries are dimmed, excluded ones dim their icon.
+        let light = app.light;
+        let faded = entry.ignored || entry.excluded;
         let color = if selected {
             tokens.text
-        } else if entry.ignored || entry.excluded {
+        } else if faded {
             tokens.muted
         } else {
             tokens.text
         };
-        let icon_color = if entry.excluded { tokens.muted } else { tokens.accent };
+        let icon_opacity = if entry.excluded {
+            0.5
+        } else if entry.ignored {
+            0.7
+        } else {
+            1.0
+        };
         let depth = row.depth as f32 * 12.0;
-        let icon = icon_for(entry, row.open);
         let label = entry.name.clone();
         let path = entry.path.clone();
         let directory = entry.directory;
@@ -95,7 +92,17 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
             button(
                 row![
                     Space::new().width(4.0 + depth),
-                    text(icon).size(11).color(icon_color),
+                    if entry.directory {
+                        row![
+                            icon(crate::icons::chevron(row.open, light), 1.0),
+                            icon(crate::icons::folder_icon(light), icon_opacity),
+                        ]
+                        .spacing(2)
+                        .align_y(Alignment::Center)
+                        .into()
+                    } else {
+                        icon(crate::icons::file_icon(&entry.name, light), icon_opacity)
+                    },
                     text(label).size(12).color(color),
                 ]
                 .spacing(4)

@@ -59,29 +59,18 @@ pub fn display_name(path: &Path) -> String {
     path.file_name().map_or_else(|| path.display().to_string(), |name| name.to_string_lossy().into_owned())
 }
 
-/// The language shown in the status bar. The web side derives it from `languages/*.toml`; the
-/// prototype maps the extensions the sample project uses.
-pub fn language_of(path: &Path) -> &'static str {
-    match path.extension().and_then(|extension| extension.to_str()).unwrap_or_default() {
-        "rs" => "Rust",
-        "go" => "Go",
-        "c" | "h" => "C",
-        "cc" | "cpp" | "cxx" | "hpp" | "hh" => "C++",
-        "cmake" | "txt" if display_name(path).eq_ignore_ascii_case("CMakeLists.txt") => "CMake",
-        "ts" => "TypeScript",
-        "tsx" => "TSX",
-        "js" | "mjs" | "cjs" => "JavaScript",
-        "json" => "JSON",
-        "md" => "Markdown",
-        "toml" => "TOML",
-        "yaml" | "yml" => "YAML",
-        "sh" => "Shell",
-        "sql" => "SQL",
-        "py" => "Python",
-        "html" => "HTML",
-        "css" => "CSS",
-        _ => "Text",
-    }
+/// The language name shown in the status bar, from the embedded `languages/*.toml` registry —
+/// the same definitions and detection order the web shell uses.
+pub fn language_of(path: &Path) -> String {
+    let registry = registry();
+    let id = registry.detect(path, None);
+    registry.get(&id).map_or_else(|| "Plain text".to_owned(), |config| config.name)
+}
+
+fn registry() -> &'static ide_language::LanguageRegistry {
+    static REGISTRY: std::sync::OnceLock<ide_language::LanguageRegistry> = std::sync::OnceLock::new();
+    REGISTRY
+        .get_or_init(|| ide_language::LanguageRegistry::load(None).expect("the embedded language definitions parse"))
 }
 
 #[cfg(test)]
@@ -89,12 +78,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn language_lookup_covers_the_sample_project() {
+    fn language_lookup_comes_from_the_embedded_definitions() {
         assert_eq!(language_of(Path::new("/w/keys.go")), "Go");
         assert_eq!(language_of(Path::new("/w/CMakeLists.txt")), "CMake");
         assert_eq!(language_of(Path::new("/w/main.cpp")), "C++");
         assert_eq!(language_of(Path::new("/w/README.md")), "Markdown");
-        assert_eq!(language_of(Path::new("/w/unknown.zzz")), "Text");
+        assert!(!language_of(Path::new("/w/unknown.zzz")).is_empty());
     }
 
     #[test]

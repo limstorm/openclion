@@ -7,6 +7,7 @@
 mod app;
 mod fs;
 mod i18n;
+mod icons;
 mod registry;
 mod tokens;
 mod tools;

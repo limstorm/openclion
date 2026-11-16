@@ -124,8 +124,11 @@ impl App {
     }
 
     /// Language of the active tab, as shown in the status bar.
-    pub fn active_language(&self) -> &'static str {
-        self.tabs.get(self.active_tab).and_then(|tab| tab.path.as_deref()).map_or("Text", fs::language_of)
+    pub fn active_language(&self) -> String {
+        self.tabs
+            .get(self.active_tab)
+            .and_then(|tab| tab.path.as_deref())
+            .map_or_else(|| "Plain text".to_owned(), fs::language_of)
     }
 
     pub fn editor_id(&self) -> iced::advanced::widget::Id {

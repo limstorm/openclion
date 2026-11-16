@@ -229,7 +229,7 @@ fn status(app: &App) -> Element<'_, Message> {
         .unwrap_or((0, 0));
 
     let mut bar = row![].spacing(2).align_y(Alignment::Center);
-    for label in ["main".to_owned(), format!("{line}:{column}"), "UTF-8".to_owned()] {
+    for label in ["main".to_owned(), format!("{line}:{column}"), "UTF-8".to_owned(), app.active_language()] {
         bar = bar.push(container(text(label).size(11).color(tokens.muted)).padding([0, 6]));
     }
     bar = bar.push(Space::new().width(Length::Fill));

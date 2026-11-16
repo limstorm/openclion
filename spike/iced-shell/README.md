@@ -22,7 +22,9 @@ DISPLAY=:10.0 ./target/release/iced-shell      # SHELL_TRACE=1 打印按键；SH
 ## 已经能用的
 
 - 活动栏切换工具窗，左/右/底部三处 dock，dock 内标签可切换、`×` 关闭；
-- 项目树点击打开文件（`keys.go` / `main.go` / `CMakeLists.txt` / `README.md` 有真实示例内容）；
+- 项目树读**真实工程**（`ide_vfs::read_dir`，excludes 与 web 相同）；点目录展开、点文件打开真实内容；
+- 文件/文件夹图标用 web 的 **SVG 图标集**（16px，暗色/亮色各一套），git-ignored 的条目文字与图标变淡；
+- 状态栏语言名来自 `languages/*.toml`（`ide_language` 的嵌入注册表），不是手写扩展名映射；
 - 标签页切换与关闭，关闭最后一个会自动补一个 `welcome.md`；
 - 状态栏：分支、行列、编码、主题开关、语言开关、命令面板入口；
 - 命令面板：`Ctrl+Shift+P` 打开、输入过滤、点行执行、`⏎` 按钮执行；
