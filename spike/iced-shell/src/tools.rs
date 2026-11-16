@@ -8,61 +8,107 @@ use iced::{Alignment, Element, Length};
 use crate::app::Message;
 use crate::tokens::Tokens;
 
-/// A row of the project tree: depth, label, and whether it is a directory.
-pub struct Row {
+/// One visible line of the tree: the entry, how deep it sits, and whether it is expanded.
+pub struct TreeRow<'a> {
+    pub entry: &'a crate::fs::Entry,
     pub depth: usize,
-    pub label: &'static str,
-    pub directory: bool,
+    pub open: bool,
 }
 
-pub fn project_rows() -> Vec<Row> {
-    vec![
-        Row { depth: 0, label: "kwbasedb", directory: true },
-        Row { depth: 1, label: ".github", directory: true },
-        Row { depth: 1, label: "build", directory: true },
-        Row { depth: 1, label: "cmake", directory: true },
-        Row { depth: 1, label: "docs", directory: true },
-        Row { depth: 1, label: "pkg", directory: true },
-        Row { depth: 2, label: "sql", directory: true },
-        Row { depth: 1, label: "scripts", directory: true },
-        Row { depth: 1, label: "src", directory: true },
-        Row { depth: 2, label: "api", directory: true },
-        Row { depth: 2, label: "ccl", directory: true },
-        Row { depth: 2, label: "keys.go", directory: false },
-        Row { depth: 2, label: "main.go", directory: false },
-        Row { depth: 1, label: "tests", directory: true },
-        Row { depth: 2, label: "smoke_test.go", directory: false },
-        Row { depth: 1, label: "CMakeLists.txt", directory: false },
-        Row { depth: 1, label: "README.md", directory: false },
-        Row { depth: 1, label: "go.mod", directory: false },
-    ]
+/// Flattens the expanded part of the tree, in the order the web tree paints it.
+pub fn visible_rows<'a>(app: &'a crate::app::App) -> Vec<TreeRow<'a>> {
+    fn walk<'a>(app: &'a crate::app::App, dir: &std::path::Path, depth: usize, out: &mut Vec<TreeRow<'a>>) {
+        let Some(children) = app.children.get(dir) else { return };
+        for entry in children {
+            let open = app.expanded.contains(&entry.path);
+            out.push(TreeRow { entry, depth, open });
+            if entry.directory && open {
+                walk(app, &entry.path, depth + 1, out);
+            }
+        }
+    }
+
+    let mut rows = Vec::new();
+    if let Some(project) = &app.project {
+        walk(app, &project.root, 0, &mut rows);
+    }
+    rows
 }
 
-pub fn project_panel<'a>(tokens: &'a Tokens, active: Option<&str>) -> Element<'a, Message> {
+/// File icon by extension, in the same spirit as the web icon set (16 px glyphs for now).
+fn icon_for(entry: &crate::fs::Entry, open: bool) -> &'static str {
+    if entry.directory {
+        return if open { "▾" } else { "▸" };
+    }
+    match entry.name.rsplit_once('.').map(|(_, extension)| extension) {
+        Some("rs") => "🦀",
+        Some("go") => "◆",
+        Some("c" | "h" | "cc" | "cpp" | "cxx" | "hpp") => "▪",
+        Some("json") => "{}",
+        Some("md") => "¶",
+        Some("toml" | "yaml" | "yml") => "⚙",
+        Some("ts" | "tsx" | "js" | "mjs") => "◆",
+        _ => "·",
+    }
+}
+
+pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
+    let tokens = app.tokens();
     let mut list = column![].spacing(1);
-    for row in project_rows() {
-        let selected = active == Some(row.label);
-        let icon = if row.directory { "▸" } else { "·" };
-        let label = row.label;
+
+    // The web tree paints the project root as its first row.
+    if let Some(project) = &app.project {
+        list = list.push(
+            row![
+                Space::new().width(4.0),
+                text("▾").size(11).color(tokens.accent),
+                text(project.name.clone())
+                    .size(12)
+                    .color(tokens.text)
+                    .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::default() }),
+            ]
+            .spacing(4)
+            .align_y(Alignment::Center)
+            .padding([1, 4]),
+        );
+    }
+
+    for row in visible_rows(app) {
+        let entry = row.entry;
+        let selected = app.selected.as_deref() == Some(entry.path.as_path());
+        // Parity with the web tree: git-ignored entries are dimmed, excluded ones dim their icon.
+        let color = if selected {
+            tokens.text
+        } else if entry.ignored || entry.excluded {
+            tokens.muted
+        } else {
+            tokens.text
+        };
+        let icon_color = if entry.excluded { tokens.muted } else { tokens.accent };
+        let depth = row.depth as f32 * 12.0;
+        let icon = icon_for(entry, row.open);
+        let label = entry.name.clone();
+        let path = entry.path.clone();
+        let directory = entry.directory;
 
         list = list.push(
             button(
                 row![
-                    Space::new().width(row.depth as f32 * 12.0),
-                    text(icon).size(11).color(tokens.muted),
-                    text(label).size(12).color(if selected { tokens.text } else { tokens.muted }),
+                    Space::new().width(4.0 + depth),
+                    text(icon).size(11).color(icon_color),
+                    text(label).size(12).color(color),
                 ]
                 .spacing(4)
                 .align_y(Alignment::Center),
             )
-            .padding([2, 6])
+            .padding([1, 4])
             .width(Length::Fill)
             .style(move |_theme, _status| button::Style {
                 background: selected.then(|| tokens.accent_muted.into()),
-                text_color: tokens.text,
+                text_color: color,
                 ..button::Style::default()
             })
-            .on_press(Message::OpenFile(label)),
+            .on_press(if directory { Message::ToggleDir(path) } else { Message::OpenFile(path) }),
         );
     }
 

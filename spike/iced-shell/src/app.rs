@@ -3,8 +3,13 @@
 //! The shape mirrors the web app: a project, editor tabs, one active tool window per dock, a
 //! command registry with `when` contexts, a keymap, a status bar and the command palette.
 
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+
 use iced::Task;
 use iced_editor::{EditorState, Shared};
+
+use crate::fs;
 
 use crate::i18n::{self, Language};
 use crate::registry::{Command, Dock, TOOL_WINDOWS, ToolWindow, When};
@@ -12,15 +17,27 @@ use crate::tokens::Tokens;
 
 pub struct Tab {
     pub title: String,
+    /// Where the tab came from, for the language label and for reopening.
+    pub path: Option<PathBuf>,
     pub editor: Shared,
+}
+
+pub struct Project {
+    pub name: String,
+    pub root: PathBuf,
 }
 
 pub struct App {
     pub tokens: Tokens,
     pub light: bool,
     pub language: Language,
-    /// The open project, if any. Only the name is used for now.
-    pub project: Option<&'static str>,
+    /// The open project, if any.
+    pub project: Option<Project>,
+    /// Directories the tree has expanded, with their children already read.
+    pub expanded: HashSet<PathBuf>,
+    pub children: HashMap<PathBuf, Vec<fs::Entry>>,
+    /// A one-line message for the status bar (unreadable file, missing project, …).
+    pub notice: Option<String>,
     pub tabs: Vec<Tab>,
     pub active_tab: usize,
     /// One active tool window per dock, like the web workbench stripes.
@@ -33,7 +50,7 @@ pub struct App {
     editor_id: iced::advanced::widget::Id,
     pub status: String,
     /// The file selected in the project tree, to show selection in the panel.
-    pub selected: Option<&'static str>,
+    pub selected: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,7 +59,8 @@ pub enum Message {
     HideTool(Dock),
     ActivateTab(usize),
     CloseTab(usize),
-    OpenFile(&'static str),
+    ToggleDir(PathBuf),
+    OpenFile(PathBuf),
     TogglePalette,
     PaletteInput(String),
     PaletteSubmit,
@@ -54,13 +72,35 @@ pub enum Message {
 
 impl App {
     pub fn boot() -> (Self, Task<Message>) {
-        let welcome = Tab { title: "welcome.md".to_owned(), editor: Shared::new(EditorState::new(WELCOME)) };
+        let welcome =
+            Tab { title: "welcome.md".to_owned(), path: None, editor: Shared::new(EditorState::new(WELCOME)) };
+
+        // Open the same project the web version opens, so the two can be compared.
+        let root = PathBuf::from("/home/limstorm/gowork/src/gitee.com/kwbasedb");
+        let project = root.is_dir().then(|| Project { name: "kwbasedb".to_owned(), root: root.clone() });
+
+        let mut children = HashMap::new();
+        let mut expanded = HashSet::new();
+        let mut notice = None;
+        if let Some(project) = &project {
+            match fs::read_dir(&project.root) {
+                Ok(entries) => {
+                    children.insert(project.root.clone(), entries);
+                    expanded.insert(project.root.clone());
+                }
+                Err(error) => notice = Some(error),
+            }
+        }
+
         (
             Self {
                 tokens: Tokens::dark(),
                 light: false,
                 language: Language::Zh,
-                project: Some("kwbasedb"),
+                project,
+                expanded,
+                children,
+                notice,
                 tabs: vec![welcome],
                 active_tab: 0,
                 left: Some("project"),
@@ -77,10 +117,15 @@ impl App {
     }
 
     pub fn title(&self) -> String {
-        match self.project {
-            Some(project) => format!("{project} – {}", self.tabs[self.active_tab].title),
+        match &self.project {
+            Some(project) => format!("{} – {}", project.name, self.tabs[self.active_tab].title),
             None => i18n::t(self.language, "app.title").to_owned(),
         }
+    }
+
+    /// Language of the active tab, as shown in the status bar.
+    pub fn active_language(&self) -> &'static str {
+        self.tabs.get(self.active_tab).and_then(|tab| tab.path.as_deref()).map_or("Text", fs::language_of)
     }
 
     pub fn editor_id(&self) -> iced::advanced::widget::Id {
@@ -124,16 +169,39 @@ impl App {
                     self.active_tab = self.active_tab.min(self.tabs.len().saturating_sub(1));
                 }
             }
+            Message::ToggleDir(path) => {
+                if !self.expanded.remove(&path) {
+                    if !self.children.contains_key(&path) {
+                        match fs::read_dir(&path) {
+                            Ok(entries) => {
+                                self.children.insert(path.clone(), entries);
+                            }
+                            Err(error) => {
+                                self.notice = Some(error);
+                                return Task::none();
+                            }
+                        }
+                    }
+                    self.expanded.insert(path);
+                }
+            }
             Message::OpenFile(path) => {
-                self.selected = Some(path);
-                if let Some(index) = self.tabs.iter().position(|tab| tab.title == path) {
+                self.selected = Some(path.clone());
+                if let Some(index) = self.tabs.iter().position(|tab| tab.path.as_deref() == Some(path.as_path())) {
                     self.active_tab = index;
-                } else {
-                    self.tabs.push(Tab {
-                        title: path.to_owned(),
-                        editor: Shared::new(EditorState::new(&sample_content(path))),
-                    });
-                    self.active_tab = self.tabs.len() - 1;
+                    return Task::none();
+                }
+                match fs::read_text(&path) {
+                    Ok(text) => {
+                        self.tabs.push(Tab {
+                            title: fs::display_name(&path),
+                            path: Some(path),
+                            editor: Shared::new(EditorState::new(&text)),
+                        });
+                        self.active_tab = self.tabs.len() - 1;
+                        self.notice = None;
+                    }
+                    Err(error) => self.notice = Some(error),
                 }
             }
             Message::TogglePalette => {
@@ -203,7 +271,11 @@ impl App {
     }
 
     fn open_welcome(&mut self) {
-        self.tabs.push(Tab { title: "welcome.md".to_owned(), editor: Shared::new(EditorState::new(WELCOME)) });
+        self.tabs.push(Tab {
+            title: "welcome.md".to_owned(),
+            path: None,
+            editor: Shared::new(EditorState::new(WELCOME)),
+        });
         self.active_tab = 0;
     }
 
@@ -235,9 +307,24 @@ impl App {
             "app.toggleTheme" => return Task::done(Message::ToggleTheme),
             "app.toggleLanguage" => return Task::done(Message::ToggleLanguage),
             "app.quit" => return iced::exit(),
-            "file.openProject" => self.project = Some("kwbasedb"),
+            "file.openProject" => {
+                let root = PathBuf::from("/home/limstorm/gowork/src/gitee.com/kwbasedb");
+                match fs::read_dir(&root) {
+                    Ok(entries) => {
+                        self.children.clear();
+                        self.expanded.clear();
+                        self.children.insert(root.clone(), entries);
+                        self.expanded.insert(root.clone());
+                        self.project = Some(Project { name: "kwbasedb".to_owned(), root });
+                        self.notice = None;
+                    }
+                    Err(error) => self.notice = Some(error),
+                }
+            }
             "file.closeProject" => {
                 self.project = None;
+                self.expanded.clear();
+                self.children.clear();
                 self.tabs.clear();
                 self.open_welcome();
             }
@@ -279,15 +366,3 @@ const WELCOME: &str = "# OpenCLion（iced 原生外壳）\n\n\
 - Ctrl+Shift+P 打开命令面板\n\
 - 活动栏图标切工具窗（Project / Search / Git / Problems / Terminal）\n\
 - 状态栏右侧切主题、切语言\n";
-
-/// Sample text per file, until the backend provides real content.
-fn sample_content(path: &str) -> String {
-    match path {
-        "keys.go" => "package kwbase\n\n// Key is the storage key of one row.\ntype Key struct {\n\tTable string\n\tIndex uint64\n}\n\nfunc (k Key) Encode() []byte {\n\treturn []byte(fmt.Sprintf(\"%s:%d\", k.Table, k.Index))\n}\n".to_owned(),
-        "main.go" => "package main\n\nfunc main() {\n\tcfg := load()\n\tstore := open(cfg)\n\tdefer store.Close()\n}\n".to_owned(),
-        "smoke_test.go" => "package kwbase_test\n\nfunc TestSmoke(t *testing.T) {\n\tt.Run(\"open\", func(t *testing.T) {\n\t\tt.Parallel()\n\t})\n}\n".to_owned(),
-        "CMakeLists.txt" => "cmake_minimum_required(VERSION 3.20)\nproject(kwbasedb C CXX)\n\nadd_subdirectory(src)\nadd_subdirectory(tests)\n".to_owned(),
-        "README.md" => "# kwbasedb\n\nKaiwuDB 存储引擎。\n\n## Build\n\n```bash\ncmake -S . -B build\ncmake --build build -j\n```\n".to_owned(),
-        other => format!("// {other}\n// （未接后端时的占位内容）\n"),
-    }
-}

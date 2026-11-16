@@ -5,6 +5,7 @@
 //! the reusable widget from `../iced-editor`.
 
 mod app;
+mod fs;
 mod i18n;
 mod registry;
 mod tokens;

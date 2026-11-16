@@ -25,6 +25,10 @@ iced = { version = "0.14", default-features = false, features = [
 iced-editor = { path = "../iced-editor" }
 ropey = "1.6"
 
+# The domain layer, unchanged: the same crates the web shell calls through Tauri.
+ide-vfs = { path = "../../crates/ide-vfs" }
+ide-core = { path = "../../crates/ide-core" }
+
 [profile.release]
 opt-level = 3
 lto = "thin"

@@ -116,7 +116,7 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
 fn tool_body<'a>(app: &'a App, id: &'static str) -> Element<'a, Message> {
     let tokens = app.tokens();
     match id {
-        "project" => tools::project_panel(tokens, app.selected),
+        "project" => tools::project_panel(app),
         "search" => tools::search_panel(tokens),
         "git" | "commit" => tools::git_panel(tokens),
         "problems" | "inspection" | "duplicates" => tools::problems_panel(tokens),
