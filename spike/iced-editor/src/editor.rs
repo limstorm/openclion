@@ -10,7 +10,7 @@ use std::rc::Rc;
 
 use iced::advanced::input_method::{self, InputMethod, Preedit, Purpose};
 use iced::advanced::renderer::Renderer as _;
-use iced::advanced::text::{self, Renderer as _};
+use iced::advanced::text::{self, Paragraph as _, Renderer as _};
 use iced::advanced::widget::operation::Focusable as _;
 use iced::advanced::widget::{Id, Tree, operation, tree::State as TreeState};
 use iced::advanced::{Clipboard, Layout, Shell, Widget, layout, mouse, renderer};
@@ -103,37 +103,12 @@ impl EditorState {
         slice.to_string().trim_end_matches('\n').to_owned()
     }
 
-    /// Width of one character. A real editor asks the text renderer
-    /// (`Paragraph::grapheme_position`); the prototype approximates a monospace cell and
-    /// treats CJK as double width, which is close enough to place a caret.
-    fn char_width(&self, c: char) -> f32 {
-        let narrow = (c as u32) < 0x2e80;
-        self.font_size * if narrow { 0.6 } else { 1.0 }
-    }
-
-    fn column_x(&self, line: usize, column: usize) -> f32 {
-        let text = self.line_text(line);
-        text.chars().take(column).map(|c| self.char_width(c)).sum()
-    }
-
-    fn column_at_x(&self, line: usize, x: f32) -> usize {
-        let text = self.line_text(line);
-        let mut width = 0.0;
-        for (i, c) in text.chars().enumerate() {
-            let w = self.char_width(c);
-            if x < width + w / 2.0 {
-                return i;
-            }
-            width += w;
-        }
-        text.chars().count()
-    }
-
     /// Caret position for a point inside the text area.
     fn position_at(&self, point: Point) -> usize {
         let line = self.scroll + (point.y / self.line_height).max(0.0) as usize;
         let line = line.min(self.line_count().saturating_sub(1));
-        let column = self.column_at_x(line, point.x.max(0.0));
+        let paragraph = paragraph(&self.line_text(line), self.font_size, self.line_height);
+        let column = column_at_x(&paragraph, self.line_text(line).chars().count(), point.x.max(0.0));
         (self.rope.line_to_char(line) + column).min(self.rope.len_chars())
     }
 
@@ -273,7 +248,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         _viewport: &Rectangle,
     ) {
         let bounds = layout.bounds();
-        let mut changed = false;
         let mut state = self.state.borrow_mut();
 
         match event {
@@ -284,7 +258,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     state.caret = state.position_at(point);
                     state.anchor = state.caret;
                     state.dragging = true;
-                    changed = true;
                 }
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
@@ -295,7 +268,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     && let Some(point) = cursor.position_in(bounds)
                 {
                     state.caret = state.position_at(point);
-                    changed = true;
                 }
             }
             Event::Keyboard(iced::keyboard::Event::KeyPressed { key, text, modifiers, .. }) if state.focused => {
@@ -335,7 +307,6 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     }
                 }
                 state.preedit = None;
-                changed = true;
             }
             Event::InputMethod(ime) => match ime {
                 input_method::Event::Opened => {
@@ -344,12 +315,10 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 input_method::Event::Preedit(content, selection) => {
                     eprintln!("ime: preedit {content:?} {selection:?}");
                     state.preedit = (!content.is_empty()).then(|| (content.clone(), selection.clone()));
-                    changed = true;
                 }
                 input_method::Event::Commit(content) => {
                     eprintln!("ime: commit {content:?}");
                     state.insert(content);
-                    changed = true;
                 }
                 input_method::Event::Closed => {
                     state.preedit = None;
@@ -371,11 +340,10 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             shell.request_redraw();
             // Keep the candidate window at the caret, and let the runtime show the
             // composition if we ever decide not to draw it inline.
+            let line_text = state.line_text(state.line());
+            let caret_x = column_x(&paragraph(&line_text, state.font_size, state.line_height), state.column());
             let caret = Rectangle::new(
-                Point::new(
-                    state.column_x(state.line(), state.column()),
-                    (state.line() - state.scroll) as f32 * state.line_height,
-                ),
+                Point::new(caret_x, (state.line() - state.scroll) as f32 * state.line_height),
                 Size::new(2.0, state.line_height),
             );
             let preedit = state.preedit.clone().map(|(content, selection)| Preedit {
@@ -422,8 +390,10 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 if from >= to {
                     continue;
                 }
-                let x0 = state.column_x(line, from - line_start);
-                let x1 = state.column_x(line, (to - line_start).min(length));
+                let text = state.line_text(line);
+                let paragraph = paragraph(&text, state.font_size, state.line_height);
+                let x0 = column_x(&paragraph, from - line_start);
+                let x1 = column_x(&paragraph, (to - line_start).min(length));
                 let y = bounds.y + (line - first) as f32 * line_height;
                 let width = if to - line_start > length {
                     bounds.x + bounds.width - (bounds.x + x0)
@@ -464,19 +434,18 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             );
         }
 
-        // The IME composition, drawn on the spot: underlined, after the caret.
+        // The IME composition, drawn on the spot: underlined, at the caret.
         if let Some((content, _)) = &state.preedit
             && state.focused
         {
             let line = state.line();
-            let x = bounds.x + state.column_x(line, state.column());
+            let line_text = state.line_text(line);
+            let x = bounds.x + column_x(&paragraph(&line_text, state.font_size, state.line_height), state.column());
             let y = bounds.y + (line - state.scroll) as f32 * line_height;
+            let preedit_width = paragraph(content, state.font_size, state.line_height).min_bounds().width;
             renderer.fill_quad(
                 renderer::Quad {
-                    bounds: Rectangle::new(
-                        Point::new(x, y + line_height - 2.0),
-                        Size::new(state.column_x(0, 0) + content_width(&state, content), 1.0),
-                    ),
+                    bounds: Rectangle::new(Point::new(x, y + line_height - 2.0), Size::new(preedit_width, 1.0)),
                     ..renderer::Quad::default()
                 },
                 Color::from_rgb(0.95, 0.70, 0.30),
@@ -501,7 +470,9 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
 
         if state.focused {
             let line = state.line();
-            let x = bounds.x + state.column_x(line, state.column());
+            let text = state.line_text(line);
+            let paragraph = paragraph(&text, state.font_size, state.line_height);
+            let x = bounds.x + column_x(&paragraph, state.column());
             let y = bounds.y + (line - state.scroll) as f32 * line_height;
             renderer.fill_quad(
                 renderer::Quad {
@@ -525,8 +496,36 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
     }
 }
 
-fn content_width(state: &EditorState, content: &str) -> f32 {
-    content.chars().map(|c| state.char_width(c)).sum()
+/// Lays out one line, unbounded, with the same parameters the draw pass uses.
+fn paragraph(content: &str, size: f32, line_height: f32) -> <iced::Renderer as text::Renderer>::Paragraph {
+    <iced::Renderer as text::Renderer>::Paragraph::with_text(text::Text {
+        content,
+        bounds: Size::new(f32::INFINITY, line_height),
+        size: Pixels::from(size),
+        line_height: text::LineHeight::Absolute(Pixels::from(line_height)),
+        font: Font::MONOSPACE,
+        align_x: text::Alignment::Left,
+        align_y: iced::alignment::Vertical::Top,
+        shaping: text::Shaping::Advanced,
+        wrapping: text::Wrapping::None,
+    })
+}
+
+/// x of a caret sitting before `column` characters of `line` (0-based, grapheme-ish).
+fn column_x(paragraph: &<iced::Renderer as text::Renderer>::Paragraph, column: usize) -> f32 {
+    use iced::advanced::text::Paragraph as _;
+
+    paragraph.grapheme_position(0, column).map_or(0.0, |point| point.x)
+}
+
+/// Nearest column for a click at `x`, using the same metrics the draw pass uses.
+fn column_at_x(paragraph: &<iced::Renderer as text::Renderer>::Paragraph, length: usize, x: f32) -> usize {
+    for column in 0..=length {
+        if x < column_x(paragraph, column) {
+            return column.saturating_sub(1);
+        }
+    }
+    length
 }
 
 impl<'a, Message> From<Editor> for Element<'a, Message>
@@ -535,5 +534,56 @@ where
 {
     fn from(editor: Editor) -> Self {
         Element::new(editor)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SIZE: f32 = 14.0;
+    const LINE_HEIGHT: f32 = 20.0;
+
+    /// A CJK glyph must be wider than an ASCII one, and the positions must grow.
+    #[test]
+    fn cjk_is_wider_than_ascii() {
+        let ascii = paragraph("aaa", SIZE, LINE_HEIGHT);
+        let cjk = paragraph("中中中", SIZE, LINE_HEIGHT);
+
+        assert!(column_x(&cjk, 1) > column_x(&ascii, 1) * 1.5);
+        assert!(column_x(&ascii, 1) > column_x(&ascii, 0));
+        assert_eq!(column_x(&ascii, 0), 0.0);
+    }
+
+    /// Clicking at the x of a column must give that column back, for mixed text too.
+    #[test]
+    fn x_and_column_round_trip() {
+        for line in ["fn main() {", "// 中文（IBus）注释", "a中b文c", ""] {
+            let paragraph = paragraph(line, SIZE, LINE_HEIGHT);
+            let length = line.chars().count();
+            for column in 0..=length {
+                let x = column_x(&paragraph, column);
+                assert_eq!(column_at_x(&paragraph, length, x), column, "line {line:?} column {column} at x {x}");
+            }
+        }
+    }
+
+    /// The rope operations the widget drives: insert, delete, move.
+    #[test]
+    fn edits_go_through_the_rope() {
+        let mut state = EditorState::new("ab\ncd");
+
+        state.caret = 1;
+        state.anchor = 1;
+        state.insert("中");
+        assert_eq!(state.len_chars(), 6);
+        assert_eq!(state.line(), 0);
+        assert_eq!(state.column(), 2);
+
+        state.backspace();
+        assert_eq!(state.len_chars(), 5);
+
+        state.move_vertical(1, false);
+        assert_eq!(state.line(), 1);
     }
 }

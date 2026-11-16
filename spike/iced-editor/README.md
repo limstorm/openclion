@@ -45,8 +45,27 @@ DISPLAY=:10.0 ./target/release/iced-editor    # EDITOR_TRACE=1 打印 IME 事件
 | 组合期间不误插入拼音字母        | ✅   |
 | 空格/回车提交中文               | ✅   |
 
+## 字形度量：不用估算，用 cosmic-text 的真实布局
+
+第一版按"ASCII 0.6em / CJK 1em"估算列宽——能跑，但光标和选区会跟字形错位（尤其中文与
+比例字体）。现在改成向 iced 的 `Paragraph` 要位置：
+
+```rust
+paragraph.grapheme_position(0, column)   // 光标/选区的 x
+```
+
+`paragraph()` 用和绘制完全相同的参数（字号、字体、`Shaping::Advanced`、`Wrapping::None`）布局
+同一行，所以"画在哪"和"算在哪"是同一份度量。点击定位用同一份度量反算列号。
+
+三条测试（`cargo test`，不需要窗口）：
+
+| 测试                        | 断言                                                                                    |
+| --------------------------- | --------------------------------------------------------------------------------------- |
+| `cjk_is_wider_than_ascii`   | 中文字宽 > 1.5 × ASCII 字宽                                                             |
+| `x_and_column_round_trip`   | 对每列取 x 再反算列号，`fn main() {` / `// 中文（IBus）注释` / `a中b文c` / 空行全部还原 |
+| `edits_go_through_the_rope` | 插入中文、退格、跨行移动后行列正确                                                      |
+
 ## 与真实编辑器的差距
 
-原型刻意省掉的部分（M2 里要做）：真实字形度量（现在用"0.6em/1em"估算列宽，
-应当改用 `Paragraph::grapheme_position` / `hit_test`）、语法高亮、多光标、折叠、
-自动缩进、undo/redo、查找替换、双向文本、滚动条、行号栏。
+剩下的（M2 里要做）：语法高亮、多光标、折叠、自动缩进、undo/redo、查找替换、
+双向文本、滚动条、行号/折叠栏、大文件视口裁剪（现在按行数裁，未做"超长单行"的字符级裁剪）。
