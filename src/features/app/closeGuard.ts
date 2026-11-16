@@ -114,8 +114,12 @@ async function onCloseRequested(deps: CloseDeps): Promise<boolean> {
     // reopen; now the project is only *left* (unsaved changes first) and the app exits.
     if (!ctx.quitting && ctx.windows <= 1) {
       if ((s.project || s.lightEdit) && !(await confirmLeave(deps))) return false;
-      await quitApp(deps);
-      return false;
+      if (!(await confirmExit(deps))) return false;
+      // Let this window close and the runtime exit once it is the last one gone.
+      // Asking the backend to quit here would call `window.close()` from inside this
+      // handler; that re-entrant close request meets the `closing` guard above and is
+      // rejected, so the quit stalled with the window still open.
+      return true;
     }
     const ok = await decideClose(
       {
@@ -147,16 +151,19 @@ export function confirmLeave(deps: CloseDeps = defaultDeps): Promise<boolean> {
   );
 }
 
+/** The `general.confirmExit` prompt, if the setting is on. */
+function confirmExit(deps: CloseDeps): Promise<boolean> {
+  if (!confirmExitEnabled(useProject.getState().settings)) return Promise.resolve(true);
+  return decideClose(
+    { quitting: false, windows: 1, confirmExit: true, dirty: 0, project: null },
+    { ...deps, prepareClose: undefined },
+  );
+}
+
 /** Quit: confirm once (if enabled), then let the backend close every window. */
 export async function quitApp(deps: CloseDeps = defaultDeps): Promise<void> {
   if (!isTauri()) return;
-  if (confirmExitEnabled(useProject.getState().settings)) {
-    const ok = await decideClose(
-      { quitting: false, windows: 1, confirmExit: true, dirty: 0, project: null },
-      { ...deps, prepareClose: undefined },
-    );
-    if (!ok) return;
-  }
+  if (!(await confirmExit(deps))) return;
   await commands.appQuit();
 }
 
