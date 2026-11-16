@@ -407,7 +407,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         let size = Pixels::from(state.font_size);
         let line_height = state.line_height;
 
-        renderer.fill_quad(renderer::Quad { bounds, ..renderer::Quad::default() }, Color::from_rgb(0.11, 0.12, 0.14));
+        renderer.fill_quad(renderer::Quad { bounds, ..renderer::Quad::default() }, self.palette.background);
 
         let first = state.scroll;
         let visible = (bounds.height / line_height).ceil() as usize + 1;

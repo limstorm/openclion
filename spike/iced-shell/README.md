@@ -39,6 +39,23 @@ cargo test --release             # registry 4 项：id 唯一、keymap 命令存
 (cd ../iced-editor && cargo test --release)   # 3 项：CJK 宽度、x↔列号往返、rope 编辑
 ```
 
+## 像素对齐（与 webview 版对照）
+
+从 `src/styles/tokens.css` 抄下来的度量放在 `src/metrics.rs`，颜色抄进 `src/tokens.rs`，
+字体用 web 打包的同一套（`@fontsource` 的 Inter / JetBrains Mono，转成 ttf 后 `include_bytes!`）。
+
+在 1920 宽的窗口上，用"整列像素游程"量出来：
+
+| 区域                    | web 实测                          | 本工程实测         | 结论                  |
+| ----------------------- | --------------------------------- | ------------------ | --------------------- |
+| 标题栏                  | 40 px (`--h-titlebar`)            | 40 px              | ✅                    |
+| 标签栏（含 1px 分隔线） | 39 px (`--h-tabbar: 38` + border) | 38 + 1 = 39 px     | ✅                    |
+| 状态栏                  | 34 px (`--h-statusbar: 30` + 4)   | 34 px              | ✅                    |
+| 树行距                  | 24 px (`--h-row`)                 | 24 px              | ✅                    |
+| 活动栏宽度              | 44 px                             | 45 px              | ⚠️ 差 1px             |
+| 面板与编辑区之间的分隔  | 6 px 分隔条                       | 未实现（仅有边框） | ⚠️ 待做               |
+| 工具窗/面板默认宽度     | 会话值（可拖拽）                  | 固定 260           | ⚠️ 会话值，需要可拖拽 |
+
 ## 已知问题（下一步）
 
 1. **命令面板里的 Enter 不生效**：焦点在 `text_input` 时 iced 吞掉 Enter，`on_submit` 在 overlay 里没有触发

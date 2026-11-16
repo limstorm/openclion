@@ -7,14 +7,34 @@ use iced::widget::{Space, button, column, container, row, scrollable, stack, tex
 use iced::{Alignment, Border, Element, Length};
 
 use crate::app::{App, Message};
+use crate::metrics::*;
 use crate::registry::{Command, Dock, TOOL_WINDOWS};
-
+use crate::tokens::Tokens;
 use crate::{i18n, tools};
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let base = row![strip(app), left_dock(app), centre(app), right_dock(app)];
+    let base = column![title_bar(app), row![strip(app), left_dock(app), centre(app), right_dock(app)]];
 
     if app.palette.is_some() { stack![base, palette(app)].into() } else { base.into() }
+}
+
+/// `--h-titlebar: 40px`, painted in `--bg-frame`: the web shell has its own title bar and the
+/// native window has none, so drawing it is what makes the two line up.
+fn title_bar(app: &App) -> Element<'_, Message> {
+    let tokens = app.tokens();
+    let title = match &app.project {
+        Some(project) => format!("{} – {}", project.name, app.tabs[app.active_tab].title),
+        None => i18n::t(app.language(), "app.title").to_owned(),
+    };
+
+    container(
+        row![Space::new().width(STRIPE), text(title).size(FONT_UI).color(tokens.fg_secondary),]
+            .align_y(Alignment::Center),
+    )
+    .height(Length::Fixed(TITLEBAR))
+    .width(Length::Fill)
+    .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
+    .into()
 }
 
 /// The activity bar: every tool window, grouped by dock, the active one highlighted.
@@ -26,11 +46,13 @@ fn strip(app: &App) -> Element<'_, Message> {
         for tool in TOOL_WINDOWS.iter().filter(|tool| tool.dock == dock) {
             let active = is_active(app, tool.id);
             buttons = buttons.push(
-                button(text(tool.icon).size(15))
-                    .padding([5, 8])
+                button(text(tool.icon).size(16))
+                    .padding([0, 0])
+                    .width(Length::Fixed(STRIPE))
+                    .height(Length::Fixed(STRIPE_BUTTON))
                     .style(move |_theme, _status| button::Style {
-                        background: active.then(|| tokens.accent_muted.into()),
-                        text_color: if active { tokens.accent } else { tokens.muted },
+                        background: active.then(|| tokens.selected.into()),
+                        text_color: if active { tokens.accent } else { tokens.fg_muted },
                         ..button::Style::default()
                     })
                     .on_press(Message::ShowTool(tool.id)),
@@ -40,14 +62,10 @@ fn strip(app: &App) -> Element<'_, Message> {
     }
 
     container(buttons)
-        .padding(4)
-        .width(Length::Fixed(40.0))
+        .padding([0, 0])
+        .width(Length::Fixed(STRIPE))
         .height(Length::Fill)
-        .style(move |_theme| container::Style {
-            background: Some(tokens.panel.into()),
-            border: tokens.border_style(),
-            ..container::Style::default()
-        })
+        .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
         .into()
 }
 
@@ -79,7 +97,7 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
 
     let header = row![
         tabs,
-        button(text("×").size(13).color(tokens.muted))
+        button(text("×").size(13).color(tokens.fg_muted))
             .padding([0, 6])
             .style(|_theme, _status| button::Style { background: None, ..button::Style::default() })
             .on_press(Message::HideTool(dock)),
@@ -88,14 +106,15 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
 
     let body = tool_body(app, id);
 
-    let panel = column![header, body].height(Length::Fill);
+    let panel =
+        column![container(header).height(Length::Fixed(HEADER)).align_y(Alignment::Center), body].height(Length::Fill);
 
     if dock == Dock::Bottom {
         container(panel)
             .height(Length::Fixed(200.0))
             .width(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(tokens.panel.into()),
+                background: Some(tokens.elev.into()),
                 border: tokens.border_style(),
                 ..container::Style::default()
             })
@@ -105,7 +124,7 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
             .width(Length::Fixed(width))
             .height(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(tokens.panel.into()),
+                background: Some(tokens.elev.into()),
                 border: tokens.border_style(),
                 ..container::Style::default()
             })
@@ -135,6 +154,7 @@ fn tool_body<'a>(app: &'a App, id: &'static str) -> Element<'a, Message> {
 fn centre(app: &App) -> Element<'_, Message> {
     column![
         tabs(app),
+        divider(app.tokens()),
         editor_area(app),
         if app.bottom.is_some() { dock(app, Dock::Bottom, 0.0) } else { Space::new().height(0).into() },
         status(app),
@@ -153,21 +173,22 @@ fn tabs(app: &App) -> Element<'_, Message> {
         tabs = tabs.push(
             button(
                 row![
-                    text(tab.title.clone()).size(12).color(if active { tokens.text } else { tokens.muted }),
-                    text("×").size(11).color(tokens.muted),
+                    text(tab.title.clone()).size(12).color(if active { tokens.fg } else { tokens.fg_muted }),
+                    text("×").size(11).color(tokens.fg_muted),
                 ]
                 .spacing(8)
                 .align_y(Alignment::Center),
             )
-            .padding([4, 10])
+            .padding([0, 10])
+            .height(Length::Fixed(TAB))
             .style(move |_theme, _status| button::Style {
-                background: Some(if active { tokens.background } else { tokens.panel }.into()),
+                background: Some(if active { tokens.tab_selected } else { tokens.app }.into()),
                 border: Border {
-                    color: if active { tokens.accent } else { tokens.border },
-                    width: if active { 1.5 } else { 1.0 },
-                    radius: 2.0.into(),
+                    color: if active { tokens.tab_selected_border } else { tokens.border },
+                    width: 1.0,
+                    radius: RADIUS_TAB.into(),
                 },
-                text_color: tokens.text,
+                text_color: tokens.fg,
                 ..button::Style::default()
             })
             .on_press(Message::ActivateTab(index)),
@@ -175,21 +196,28 @@ fn tabs(app: &App) -> Element<'_, Message> {
     }
 
     container(tabs)
-        .padding([0, 4])
-        .height(Length::Fixed(30.0))
+        .padding([5, 4])
+        .height(Length::Fixed(TABBAR))
         .width(Length::Fill)
-        .style(move |_theme| container::Style {
-            background: Some(tokens.panel.into()),
-            border: tokens.border_style(),
-            ..container::Style::default()
-        })
+        .style(move |_theme| container::Style { background: Some(tokens.elev.into()), ..container::Style::default() })
+        .into()
+}
+
+/// The web paints a 1px `--border-editor-tabs` under the strip; a separate row keeps the tab
+/// bar itself at exactly `--h-tabbar` pixels instead of losing two to a box border.
+fn divider<'a>(tokens: &Tokens) -> Element<'a, Message> {
+    let color = tokens.border;
+    container(Space::new().width(Length::Fill))
+        .height(Length::Fixed(1.0))
+        .width(Length::Fill)
+        .style(move |_theme| container::Style { background: Some(color.into()), ..container::Style::default() })
         .into()
 }
 
 fn editor_area(app: &App) -> Element<'_, Message> {
     let tokens = app.tokens();
     let Some(tab) = app.tabs.get(app.active_tab) else {
-        return container(text(i18n::t(app.language(), "workbench.welcome")).size(14).color(tokens.muted))
+        return container(text(i18n::t(app.language(), "workbench.welcome")).size(14).color(tokens.fg_muted))
             .width(Length::Fill)
             .height(Length::Fill)
             .padding(24)
@@ -197,10 +225,10 @@ fn editor_area(app: &App) -> Element<'_, Message> {
     };
 
     let palette = iced_editor::Palette {
-        background: tokens.background,
-        text: tokens.text,
-        selection: tokens.accent_muted,
-        caret: tokens.text,
+        background: tokens.app,
+        text: tokens.fg,
+        selection: tokens.selected,
+        caret: tokens.caret,
         preedit: tokens.warning,
         preedit_underline: tokens.warning,
     };
@@ -208,10 +236,7 @@ fn editor_area(app: &App) -> Element<'_, Message> {
     container(iced_editor::Editor::new(tab.editor.clone(), app.editor_id()).palette(palette))
         .width(Length::Fill)
         .height(Length::Fill)
-        .style(move |_theme| container::Style {
-            background: Some(tokens.background.into()),
-            ..container::Style::default()
-        })
+        .style(move |_theme| container::Style { background: Some(tokens.app.into()), ..container::Style::default() })
         .into()
 }
 
@@ -228,9 +253,9 @@ fn status(app: &App) -> Element<'_, Message> {
         })
         .unwrap_or((0, 0));
 
-    let mut bar = row![].spacing(2).align_y(Alignment::Center);
+    let mut bar = row![].spacing(4).align_y(Alignment::Center);
     for label in ["main".to_owned(), format!("{line}:{column}"), "UTF-8".to_owned(), app.active_language()] {
-        bar = bar.push(container(text(label).size(11).color(tokens.muted)).padding([0, 6]));
+        bar = bar.push(text(label).size(FONT_UI).color(tokens.fg_secondary));
     }
     bar = bar.push(Space::new().width(Length::Fill));
     bar = bar.push(
@@ -241,7 +266,7 @@ fn status(app: &App) -> Element<'_, Message> {
         .padding([0, 6])
         .style(|_theme, _status| button::Style {
             background: None,
-            text_color: tokens.muted,
+            text_color: tokens.fg_muted,
             ..button::Style::default()
         })
         .on_press(Message::ToggleTheme),
@@ -251,7 +276,7 @@ fn status(app: &App) -> Element<'_, Message> {
             .padding([0, 6])
             .style(|_theme, _status| button::Style {
                 background: None,
-                text_color: tokens.muted,
+                text_color: tokens.fg_muted,
                 ..button::Style::default()
             })
             .on_press(Message::ToggleLanguage),
@@ -261,21 +286,17 @@ fn status(app: &App) -> Element<'_, Message> {
             .padding([0, 6])
             .style(|_theme, _status| button::Style {
                 background: None,
-                text_color: tokens.muted,
+                text_color: tokens.fg_muted,
                 ..button::Style::default()
             })
             .on_press(Message::TogglePalette),
     );
 
     container(bar)
-        .padding([2, 4])
-        .height(Length::Fixed(24.0))
+        .padding([0, 12])
+        .height(Length::Fixed(STATUSBAR))
         .width(Length::Fill)
-        .style(move |_theme| container::Style {
-            background: Some(tokens.panel.into()),
-            border: tokens.border_style(),
-            ..container::Style::default()
-        })
+        .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
         .into()
 }
 
@@ -287,12 +308,12 @@ fn palette(app: &App) -> Element<'_, Message> {
     for id in app.matching_commands(&filter) {
         let Some(command) = Command::by_id(id) else { continue };
         results = results.push(
-            button(text(command.title).size(13).color(tokens.text))
+            button(text(command.title).size(13).color(tokens.fg))
                 .width(Length::Fill)
                 .padding([4, 8])
                 .style(|_theme, _status| button::Style {
                     background: None,
-                    text_color: tokens.text,
+                    text_color: tokens.fg,
                     ..button::Style::default()
                 })
                 .on_press(Message::RunCommand(command.id)),
@@ -322,8 +343,8 @@ fn palette(app: &App) -> Element<'_, Message> {
     .padding(8)
     .width(Length::Fixed(560.0))
     .style(move |_theme| container::Style {
-        background: Some(tokens.panel.into()),
-        border: Border { color: tokens.accent, width: 1.0, radius: 4.0.into() },
+        background: Some(tokens.elev.into()),
+        border: Border { color: tokens.accent, width: 1.0, radius: RADIUS_SMALL.into() },
         ..container::Style::default()
     });
 

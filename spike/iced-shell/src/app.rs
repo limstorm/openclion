@@ -94,8 +94,8 @@ impl App {
 
         (
             Self {
-                tokens: Tokens::dark(),
-                light: false,
+                tokens: Tokens::light(),
+                light: true,
                 language: Language::Zh,
                 project,
                 expanded,
@@ -196,10 +196,13 @@ impl App {
                 }
                 match fs::read_text(&path) {
                     Ok(text) => {
+                        let mut state = EditorState::new(&text);
+                        state.font_size = crate::metrics::FONT_CODE;
+                        state.line_height = crate::metrics::EDITOR_LINE;
                         self.tabs.push(Tab {
                             title: fs::display_name(&path),
                             path: Some(path),
-                            editor: Shared::new(EditorState::new(&text)),
+                            editor: Shared::new(state),
                         });
                         self.active_tab = self.tabs.len() - 1;
                         self.notice = None;

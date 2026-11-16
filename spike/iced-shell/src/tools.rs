@@ -4,7 +4,7 @@
 
 use iced::widget::svg::{Handle, Svg};
 use iced::widget::{Space, button, column, container, row, scrollable, text};
-use iced::{Alignment, Element, Length};
+use iced::{Alignment, Border, Element, Length};
 
 use crate::app::Message;
 use crate::tokens::Tokens;
@@ -48,18 +48,20 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
     // The web tree paints the project root as its first row.
     if let Some(project) = &app.project {
         list = list.push(
-            row![
-                Space::new().width(4.0),
-                icon(crate::icons::chevron(true, app.light), 1.0),
-                icon(crate::icons::folder_icon(app.light), 1.0),
-                text(project.name.clone())
-                    .size(12)
-                    .color(tokens.text)
-                    .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::default() }),
-            ]
-            .spacing(4)
-            .align_y(Alignment::Center)
-            .padding([1, 4]),
+            container(
+                row![
+                    Space::new().width(crate::metrics::TREE_PADDING),
+                    icon(crate::icons::chevron(true, app.light), 1.0),
+                    icon(crate::icons::folder_icon(app.light), 1.0),
+                    text(project.name.clone())
+                        .size(crate::metrics::FONT_UI)
+                        .color(tokens.fg)
+                        .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::default() }),
+                ]
+                .spacing(crate::metrics::TREE_GAP)
+                .align_y(Alignment::Center),
+            )
+            .height(Length::Fixed(crate::metrics::ROW)),
         );
     }
 
@@ -70,11 +72,11 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         let light = app.light;
         let faded = entry.ignored || entry.excluded;
         let color = if selected {
-            tokens.text
+            tokens.fg
         } else if faded {
-            tokens.muted
+            tokens.fg_muted
         } else {
-            tokens.text
+            tokens.fg
         };
         let icon_opacity = if entry.excluded {
             0.5
@@ -83,7 +85,7 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         } else {
             1.0
         };
-        let depth = row.depth as f32 * 12.0;
+        let depth = row.depth as f32 * crate::metrics::TREE_INDENT;
         let label = entry.name.clone();
         let path = entry.path.clone();
         let directory = entry.directory;
@@ -91,7 +93,7 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
         list = list.push(
             button(
                 row![
-                    Space::new().width(4.0 + depth),
+                    Space::new().width(crate::metrics::TREE_PADDING + depth),
                     if entry.directory {
                         row![
                             icon(crate::icons::chevron(row.open, light), 1.0),
@@ -103,15 +105,17 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
                     } else {
                         icon(crate::icons::file_icon(&entry.name, light), icon_opacity)
                     },
-                    text(label).size(12).color(color),
+                    text(label).size(crate::metrics::FONT_UI).color(color),
                 ]
-                .spacing(4)
+                .spacing(crate::metrics::TREE_GAP)
                 .align_y(Alignment::Center),
             )
-            .padding([1, 4])
+            .padding([0, 0])
+            .height(Length::Fixed(crate::metrics::ROW))
             .width(Length::Fill)
             .style(move |_theme, _status| button::Style {
-                background: selected.then(|| tokens.accent_muted.into()),
+                background: selected.then(|| tokens.selected.into()),
+                border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
                 text_color: color,
                 ..button::Style::default()
             })
@@ -132,8 +136,8 @@ pub fn search_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
     for (file, line, content) in hits {
         list = list.push(
             column![
-                row![text(file).size(12).color(tokens.text), text(line).size(11).color(tokens.muted)].spacing(8),
-                text(content).size(11).color(tokens.muted),
+                row![text(file).size(12).color(tokens.fg), text(line).size(11).color(tokens.fg_muted)].spacing(8),
+                text(content).size(11).color(tokens.fg_muted),
             ]
             .spacing(1)
             .padding([3, 6]),
@@ -152,7 +156,7 @@ pub fn git_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
     let mut list = column![].spacing(2);
     for (hash, subject) in log {
         list = list.push(
-            row![text(hash).size(11).color(tokens.accent), text(subject).size(12).color(tokens.muted)]
+            row![text(hash).size(11).color(tokens.accent), text(subject).size(12).color(tokens.fg_muted)]
                 .spacing(8)
                 .padding([3, 6]),
         );
@@ -163,7 +167,7 @@ pub fn git_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
 pub fn problems_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
     let problems = [
         (tokens.warning, "keys.go:42", "unused parameter `opts`"),
-        (tokens.error, "main.go:17", "cannot use cfg.Store (variable of type *Store)"),
+        (tokens.danger, "main.go:17", "cannot use cfg.Store (variable of type *Store)"),
         (tokens.warning, "smoke_test.go:88", "missing t.Parallel()"),
     ];
     let mut list = column![].spacing(2);
@@ -171,8 +175,8 @@ pub fn problems_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
         list = list.push(
             row![
                 text("●").size(10).color(color),
-                text(location).size(12).color(tokens.text),
-                text(message).size(12).color(tokens.muted)
+                text(location).size(12).color(tokens.fg),
+                text(message).size(12).color(tokens.fg_muted)
             ]
             .spacing(8)
             .padding([3, 6]),
@@ -182,7 +186,11 @@ pub fn problems_panel<'a>(tokens: &'a Tokens) -> Element<'a, Message> {
 }
 
 pub fn text_panel<'a>(tokens: &'a Tokens, label: &'a str) -> Element<'a, Message> {
-    container(text(label).size(12).color(tokens.muted)).padding(10).width(Length::Fill).height(Length::Fill).into()
+    container(text(label).size(crate::metrics::FONT_SMALL).color(tokens.fg_muted))
+        .padding(10)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
 }
 
 /// A tab strip inside a dock, for the tools that share a dock in the web workbench.
@@ -191,11 +199,12 @@ pub fn dock_tabs<'a>(tokens: &'a Tokens, tabs: &[(&'static str, &'a str)], activ
     for (index, (id, title)) in tabs.iter().enumerate() {
         let selected = index == active;
         row_of_tabs = row_of_tabs.push(
-            button(text(*title).size(11))
+            button(text(*title).size(crate::metrics::FONT_TINY))
                 .padding([3, 8])
                 .style(move |_theme, _status| button::Style {
-                    background: selected.then(|| tokens.accent_muted.into()),
-                    text_color: if selected { tokens.text } else { tokens.muted },
+                    background: selected.then(|| tokens.selected.into()),
+                    border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
+                    text_color: if selected { tokens.fg } else { tokens.fg_muted },
                     ..button::Style::default()
                 })
                 .on_press(Message::ShowTool(id)),
