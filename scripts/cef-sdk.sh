@@ -5,6 +5,7 @@
 #   scripts/cef-sdk.sh --check         # verify the cache, download only if missing
 #   scripts/cef-sdk.sh --from-file F   # seed from an archive on disk (USB, another machine)
 #   scripts/cef-sdk.sh --parts "U1 U2" # concatenate archive parts (e.g. Gitee release assets)
+#   scripts/cef-sdk.sh --url URL       # fetch a single archive from a mirror
 #
 # Cache: ${OPENCLION_CEF_CACHE:-$HOME/.cache/openclion/cef}/154.0.34/cef_linux_x86_64
 # Then:  export CEF_PATH="${OPENCLION_CEF_CACHE:-$HOME/.cache/openclion/cef}"
@@ -19,6 +20,7 @@ TARGET="$CACHE/$VERSION/cef_linux_x86_64"
 FROM_FILE=""
 CHECK_ONLY=0
 PARTS="${OPENCLION_CEF_PARTS:-}"
+URL="${OPENCLION_CEF_URL:-$DEFAULT_URL}"
 
 die() { echo "cef-sdk: $*" >&2; exit 1; }
 
@@ -27,6 +29,7 @@ while [ $# -gt 0 ]; do
     --check) CHECK_ONLY=1 ;;
     --from-file) shift; FROM_FILE="${1:?--from-file needs a path}" ;;
     --parts) shift; PARTS="${1:?--parts needs a space-separated list}" ;;
+    --url) shift; URL="${1:?--url needs an archive URL}" ;;
     -h|--help) sed -n '2,12p' "$0"; exit 0 ;;
     *) die "unknown argument: $1" ;;
   esac
@@ -84,7 +87,7 @@ if [ ! -f "$CACHE/$ARCHIVE" ]; then
     for _ in $(seq 1 30); do
       before=$(stat -c%s "$CACHE/$ARCHIVE" 2>/dev/null || echo 0)
       if curl -fL --retry 3 --retry-delay 2 --connect-timeout 20 --max-time 1800 -C - \
-          -o "$CACHE/$ARCHIVE" "$DEFAULT_URL"; then ok=1; break; fi
+          -o "$CACHE/$ARCHIVE" "$URL"; then ok=1; break; fi
       after=$(stat -c%s "$CACHE/$ARCHIVE" 2>/dev/null || echo 0)
       echo "cef-sdk: transfer interrupted at $after bytes, resuming"
       if [ "$after" -le "$before" ]; then sleep 3; fi
