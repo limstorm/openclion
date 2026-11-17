@@ -48,12 +48,16 @@ pub struct App {
     pub right: Option<&'static str>,
     pub bottom: Option<&'static str>,
     pub palette: Option<String>,
+    /// The main menu is open (a stand-in until the menu bar is ported).
+    pub menu: bool,
     pub palette_input: iced::advanced::widget::Id,
     /// Stable id for the editor widget; iced routes IME through focus, which needs one.
     editor_id: iced::advanced::widget::Id,
     pub status: String,
     /// The file selected in the project tree, to show selection in the panel.
     pub selected: Option<PathBuf>,
+    /// Kept so the title bar's minimize/maximize/close can address this window.
+    window_id: Option<iced::window::Id>,
 }
 
 #[derive(Debug, Clone)]
@@ -65,6 +69,8 @@ pub enum Message {
     ToggleDir(PathBuf),
     OpenFile(PathBuf),
     TogglePalette,
+    /// The ☰ button's menu (the web's MainMenu).
+    ToggleMenu,
     PaletteInput(String),
     PaletteSubmit,
     RunCommand(&'static str),
@@ -73,6 +79,11 @@ pub enum Message {
     ToggleLanguage,
     /// The splitter moved to this window x; the left panel takes the space up to it.
     ResizeDock(f32),
+    /// The window id, fetched once at boot so the title bar's controls can act on it.
+    WindowId(Option<iced::window::Id>),
+    Minimize,
+    Maximize,
+    CloseWindow,
 }
 
 impl App {
@@ -112,17 +123,20 @@ impl App {
             right: None,
             bottom: None,
             palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
+            menu: false,
             palette_input: iced::advanced::widget::Id::unique(),
             editor_id: iced::advanced::widget::Id::unique(),
             status: i18n::t(Language::Zh, "status.ready").to_owned(),
             selected: None,
+            window_id: None,
         };
 
         if let Some(path) = std::env::var_os("SHELL_OPEN") {
             app.open_file(PathBuf::from(path));
         }
 
-        (app, Task::none())
+        let id = iced::window::latest().map(Message::WindowId);
+        (app, id)
     }
 
     pub fn title(&self) -> String {
@@ -218,6 +232,7 @@ impl App {
                 }
             }
             Message::OpenFile(path) => self.open_file(path),
+            Message::ToggleMenu => self.menu = !self.menu,
             Message::TogglePalette => {
                 self.palette = if self.palette.is_some() { None } else { Some(String::new()) };
                 if self.palette.is_some() {
@@ -274,6 +289,22 @@ impl App {
                 let margin = crate::metrics::STRIPE + 6.0;
                 self.left_width = (x - margin).clamp(160.0, 900.0);
                 save_panel_width(self.left_width);
+            }
+            Message::WindowId(id) => self.window_id = id,
+            Message::Minimize => {
+                if let Some(id) = self.window_id {
+                    return iced::window::minimize(id, true);
+                }
+            }
+            Message::Maximize => {
+                if let Some(id) = self.window_id {
+                    return iced::window::toggle_maximize(id);
+                }
+            }
+            Message::CloseWindow => {
+                if let Some(id) = self.window_id {
+                    return iced::window::close(id);
+                }
             }
             Message::ToggleTheme => {
                 self.light = !self.light;

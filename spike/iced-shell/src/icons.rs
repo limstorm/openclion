@@ -45,6 +45,23 @@ icons! {
     CHEVRON_RIGHT_LIGHT => "general/chevronRight.svg",
     CHEVRON_DOWN_DARK => "general/chevronDown_dark.svg",
     CHEVRON_DOWN_LIGHT => "general/chevronDown.svg",
+    // Title bar chrome that lives in the expui set.
+    SETTINGS_DARK => "general/settings_dark.svg",
+    SETTINGS_LIGHT => "general/settings.svg",
+}
+
+/// The `openclion/` set (window chrome), which sits at a different root than `expui/`.
+macro_rules! chrome {
+    ($($name:ident => $path:literal),* $(,)?) => {
+        $(const $name: &[u8] = include_bytes!(concat!("../../../src/ui/openclion/", $path));)*
+    };
+}
+
+chrome! {
+    MAIN_MENU => "general/mainMenu.svg",
+    WINDOW_MINIMIZE => "general/windowMinimize.svg",
+    WINDOW_MAXIMIZE => "general/windowMaximize.svg",
+    WINDOW_CLOSE => "general/windowClose.svg",
 }
 
 fn pick(dark: &'static [u8], light: &'static [u8], light_theme: bool) -> &'static [u8] {
@@ -87,6 +104,32 @@ pub fn file_icon(name: &str, light_theme: bool) -> &'static [u8] {
 
 pub fn folder_icon(light_theme: bool) -> &'static [u8] {
     pick(FOLDER_DARK, FOLDER_LIGHT, light_theme)
+}
+
+/// The ☰ menu button of the title bar.
+pub fn main_menu() -> &'static [u8] {
+    MAIN_MENU
+}
+
+/// `−`, `□`, `×` of the caption buttons.
+pub fn caption(kind: Caption) -> &'static [u8] {
+    match kind {
+        Caption::Minimize => WINDOW_MINIMIZE,
+        Caption::Maximize => WINDOW_MAXIMIZE,
+        Caption::Close => WINDOW_CLOSE,
+    }
+}
+
+/// `⚙` in the title bar, 18px in the web.
+pub fn settings(light_theme: bool) -> &'static [u8] {
+    pick(SETTINGS_DARK, SETTINGS_LIGHT, light_theme)
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Caption {
+    Minimize,
+    Maximize,
+    Close,
 }
 
 pub fn chevron(open: bool, light_theme: bool) -> &'static [u8] {

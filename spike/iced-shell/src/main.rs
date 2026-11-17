@@ -10,6 +10,7 @@ mod highlight;
 mod i18n;
 mod icons;
 mod metrics;
+mod project;
 mod registry;
 mod splitter;
 mod tokens;

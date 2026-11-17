@@ -3,60 +3,186 @@
 //! Composition mirrors the web shell: one strip on the left, one dock per side, a centre column
 //! with the tab strip over the editor group, and the status bar at the bottom.
 
+use iced::widget::svg::{Handle, Svg};
 use iced::widget::{Space, button, column, container, row, scrollable, stack, text, text_input};
-use iced::{Alignment, Border, Element, Length};
+use iced::{Alignment, Border, Color, Element, Length};
 
 use crate::app::{App, Message};
 use crate::metrics::*;
 use crate::registry::{Command, Dock, TOOL_WINDOWS};
 use crate::tokens::Tokens;
-use crate::{i18n, tools};
+use crate::{i18n, icons, project, tools};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     let base = column![title_bar(app), row![strip(app), left_dock(app), splitter(app), centre(app), right_dock(app)]];
 
-    if app.palette.is_some() { stack![base, palette(app)].into() } else { base.into() }
+    if app.palette.is_some() {
+        stack![base, palette(app)].into()
+    } else if app.menu {
+        stack![base, main_menu(app)].into()
+    } else {
+        base.into()
+    }
 }
 
 /// `--h-titlebar: 40px`, painted in `--bg-frame`: the web shell has its own title bar and the
 /// native window has none, so drawing it is what makes the two line up.
-fn title_bar(app: &App) -> Element<'_, Message> {
+/// The web's `TitleBar`: 40px, `padding: 0 8px 0 10px`, `gap: 4px`, carrying the main menu
+/// button, the project widget, the toolbar's right side, the gear and the caption buttons.
+fn title_bar<'a>(app: &'a App) -> Element<'a, Message> {
     let tokens = app.tokens();
-    let project = app.project.as_ref().map(|project| project.name.clone());
+    let light = app.light;
 
-    // The web title bar is `[gap 44][18px project badge][8px][project name][chevron] …`.
-    let badge: Element<'_, Message> = match &project {
-        Some(name) => {
-            let initial = name.chars().next().unwrap_or('O').to_ascii_uppercase();
-            container(text(initial.to_string()).size(FONT_TINY).color(tokens.app))
-                .width(Length::Fixed(18.0))
-                .height(Length::Fixed(18.0))
-                .center_x(Length::Fixed(18.0))
-                .center_y(Length::Fixed(18.0))
-                .style(move |_theme| container::Style {
-                    background: Some(tokens.success.into()),
-                    border: Border { radius: 4.0.into(), ..Border::default() },
-                    ..container::Style::default()
-                })
-                .into()
+    let menu = icon_button(icons::main_menu(), 16.0, tokens, Message::ToggleMenu);
+
+    // `.widget`: 30px tall, `padding: 0 8px`, `radius-popup` (8px), `gap: 6px`.
+    let project: Element<'a, Message> = match &app.project {
+        Some(project) => {
+            let name = project.name.clone();
+            let (start_color, _end) = project_colors(name.as_str());
+            let avatar: Element<'a, Message> =
+                container(text(project::initials(&name)).size(FONT_TINY).color(Color::WHITE))
+                    .width(Length::Fixed(20.0))
+                    .height(Length::Fixed(20.0))
+                    .center_x(Length::Fixed(20.0))
+                    .center_y(Length::Fixed(20.0))
+                    .style(move |_theme| container::Style {
+                        background: Some(start_color.into()),
+                        border: Border { radius: RADIUS_SMALL.into(), ..Border::default() },
+                        ..container::Style::default()
+                    })
+                    .into();
+
+            button(
+                row![
+                    avatar,
+                    text(name)
+                        .size(FONT_UI)
+                        .color(tokens.fg)
+                        .font(iced::Font { weight: iced::font::Weight::Medium, ..iced::Font::default() }),
+                    Svg::new(Handle::from_memory(icons::chevron(false, light))).width(12).height(12),
+                ]
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .padding([0, 8]),
+            )
+            .height(Length::Fixed(30.0))
+            .padding([0, 0])
+            .style(move |_theme, status| button::Style {
+                background: matches!(status, button::Status::Hovered).then(|| tokens.toolbar_hover.into()),
+                border: Border { radius: 8.0.into(), ..Border::default() },
+                ..button::Style::default()
+            })
+            .on_press(Message::ToggleMenu)
+            .into()
         }
         None => Space::new().width(0).into(),
     };
 
-    let name: Element<'_, Message> = match &project {
-        Some(name) => text(name.clone()).size(FONT_UI).color(tokens.fg).into(),
-        None => Space::new().width(0).into(),
-    };
+    // `.tools`: 30x30 icon buttons, `margin-left: 12px`, `gap: 4px`.
+    let gear = icon_button(icons::settings(light), 18.0, tokens, Message::ToggleMenu);
+
+    // `.captions`: 46x40 each, flush with the right edge, `margin-left: 8px`.
+    let minimize = caption_button(icons::caption(icons::Caption::Minimize), tokens, Message::Minimize);
+    let maximize = caption_button(icons::caption(icons::Caption::Maximize), tokens, Message::Maximize);
+    let close = caption_button(icons::caption(icons::Caption::Close), tokens, Message::CloseWindow);
 
     container(
-        row![Space::new().width(STRIPE + 8.0), badge, name, text("⌄").size(FONT_TINY).color(tokens.fg_muted),]
-            .spacing(8)
-            .align_y(Alignment::Center),
+        row![
+            menu,
+            project,
+            Space::new().width(Length::Fill),
+            container(gear).padding([0, 0]).width(Length::Fixed(30.0)),
+            container(row![minimize, maximize, close]).padding([0, 8]),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center)
+        .padding(iced::Padding { top: 0.0, right: 0.0, bottom: 0.0, left: 10.0 }),
     )
     .height(Length::Fixed(TITLEBAR))
     .width(Length::Fill)
     .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
     .into()
+}
+
+/// A 16px SVG in a 30x30 hoverable square, the title bar's `.tool` / `.mainMenuButton`.
+fn icon_button(bytes: &'static [u8], size: f32, tokens: &Tokens, message: Message) -> Element<'static, Message> {
+    let tokens = *tokens;
+    button(Svg::new(Handle::from_memory(bytes)).width(size).height(size))
+        .width(Length::Fixed(30.0))
+        .height(Length::Fixed(30.0))
+        .padding([0, 0])
+        .style(move |_theme, status| button::Style {
+            background: matches!(status, button::Status::Hovered).then(|| tokens.toolbar_hover.into()),
+            border: Border { radius: 8.0.into(), ..Border::default() },
+            ..button::Style::default()
+        })
+        .on_press(message)
+        .into()
+}
+
+/// `.caption`: 46px wide, full height, no radius; the close button tints red on hover.
+fn caption_button(bytes: &'static [u8], tokens: &Tokens, message: Message) -> Element<'static, Message> {
+    let tokens = *tokens;
+    let close = matches!(message, Message::CloseWindow);
+    button(Svg::new(Handle::from_memory(bytes)).width(16).height(16))
+        .width(Length::Fixed(46.0))
+        .height(Length::Fixed(TITLEBAR))
+        .padding([0, 0])
+        .style(move |_theme, status| button::Style {
+            background: match status {
+                button::Status::Hovered if close => Some(Color::from_rgb(0.898, 0.286, 0.302).into()),
+                button::Status::Hovered => Some(tokens.toolbar_hover.into()),
+                _ => None,
+            },
+            border: Border::default(),
+            ..button::Style::default()
+        })
+        .on_press(message)
+        .into()
+}
+
+/// `--project-color-N` (`RecentProject.ColorN`), identical in both themes.
+fn project_colors(name: &str) -> (Color, Color) {
+    const SLOTS: [(Color, Color); 9] = [
+        (
+            Color::from_rgb(224.0 / 255.0, 136.0 / 255.0, 85.0 / 255.0),
+            Color::from_rgb(233.0 / 255.0, 128.0 / 255.0, 111.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(176.0 / 255.0, 139.0 / 255.0, 20.0 / 255.0),
+            Color::from_rgb(187.0 / 255.0, 127.0 / 255.0, 25.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(161.0 / 255.0, 163.0 / 255.0, 89.0 / 255.0),
+            Color::from_rgb(135.0 / 255.0, 170.0 / 255.0, 89.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(59.0 / 255.0, 146.0 / 255.0, 184.0 / 255.0),
+            Color::from_rgb(97.0 / 255.0, 131.0 / 255.0, 236.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(53.0 / 255.0, 116.0 / 255.0, 240.0 / 255.0),
+            Color::from_rgb(122.0 / 255.0, 100.0 / 255.0, 240.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(200.0 / 255.0, 77.0 / 255.0, 143.0 / 255.0),
+            Color::from_rgb(169.0 / 255.0, 86.0 / 255.0, 207.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(149.0 / 255.0, 90.0 / 255.0, 224.0 / 255.0),
+            Color::from_rgb(168.0 / 255.0, 77.0 / 255.0, 224.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(36.0 / 255.0, 163.0 / 255.0, 148.0 / 255.0),
+            Color::from_rgb(39.0 / 255.0, 156.0 / 255.0, 205.0 / 255.0),
+        ),
+        (
+            Color::from_rgb(95.0 / 255.0, 173.0 / 255.0, 101.0 / 255.0),
+            Color::from_rgb(61.0 / 255.0, 150.0 / 255.0, 139.0 / 255.0),
+        ),
+    ];
+    SLOTS[project::color_index(name) - 1]
 }
 
 /// The activity bar: every tool window, grouped by dock, the active one highlighted.
@@ -394,6 +520,43 @@ fn status(app: &App) -> Element<'_, Message> {
         .height(Length::Fixed(STATUSBAR))
         .width(Length::Fill)
         .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
+        .into()
+}
+
+/// The ☰ menu: the top-level entries the web's `MainMenu` renders, in the same order as
+/// `src-tauri/src/menu.rs` builds them. Rows are placeholders until each submenu is ported.
+fn main_menu(app: &App) -> Element<'_, Message> {
+    let tokens = app.tokens();
+    const TITLES: [&str; 11] =
+        ["File", "Edit", "View", "Navigate", "Code", "Refactor", "Build", "Run", "Tools", "Window", "Help"];
+
+    let mut rows = column![].spacing(0);
+    for title in TITLES {
+        rows = rows.push(
+            button(text(title).size(FONT_UI).color(tokens.fg).width(Length::Fill))
+                .padding([0, 12])
+                .height(Length::Fixed(28.0))
+                .width(Length::Fill)
+                .style(move |_theme, status| button::Style {
+                    background: matches!(status, button::Status::Hovered).then(|| tokens.toolbar_hover.into()),
+                    text_color: tokens.fg,
+                    ..button::Style::default()
+                }),
+        );
+    }
+
+    let panel = container(rows).padding([4, 0]).width(Length::Fixed(220.0)).style(move |_theme| container::Style {
+        background: Some(tokens.elev.into()),
+        border: Border { color: tokens.border_strong, width: 1.0, radius: 8.0.into() },
+        ..container::Style::default()
+    });
+
+    container(panel)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .padding(iced::Padding { top: 44.0, right: 0.0, bottom: 0.0, left: 6.0 })
+        .align_x(Alignment::Start)
+        .align_y(Alignment::Start)
         .into()
 }
 

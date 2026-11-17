@@ -18,6 +18,7 @@ pub struct SyntaxPalette {
     pub variable: Color,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Tokens {
     /// `--bg-frame` — the window chrome between islands.
     pub frame: Color,
