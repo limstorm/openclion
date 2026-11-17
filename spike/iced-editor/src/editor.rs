@@ -38,10 +38,12 @@ impl Shared {
     }
 }
 
-/// Where the line numbers end, measured from the editor's left edge in the web build: the
-/// digits "87" sit at x=471..485 with the editor at 453, so their right edge is 32px in.
+/// Where the line numbers end: the digits `87` sit at x=471..485 with the editor at 453, so
+/// their right edge is 32px in (`.cm-lineNumbers .cm-gutterElement` pads `0 8px 0 10px`).
 const GUTTER_NUMBERS_RIGHT: f32 = 32.0;
-/// Where the code column starts: the first glyph of `func reserve…` is at 550, i.e. 97px in.
+/// The 1px `--editor-gutter-border` line: measured at x=543 for an editor at 453, 90px in.
+const GUTTER_BORDER: f32 = 90.0;
+/// Where the code column starts: the first glyph of `func reserve…` is at 550, 97px in.
 const TEXT_ORIGIN: f32 = 97.0;
 
 pub struct EditorState {
@@ -305,6 +307,8 @@ pub struct Palette {
     pub gutter_text: Color,
     /// `--fg-line-number-current`
     pub gutter_text_current: Color,
+    /// `--editor-gutter-border`
+    pub gutter_border: Color,
     /// `--syn-*`
     pub syntax: SyntaxColors,
     /// `--scrollbar-thumb`
@@ -323,6 +327,7 @@ impl Default for Palette {
             gutter_text: Color::from_rgb(0.294, 0.314, 0.349),
             gutter_text_current: Color::from_rgb(0.631, 0.639, 0.671),
             scrollbar: Color::from_rgba(1.0, 1.0, 1.0, 0.2),
+            gutter_border: Color::from_rgb(0.149, 0.157, 0.173),
             syntax: SyntaxColors {
                 keyword: Color::from_rgb(0.812, 0.557, 0.427),
                 string: Color::from_rgb(0.416, 0.671, 0.451),
@@ -572,19 +577,27 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         let last = (first + visible).min(state.line_count());
         let origin = if state.gutter { TEXT_ORIGIN } else { 0.0 };
 
-        // `--fg-line-number` numbers; the caret's line uses `--fg-line-number-current`.
-        // Monospace, so padding to three columns right-aligns the digits deterministically —
-        // no dependence on how the backend anchors aligned text.
+        // `.cm-lineNumbers`: right-aligned digits ending `GUTTER_NUMBERS_RIGHT` in, in
+        // `--fg-line-number` (the caret's line uses `--fg-line-number-current`), with the 1px
+        // `--editor-gutter-border` hairline after the gutter.
+        //
+        // `fill_text` anchors left-aligned text reliably in this backend while `fill_paragraph`
+        // does not draw at all, so the digits are padded with spaces to the widest number and
+        // placed by measuring one glyph — the font is monospace, which keeps it exact.
         if state.gutter {
             let caret_line = state.line();
+            let widest = state.line_count().max(1).to_string().len();
+            let digit = line_paragraph("0", state.font_size, line_height).min_bounds().width;
+            let left = GUTTER_NUMBERS_RIGHT - widest as f32 * digit;
+
             for line in first..last {
                 let y = bounds.y + (line - first) as f32 * line_height;
                 let color =
                     if line == caret_line { self.palette.gutter_text_current } else { self.palette.gutter_text };
                 renderer.fill_text(
                     text::Text {
-                        content: format!("{:>3}", line + 1),
-                        bounds: Size::new(GUTTER_NUMBERS_RIGHT, line_height),
+                        content: format!("{:>widest$}", line + 1),
+                        bounds: Size::new(GUTTER_BORDER, line_height),
                         size,
                         line_height: text::LineHeight::Absolute(Pixels::from(line_height)),
                         font,
@@ -593,11 +606,22 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                         shaping: text::Shaping::Advanced,
                         wrapping: text::Wrapping::None,
                     },
-                    Point::new(bounds.x + 6.0, y),
+                    Point::new(bounds.x + left, y),
                     color,
                     bounds,
                 );
             }
+
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: Rectangle::new(
+                        Point::new(bounds.x + GUTTER_BORDER, bounds.y),
+                        Size::new(1.0, bounds.height),
+                    ),
+                    ..renderer::Quad::default()
+                },
+                self.palette.gutter_border,
+            );
         }
 
         if let Some((start, end)) = state.selection() {

@@ -561,6 +561,7 @@ fn editor_area(app: &App) -> Element<'_, Message> {
         } else {
             iced::Color::from_rgba(1.0, 1.0, 1.0, 0.2)
         },
+        gutter_border: tokens.border,
         gutter_text: tokens.gutter_text,
         gutter_text_current: tokens.gutter_text_current,
         syntax: iced_editor::SyntaxColors {
