@@ -23,22 +23,28 @@ on a GPU-less Linux host costs ~30 ms per frame (see `docs/perf/webkit-wayland.m
 The `cef` crate links against a CEF binary distribution that it would normally download, but its
 index (`https://cef-builds.spotifycdn.com/index.json`) has grown past the 10 MiB limit its HTTP
 client allows, so the download step fails with `response body is larger than request limit`.
-Point `CEF_PATH` at an unpacked distribution instead:
+Point `CEF_PATH` at an unpacked distribution instead. `scripts/cef-sdk.sh` downloads the
+pinned archive into a cache outside the repository, verifies its sha1 and unpacks the layout the
+crate expects (it resumes interrupted transfers and is a no-op once the cache is complete):
 
 ```bash
-# 154.0.34 is what cef-dll-sys 154.5.0+154.0.34 expects
-curl -L -O "https://cef-builds.spotifycdn.com/cef_binary_154.0.34%2Bg14c5a08%2Bchromium-154.0.8037.98_linux64_minimal.tar.bz2"
-sudo mkdir -p /opt/cef/154.0.34
-sudo tar xjf cef_binary_154.0.34*.tar.bz2 -C /opt/cef/154.0.34
-cd /opt/cef/154.0.34
-sudo mv cef_binary_*_linux64_minimal cef_linux_x86_64     # the name the crate resolves
-cd cef_linux_x86_64
-sudo mv Release/* . && rmdir Release                       # the layout the crate expects
-sudo mv Resources/* . && rmdir Resources
-printf '{"type":"minimal","name":"cef_binary_154.0.34","sha1":"15c91ad767097217b2e82ba8b933fe30b134be69"}\n' | sudo tee archive.json
-
-export CEF_PATH=/opt/cef
+scripts/cef-sdk.sh                      # ~311 MiB, cache: ~/.cache/openclion/cef
+export CEF_PATH="$HOME/.cache/openclion/cef"
 cargo build -p openclion
+```
+
+The cache survives reboots; keep it out of `/tmp`. To avoid the download on another machine, copy
+`~/.cache/openclion/cef/cef_binary_*.tar.bz2` over and pass it with
+`scripts/cef-sdk.sh --from-file <archive>`, or host the archive yourself.
+
+A Gitee repository cannot hold the archive as one file (50 MiB per file, 100 MiB per release
+attachment). Split it below the attachment limit, upload the parts to a release, and let the script
+concatenate and verify them:
+
+```bash
+split -b 90M cef_binary_154.0.34*.tar.bz2 cef.tar.bz2.part-
+# upload cef.tar.bz2.part-* to a release, then on each machine:
+scripts/cef-sdk.sh --parts "<url part-aa> <url part-ab> <url part-ac> <url part-ad>"
 ```
 
 GTK4 development headers are now required (`libgtk-4-dev`); WebKitGTK is not.
