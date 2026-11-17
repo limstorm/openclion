@@ -224,15 +224,25 @@ fn tabs(app: &App) -> Element<'_, Message> {
             )
             .padding([0, 0])
             .height(Length::Fixed(TAB))
-            .style(move |_theme, _status| button::Style {
-                background: Some(if active { tokens.tab_selected } else { tokens.app }.into()),
-                border: Border {
-                    color: if active { tokens.tab_selected_border } else { tokens.border },
-                    width: 1.0,
-                    radius: RADIUS_TAB.into(),
-                },
-                text_color: tokens.fg,
-                ..button::Style::default()
+            .style(move |_theme, status| {
+                let hovered = matches!(status, button::Status::Hovered);
+                let background = if active {
+                    tokens.tab_selected
+                } else if hovered {
+                    tokens.tab_hover
+                } else {
+                    tokens.app
+                };
+                button::Style {
+                    background: Some(background.into()),
+                    border: Border {
+                        color: if active { tokens.tab_selected_border } else { tokens.border },
+                        width: 1.0,
+                        radius: RADIUS_TAB.into(),
+                    },
+                    text_color: tokens.fg,
+                    ..button::Style::default()
+                }
             })
             .on_press(Message::ActivateTab(index)),
         );
@@ -322,40 +332,54 @@ fn status(app: &App) -> Element<'_, Message> {
         })
         .unwrap_or((0, 0));
 
-    let mut bar = row![].spacing(4).align_y(Alignment::Center);
-    for label in ["main".to_owned(), format!("{line}:{column}"), "UTF-8".to_owned(), app.active_language()] {
-        bar = bar.push(text(label).size(FONT_UI).color(tokens.fg_secondary));
+    let mut segments: Vec<String> = Vec::new();
+    if let Some(branch) = app.branch() {
+        segments.push(branch);
+    }
+    segments.push(format!("{line}:{column}"));
+    if let Some(selected) = app.selection_chars() {
+        segments.push(format!("{selected} selected"));
+    }
+    if let Some(indent) = app.indentation() {
+        segments.push(indent);
+    }
+    segments.push("UTF-8".to_owned());
+    segments.push(app.active_language());
+
+    let mut bar = row![].spacing(16).align_y(Alignment::Center);
+    for segment in segments {
+        bar = bar.push(text(segment).size(FONT_UI).color(tokens.fg_secondary));
     }
     bar = bar.push(Space::new().width(Length::Fill));
     bar = bar.push(
         button(
             text(format!("{} · {}", if app.light { "Light" } else { "Dark" }, i18n::t(language, "status.ready")))
-                .size(11),
+                .size(FONT_UI),
         )
-        .padding([0, 6])
+        .padding([0, 4])
         .style(|_theme, _status| button::Style {
             background: None,
-            text_color: tokens.fg_muted,
+            text_color: tokens.fg_secondary,
             ..button::Style::default()
         })
         .on_press(Message::ToggleTheme),
     );
     bar = bar.push(
-        button(text(if language == i18n::Language::Zh { "中文" } else { "EN" }).size(11))
-            .padding([0, 6])
+        button(text(if language == i18n::Language::Zh { "中文" } else { "EN" }).size(FONT_UI))
+            .padding([0, 4])
             .style(|_theme, _status| button::Style {
                 background: None,
-                text_color: tokens.fg_muted,
+                text_color: tokens.fg_secondary,
                 ..button::Style::default()
             })
             .on_press(Message::ToggleLanguage),
     );
     bar = bar.push(
-        button(text("Ctrl+Shift+P").size(11))
-            .padding([0, 6])
+        button(text("Ctrl+Shift+P").size(FONT_UI))
+            .padding([0, 4])
             .style(|_theme, _status| button::Style {
                 background: None,
-                text_color: tokens.fg_muted,
+                text_color: tokens.fg_secondary,
                 ..button::Style::default()
             })
             .on_press(Message::TogglePalette),

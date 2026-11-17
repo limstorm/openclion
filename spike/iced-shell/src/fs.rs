@@ -161,3 +161,36 @@ fn syntax() -> &'static ide_language::Syntax {
     static SYNTAX: std::sync::OnceLock<ide_language::Syntax> = std::sync::OnceLock::new();
     SYNTAX.get_or_init(ide_language::Syntax::new)
 }
+
+/// The current branch of the repository containing `root`, read from `.git/HEAD` the way the
+/// web shell's status bar shows it (a detached head renders the short commit id).
+pub fn git_branch(root: &Path) -> Option<String> {
+    let mut dir = Some(root);
+    while let Some(current) = dir {
+        let head = current.join(".git/HEAD");
+        if let Ok(contents) = std::fs::read_to_string(&head) {
+            let contents = contents.trim();
+            return Some(match contents.strip_prefix("ref: refs/heads/") {
+                Some(branch) => branch.to_owned(),
+                None => contents.chars().take(7).collect(),
+            });
+        }
+        dir = current.parent();
+    }
+    None
+}
+
+/// The indentation the web status bar reports: the first indented line decides between a tab
+/// and a space count.
+pub fn indentation(text: &str) -> Option<String> {
+    for line in text.lines() {
+        if line.starts_with('\t') {
+            return Some("Tab".to_owned());
+        }
+        let spaces = line.chars().take_while(|c| *c == ' ').count();
+        if spaces > 0 && line.chars().nth(spaces) != Some(' ') {
+            return Some(if spaces == 1 { "1 space".to_owned() } else { format!("{spaces} spaces") });
+        }
+    }
+    None
+}

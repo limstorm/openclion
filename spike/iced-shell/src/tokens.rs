@@ -27,6 +27,10 @@ pub struct Tokens {
     pub elev: Color,
     /// `--bg-hover`
     pub hover: Color,
+    /// `--bg-tab-hover`, `--bg-tree-hover`, `--bg-toolbar-hover`
+    pub tab_hover: Color,
+    pub tree_hover: Color,
+    pub toolbar_hover: Color,
     /// `--border`
     pub border: Color,
     /// `--border-strong`
@@ -65,21 +69,24 @@ impl Tokens {
     /// `:root` — Islands Dark.
     pub const fn dark() -> Self {
         Self {
-            frame: Color::from_rgb(0.149, 0.157, 0.173),               // #26282c
-            app: Color::from_rgb(0.098, 0.102, 0.110),                 // #191a1c
-            elev: Color::from_rgb(0.129, 0.137, 0.149),                // #212326
-            hover: Color::from_rgb(0.180, 0.184, 0.188),               // #2e2f30
-            border: Color::from_rgb(0.149, 0.157, 0.173),              // #26282c
-            border_strong: Color::from_rgb(0.251, 0.263, 0.290),       // #40434a
-            fg: Color::from_rgb(0.820, 0.827, 0.839),                  // #d1d3d9
-            fg_secondary: Color::from_rgb(0.624, 0.635, 0.659),        // #9fa2a8
-            fg_muted: Color::from_rgb(0.549, 0.561, 0.584),            // #8c8f95
-            accent: Color::from_rgb(0.220, 0.443, 0.882),              // #3871e1
-            selected: Color::from_rgb(0.165, 0.263, 0.443),            // #2a4371
-            tree_selected: Color::from_rgb(0.165, 0.263, 0.443),       // #2a4371
-            tab_selected: Color::from_rgb(0.137, 0.208, 0.345),        // #233558
+            frame: Color::from_rgb(0.149, 0.157, 0.173),      // #26282c
+            app: Color::from_rgb(0.098, 0.102, 0.110),        // #191a1c
+            elev: Color::from_rgb(0.129, 0.137, 0.149),       // #212326
+            hover: Color::from_rgb(0.180, 0.184, 0.188),      // #2e2f30
+            tab_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09), // #ffffff17
+            tree_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
+            toolbar_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09),
+            border: Color::from_rgb(0.149, 0.157, 0.173),        // #26282c
+            border_strong: Color::from_rgb(0.251, 0.263, 0.290), // #40434a
+            fg: Color::from_rgb(0.820, 0.827, 0.839),            // #d1d3d9
+            fg_secondary: Color::from_rgb(0.624, 0.635, 0.659),  // #9fa2a8
+            fg_muted: Color::from_rgb(0.549, 0.561, 0.584),      // #8c8f95
+            accent: Color::from_rgb(0.220, 0.443, 0.882),        // #3871e1
+            selected: Color::from_rgb(0.165, 0.263, 0.443),      // #2a4371
+            tree_selected: Color::from_rgb(0.165, 0.263, 0.443), // #2a4371
+            tab_selected: Color::from_rgb(0.137, 0.208, 0.345),  // #233558
             tab_selected_border: Color::from_rgb(0.180, 0.302, 0.537), // #2e4d89
-            caret: Color::from_rgb(0.808, 0.816, 0.839),               // #ced0d6
+            caret: Color::from_rgb(0.808, 0.816, 0.839),         // #ced0d6
             syn: SyntaxPalette {
                 keyword: Color::from_rgb(0.812, 0.557, 0.427),     // #cf8e6d
                 string: Color::from_rgb(0.416, 0.671, 0.451),      // #6aab73
@@ -107,6 +114,9 @@ impl Tokens {
             app: Color::from_rgb(1.0, 1.0, 1.0),                     // #ffffff
             elev: Color::from_rgb(0.969, 0.973, 0.976),              // #f7f8f9
             hover: Color::from_rgb(0.929, 0.929, 0.929),             // #ededed
+            tab_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.07),        // #00000012
+            tree_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.03),       // #00000008
+            toolbar_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.07),    // #00000012
             border: Color::from_rgb(0.914, 0.918, 0.933),            // #e9eaee
             border_strong: Color::from_rgb(0.820, 0.827, 0.851),     // #d1d3d9
             fg: Color::from_rgb(0.0, 0.0, 0.0),                      // #000000

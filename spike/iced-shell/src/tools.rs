@@ -160,11 +160,15 @@ pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
             .padding([0, 0])
             .height(Length::Fixed(crate::metrics::ROW))
             .width(Length::Fill)
-            .style(move |_theme, _status| button::Style {
-                background: background.map(Into::into),
-                border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
-                text_color: color,
-                ..button::Style::default()
+            .style(move |_theme, status| {
+                let hovered = matches!(status, button::Status::Hovered);
+                let fill = background.or(hovered.then_some(tokens.tree_hover));
+                button::Style {
+                    background: fill.map(Into::into),
+                    border: Border { radius: crate::metrics::RADIUS_ROW.into(), ..Border::default() },
+                    text_color: color,
+                    ..button::Style::default()
+                }
             })
             .on_press(if directory { Message::ToggleDir(path) } else { Message::OpenFile(path) }),
         );

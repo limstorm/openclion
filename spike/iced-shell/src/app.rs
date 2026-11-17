@@ -130,6 +130,26 @@ impl App {
         }
     }
 
+    /// The branch shown in the status bar, from the project's repository.
+    pub fn branch(&self) -> Option<String> {
+        self.project.as_ref().and_then(|project| fs::git_branch(&project.root))
+    }
+
+    /// Indentation and selection of the active tab, as the web status bar reports them.
+    pub fn indentation(&self) -> Option<String> {
+        self.tabs.get(self.active_tab).and_then(|tab| {
+            let state = tab.editor.borrow();
+            fs::indentation(&state.text())
+        })
+    }
+
+    pub fn selection_chars(&self) -> Option<usize> {
+        self.tabs.get(self.active_tab).and_then(|tab| {
+            let state = tab.editor.borrow();
+            state.selection().map(|(start, end)| end - start)
+        })
+    }
+
     /// Language of the active tab, as shown in the status bar.
     pub fn active_language(&self) -> String {
         self.tabs
@@ -275,11 +295,10 @@ impl App {
                 let mut state = EditorState::new(&text);
                 state.font_size = crate::metrics::FONT_CODE;
                 state.line_height = crate::metrics::EDITOR_LINE;
-                let spans = fs::highlights(&path, &text);
-                if std::env::var_os("SHELL_TRACE").is_some() {
-                    eprintln!("highlights for {}: {} spans", path.display(), spans.len());
-                }
-                state.set_highlights(spans);
+                // Re-highlight after every edit: the widget calls this hook once the rope has
+                // changed, so typing a `//` turns the line into a comment immediately.
+                let language_path = path.clone();
+                state.set_highlighter(Box::new(move |text| fs::highlights(&language_path, text)));
                 self.tabs.push(Tab { title: fs::display_name(&path), path: Some(path), editor: Shared::new(state) });
                 self.active_tab = self.tabs.len() - 1;
                 self.notice = None;

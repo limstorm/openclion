@@ -62,6 +62,9 @@ pub struct EditorState {
     pub gutter: bool,
     /// Highlighted ranges, sorted by start; empty when the file is not highlighted.
     highlights: Vec<Highlight>,
+    /// Recomputes the highlights after an edit. The shell installs this when it opens a file,
+    /// so the widget does not need to know which language it is editing.
+    highlighter: Option<Highlighter>,
 }
 
 impl EditorState {
@@ -78,6 +81,25 @@ impl EditorState {
             dragging: false,
             gutter: true,
             highlights: Vec::new(),
+            highlighter: None,
+        }
+    }
+
+    /// The buffer as a string (the shell reads it for indentation and outline panels).
+    pub fn text(&self) -> String {
+        self.rope.to_string()
+    }
+
+    /// Installs the re-highlighting hook; called after every edit.
+    pub fn set_highlighter(&mut self, highlighter: Highlighter) {
+        self.highlights = highlighter(&self.rope.to_string());
+        self.highlighter = Some(highlighter);
+    }
+
+    fn rehighlight(&mut self) {
+        if let Some(highlighter) = &self.highlighter {
+            let spans = highlighter(&self.rope.to_string());
+            self.highlights = spans;
         }
     }
 
@@ -144,6 +166,7 @@ impl EditorState {
         self.caret = at + text.chars().count();
         self.anchor = self.caret;
         self.preedit = None;
+        self.rehighlight();
     }
 
     fn backspace(&mut self) {
@@ -158,6 +181,7 @@ impl EditorState {
             self.caret -= 1;
             self.anchor = self.caret;
         }
+        self.rehighlight();
     }
 
     fn delete_forward(&mut self) {
@@ -170,6 +194,7 @@ impl EditorState {
         if self.caret < self.rope.len_chars() {
             self.rope.remove(self.caret..self.caret + 1);
         }
+        self.rehighlight();
     }
 
     fn move_horizontal(&mut self, delta: isize, select: bool) {
@@ -223,6 +248,10 @@ pub struct Highlight {
     pub end: usize,
     pub class: SyntaxClass,
 }
+
+/// Computes the highlight spans for a buffer (installed by the shell, so the widget stays
+/// independent of any language).
+pub type Highlighter = Box<dyn Fn(&str) -> Vec<Highlight>>;
 
 /// Syntax colours, mirroring the `--syn-*` variables of the web theme.
 #[derive(Debug, Clone, Copy)]
