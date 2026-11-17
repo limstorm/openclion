@@ -108,7 +108,7 @@ impl App {
             tabs: vec![welcome],
             active_tab: 0,
             left: Some("project"),
-            left_width: 403.0,
+            left_width: load_panel_width().unwrap_or(403.0),
             right: None,
             bottom: None,
             palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
@@ -273,6 +273,7 @@ impl App {
             Message::ResizeDock(x) => {
                 let margin = crate::metrics::STRIPE + 6.0;
                 self.left_width = (x - margin).clamp(160.0, 900.0);
+                save_panel_width(self.left_width);
             }
             Message::ToggleTheme => {
                 self.light = !self.light;
@@ -409,3 +410,23 @@ const WELCOME: &str = "# OpenCLion（iced 原生外壳）\n\n\
 - Ctrl+Shift+P 打开命令面板\n\
 - 活动栏图标切工具窗（Project / Search / Git / Problems / Terminal）\n\
 - 状态栏右侧切主题、切语言\n";
+
+/// The web stores panel widths in the window's workspace; the prototype keeps the one value
+/// it has in a small state file so a restart looks the same.
+fn state_file() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME")?;
+    Some(PathBuf::from(home).join(".cache/iced-shell/state"))
+}
+
+pub fn load_panel_width() -> Option<f32> {
+    let contents = std::fs::read_to_string(state_file()?).ok()?;
+    contents.lines().find_map(|line| line.strip_prefix("left_width=")?.parse().ok())
+}
+
+fn save_panel_width(width: f32) {
+    let Some(path) = state_file() else { return };
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::write(path, format!("left_width={width:.0}\n"));
+}

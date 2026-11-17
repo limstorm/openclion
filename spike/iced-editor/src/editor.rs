@@ -60,6 +60,8 @@ pub struct EditorState {
     dragging: bool,
     /// Draw the line-number gutter (the web editor always has one).
     pub gutter: bool,
+    /// Rows the viewport shows, refreshed on every draw.
+    visible_rows: usize,
     /// Highlighted ranges, sorted by start; empty when the file is not highlighted.
     highlights: Vec<Highlight>,
     /// Recomputes the highlights after an edit. The shell installs this when it opens a file,
@@ -80,6 +82,7 @@ impl EditorState {
             preedit: None,
             dragging: false,
             gutter: true,
+            visible_rows: 0,
             highlights: Vec::new(),
             highlighter: None,
         }
@@ -220,8 +223,11 @@ impl EditorState {
 
     fn ensure_visible(&mut self) {
         let line = self.line();
+        let rows = self.visible_rows.max(1);
         if line < self.scroll {
             self.scroll = line;
+        } else if line >= self.scroll + rows {
+            self.scroll = line + 1 - rows;
         }
     }
 }
@@ -301,6 +307,8 @@ pub struct Palette {
     pub gutter_text_current: Color,
     /// `--syn-*`
     pub syntax: SyntaxColors,
+    /// `--scrollbar-thumb`
+    pub scrollbar: Color,
 }
 
 impl Default for Palette {
@@ -314,6 +322,7 @@ impl Default for Palette {
             preedit_underline: Color::from_rgb(0.95, 0.70, 0.30),
             gutter_text: Color::from_rgb(0.294, 0.314, 0.349),
             gutter_text_current: Color::from_rgb(0.631, 0.639, 0.671),
+            scrollbar: Color::from_rgba(1.0, 1.0, 1.0, 0.2),
             syntax: SyntaxColors {
                 keyword: Color::from_rgb(0.812, 0.557, 0.427),
                 string: Color::from_rgb(0.416, 0.671, 0.451),
@@ -413,6 +422,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
     ) {
         let bounds = layout.bounds();
         let mut state = self.state.borrow_mut();
+        state.visible_rows = (bounds.height / state.line_height).floor().max(1.0) as usize;
 
         match event {
             Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
@@ -426,6 +436,20 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             }
             Event::Mouse(mouse::Event::ButtonReleased(mouse::Button::Left)) => {
                 state.dragging = false;
+            }
+            Event::Mouse(mouse::Event::WheelScrolled { delta }) if cursor.is_over(bounds) => {
+                let rows = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => *y,
+                    mouse::ScrollDelta::Pixels { y, .. } => *y / state.line_height,
+                };
+                let visible = (bounds.height / state.line_height).ceil() as isize;
+                let max = (state.line_count() as isize - visible).max(0);
+                let next = (state.scroll as isize - rows.round() as isize).clamp(0, max);
+                if next != state.scroll as isize {
+                    state.scroll = next as usize;
+                    shell.request_redraw();
+                }
+                shell.capture_event();
             }
             Event::Mouse(mouse::Event::CursorMoved { .. }) => {
                 if state.dragging
@@ -699,6 +723,29 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 Point::new(x, y),
                 self.palette.preedit,
                 bounds,
+            );
+        }
+
+        // Overlay scrollbar, like the web editor's: a thin thumb on the right edge.
+        let lines = state.line_count();
+        let visible = (bounds.height / line_height).ceil() as usize;
+        if lines > visible && visible > 0 {
+            let track = 10.0;
+            let total = bounds.height - 8.0;
+            let thumb_height = (visible as f32 / lines as f32 * total).max(24.0);
+            let max_scroll = (lines - visible) as f32;
+            let offset =
+                if max_scroll > 0.0 { (state.scroll as f32 / max_scroll) * (total - thumb_height) } else { 0.0 };
+            renderer.fill_quad(
+                renderer::Quad {
+                    bounds: Rectangle::new(
+                        Point::new(bounds.x + bounds.width - track, bounds.y + 4.0 + offset),
+                        Size::new(track - 4.0, thumb_height),
+                    ),
+                    border: iced::Border { radius: 3.0.into(), ..iced::Border::default() },
+                    ..renderer::Quad::default()
+                },
+                self.palette.scrollbar,
             );
         }
 

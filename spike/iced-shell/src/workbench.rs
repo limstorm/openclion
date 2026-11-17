@@ -293,6 +293,11 @@ fn editor_area(app: &App) -> Element<'_, Message> {
         caret: tokens.caret,
         preedit: tokens.warning,
         preedit_underline: tokens.warning,
+        scrollbar: if tokens.fg == iced::Color::BLACK {
+            iced::Color::from_rgba(0.0, 0.0, 0.0, 0.2)
+        } else {
+            iced::Color::from_rgba(1.0, 1.0, 1.0, 0.2)
+        },
         gutter_text: tokens.gutter_text,
         gutter_text_current: tokens.gutter_text_current,
         syntax: iced_editor::SyntaxColors {
