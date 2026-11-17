@@ -50,6 +50,8 @@ pub struct App {
     pub palette: Option<String>,
     /// The main menu is open (a stand-in until the menu bar is ported).
     pub menu: bool,
+    /// Which tool window the pointer is over; its header actions show only then.
+    pub dock_hovered: Option<&'static str>,
     pub palette_input: iced::advanced::widget::Id,
     /// Stable id for the editor widget; iced routes IME through focus, which needs one.
     editor_id: iced::advanced::widget::Id,
@@ -71,6 +73,8 @@ pub enum Message {
     TogglePalette,
     /// The ☰ button's menu (the web's MainMenu).
     ToggleMenu,
+    /// The pointer entered or left a tool window island.
+    HoverDock(Option<&'static str>),
     PaletteInput(String),
     PaletteSubmit,
     RunCommand(&'static str),
@@ -124,6 +128,7 @@ impl App {
             bottom: None,
             palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
             menu: false,
+            dock_hovered: None,
             palette_input: iced::advanced::widget::Id::unique(),
             editor_id: iced::advanced::widget::Id::unique(),
             status: i18n::t(Language::Zh, "status.ready").to_owned(),
@@ -232,6 +237,7 @@ impl App {
                 }
             }
             Message::OpenFile(path) => self.open_file(path),
+            Message::HoverDock(id) => self.dock_hovered = id,
             Message::ToggleMenu => self.menu = !self.menu,
             Message::TogglePalette => {
                 self.palette = if self.palette.is_some() { None } else { Some(String::new()) };

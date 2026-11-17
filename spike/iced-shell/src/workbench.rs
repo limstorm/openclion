@@ -290,8 +290,11 @@ fn right_dock(app: &App) -> Element<'_, Message> {
     dock(app, Dock::Right, 280.0)
 }
 
+/// A tool window island: the 40px header (`padding: 0 6px 0 8px`, `gap: 6px`) with the
+/// title button, its chevron and the two header actions, then the body.
 fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
     let tokens = app.tokens();
+    let light = app.light;
     let active = match dock {
         Dock::Left => app.left,
         Dock::Right => app.right,
@@ -304,30 +307,55 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
     let title =
         i18n::t(app.language(), crate::registry::ToolWindow::by_id(id).map_or("tool.project", |tool| tool.title_key));
 
-    // `--h-header: 40px`: one tool window per dock, its title and the actions affordance.
-    let header = row![
-        text(title).size(FONT_UI).color(tokens.fg),
-        text("⌄").size(FONT_TINY).color(tokens.fg_muted),
-        Space::new().width(Length::Fill),
-        // The web reveals these on hover; until hover state exists they stay visible but muted.
-        button(text("⋯").size(FONT_UI).color(tokens.fg_muted))
-            .padding([0, 4])
-            .style(|_theme, _status| button::Style { background: None, ..button::Style::default() }),
-        button(text("×").size(FONT_UI).color(tokens.fg_muted))
-            .padding([0, 4])
-            .style(|_theme, _status| button::Style { background: None, ..button::Style::default() })
-            .on_press(Message::HideTool(dock)),
-    ]
-    .spacing(6)
-    .align_y(Alignment::Center)
-    .padding([0, 12]);
+    // `.titleButton`: 24px tall, `gap: 4px`, `padding: 0 4px`, `radius-small`, hover background.
+    let title_button = button(
+        row![
+            text(title)
+                .size(FONT_UI)
+                .color(tokens.fg)
+                .font(iced::Font { weight: iced::font::Weight::Semibold, ..iced::Font::default() }),
+            Svg::new(Handle::from_memory(icons::chevron(true, light))).width(12).height(12),
+        ]
+        .spacing(4)
+        .align_y(Alignment::Center),
+    )
+    .padding([0, 4])
+    .height(Length::Fixed(24.0))
+    .style(move |_theme, status| button::Style {
+        background: matches!(status, button::Status::Hovered).then(|| tokens.toolbar_hover.into()),
+        border: Border { radius: RADIUS_SMALL.into(), ..Border::default() },
+        ..button::Style::default()
+    });
 
-    let body = tool_body(app, id);
+    // `.headerActions`: 16px icons in small buttons, `gap: 2px`, revealed on hover.
+    let shown = app.dock_hovered == Some(id);
+    let actions: Element<'_, Message> = if shown {
+        row![
+            action_button(icons::tool_window_action(icons::ToolWindowAction::More, light), tokens, None),
+            action_button(
+                icons::tool_window_action(icons::ToolWindowAction::Hide, light),
+                tokens,
+                Some(Message::HideTool(dock)),
+            ),
+        ]
+        .spacing(2)
+        .into()
+    } else {
+        Space::new().width(0).into()
+    };
 
-    let panel =
-        column![container(header).height(Length::Fixed(HEADER)).align_y(Alignment::Center), body].height(Length::Fill);
+    let header = container(
+        row![title_button, Space::new().width(Length::Fill), actions]
+            .spacing(6)
+            .align_y(Alignment::Center)
+            .padding(iced::Padding { top: 0.0, right: 6.0, bottom: 0.0, left: 8.0 }),
+    )
+    .height(Length::Fixed(HEADER))
+    .width(Length::Fill);
 
-    if dock == Dock::Bottom {
+    let panel = column![header, tool_body(app, id)].height(Length::Fill);
+
+    let body: Element<'_, Message> = if dock == Dock::Bottom {
         container(panel)
             .height(Length::Fixed(200.0))
             .width(Length::Fill)
@@ -347,6 +375,31 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
                 ..container::Style::default()
             })
             .into()
+    };
+
+    // `mouse_area` gives the island's hover state, which reveals the header actions.
+    let id_for_hover = id;
+    iced::widget::mouse_area(body)
+        .on_enter(Message::HoverDock(Some(id_for_hover)))
+        .on_exit(Message::HoverDock(None))
+        .into()
+}
+
+/// A small (16px) header action button.
+fn action_button(bytes: &'static [u8], tokens: &Tokens, message: Option<Message>) -> Element<'static, Message> {
+    let tokens = *tokens;
+    let button = button(Svg::new(Handle::from_memory(bytes)).width(16).height(16))
+        .padding([0, 0])
+        .width(Length::Fixed(20.0))
+        .height(Length::Fixed(20.0))
+        .style(move |_theme, status| button::Style {
+            background: matches!(status, button::Status::Hovered).then(|| tokens.toolbar_hover.into()),
+            border: Border { radius: RADIUS_SMALL.into(), ..Border::default() },
+            ..button::Style::default()
+        });
+    match message {
+        Some(message) => button.on_press(message).into(),
+        None => button.into(),
     }
 }
 

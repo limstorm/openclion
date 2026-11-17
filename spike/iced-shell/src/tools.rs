@@ -61,24 +61,9 @@ fn display_path(path: &std::path::Path) -> String {
 
 pub fn project_panel(app: &crate::app::App) -> Element<'_, Message> {
     let tokens = app.tokens();
-    let mut list = column![].spacing(0);
-
-    // The tree toolbar the web shows under the tool window header: collapse, actions, settings.
-    list = list.push(
-        container(
-            row![
-                Space::new().width(crate::metrics::TREE_PADDING),
-                text("⌄").size(crate::metrics::FONT_TINY).color(tokens.fg_muted),
-                text("⋯").size(crate::metrics::FONT_SMALL).color(tokens.fg_muted),
-                Space::new().width(Length::Fill),
-                text("⛭").size(crate::metrics::FONT_SMALL).color(tokens.fg_muted),
-            ]
-            .spacing(8)
-            .align_y(Alignment::Center),
-        )
-        .height(Length::Fixed(crate::metrics::FIELD))
-        .width(Length::Fill),
-    );
+    // The web tree is inset from the island edge (`.tree` `--tree-inset`) and starts a few
+    // pixels under the header; measured against the webview build, 4px top matches.
+    let mut list = column![].spacing(0).padding(iced::Padding { top: 4.0, right: 0.0, bottom: 0.0, left: 0.0 });
 
     // The web tree paints the project root as its first row.
     if let Some(project) = &app.project {

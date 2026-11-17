@@ -48,6 +48,11 @@ icons! {
     // Title bar chrome that lives in the expui set.
     SETTINGS_DARK => "general/settings_dark.svg",
     SETTINGS_LIGHT => "general/settings.svg",
+    // Tool window header actions.
+    MORE_DARK => "general/moreVertical_dark.svg",
+    MORE_LIGHT => "general/moreVertical.svg",
+    HIDE_DARK => "general/remove_dark.svg",
+    HIDE_LIGHT => "general/remove.svg",
 }
 
 /// The `openclion/` set (window chrome), which sits at a different root than `expui/`.
@@ -170,6 +175,20 @@ pub fn tool_window(id: &str, light_theme: bool) -> &'static [u8] {
         "database" => pick(TW_DATABASE_DARK, TW_DATABASE_LIGHT, light_theme),
         _ => pick(TW_PROJECT_DARK, TW_PROJECT_LIGHT, light_theme),
     }
+}
+
+/// The tool window header's "more options" and "hide" affordances.
+pub fn tool_window_action(kind: ToolWindowAction, light_theme: bool) -> &'static [u8] {
+    match kind {
+        ToolWindowAction::More => pick(MORE_DARK, MORE_LIGHT, light_theme),
+        ToolWindowAction::Hide => pick(HIDE_DARK, HIDE_LIGHT, light_theme),
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum ToolWindowAction {
+    More,
+    Hide,
 }
 
 /// The ☰ menu button of the title bar.
