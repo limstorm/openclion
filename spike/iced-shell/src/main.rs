@@ -11,6 +11,7 @@ mod i18n;
 mod icons;
 mod metrics;
 mod registry;
+mod splitter;
 mod tokens;
 mod tools;
 mod workbench;

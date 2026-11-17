@@ -91,16 +91,15 @@ fn strip(app: &App) -> Element<'_, Message> {
         .into()
 }
 
-/// The 6px band the web puts between a tool window and the editor (`--splitter`), where a drag
-/// resizes the dock. Same width here; the drag comes with the resizable docks.
+/// The 6px band the web puts between a tool window and the editor; dragging it resizes the
+/// panel, exactly like the web's splitter.
 fn splitter<'a>(app: &'a App) -> Element<'a, Message> {
     let tokens = app.tokens();
-    let width = if app.left.is_some() { 6.0 } else { 0.0 };
-    container(Space::new().width(Length::Fixed(width)))
-        .width(Length::Fixed(width))
-        .height(Length::Fill)
-        .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
-        .into()
+    if app.left.is_none() {
+        return Space::new().width(0).into();
+    }
+
+    crate::splitter::Splitter::new(tokens.frame, tokens.selected, Message::ResizeDock).into()
 }
 
 fn is_active(app: &App, id: &str) -> bool {

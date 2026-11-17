@@ -71,6 +71,8 @@ pub enum Message {
     Key(iced::keyboard::Event),
     ToggleTheme,
     ToggleLanguage,
+    /// The splitter moved to this window x; the left panel takes the space up to it.
+    ResizeDock(f32),
 }
 
 impl App {
@@ -268,6 +270,10 @@ impl App {
                 }
             }
             Message::Key(_) => {}
+            Message::ResizeDock(x) => {
+                let margin = crate::metrics::STRIPE + 6.0;
+                self.left_width = (x - margin).clamp(160.0, 900.0);
+            }
             Message::ToggleTheme => {
                 self.light = !self.light;
                 self.tokens = if self.light { Tokens::light() } else { Tokens::dark() };
