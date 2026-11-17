@@ -76,6 +76,7 @@ export function BranchFilterPopup({
       onClose={onClose}
       className={styles.branchFilterPopup}
       aria-label={tx("Filter by Branch")}
+      closeOnDeactivate={false}
     >
       <div className={styles.branchFilterSearch}>
         <SearchField

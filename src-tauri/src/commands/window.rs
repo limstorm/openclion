@@ -84,7 +84,13 @@ pub async fn window_open_settings(
     new_projects: bool,
     background: Option<String>,
 ) -> IdeResult<()> {
-    windows::open_settings_window(&app, &window, page, new_projects, background)
+    tracing::info!("window_open_settings: parent={} page={page:?}", window.label());
+    let result = windows::open_settings_window(&app, &window, page, new_projects, background);
+    match &result {
+        Ok(()) => tracing::info!("window_open_settings: done"),
+        Err(e) => tracing::warn!("window_open_settings: {e}"),
+    }
+    result
 }
 
 /// Focuses the next / previous window (⌘` / ⇧⌘`).

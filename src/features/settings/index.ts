@@ -86,13 +86,29 @@ function settingsActions(open: (page?: string, newProjects?: boolean) => void): 
   ];
 }
 
+/**
+ * The CEF runtime opens a second window but its webview never paints (a blank Settings
+ * window), so this branch keeps Settings in the in-page dialog. Set to true once the
+ * runtime creates working webviews for new windows.
+ */
+const NATIVE_SETTINGS_WINDOW = false;
+
+/** Cleared for good once the runtime cannot open the native window. */
+let nativeSettingsBroken = false;
+
 /** Native Settings window when the backend can make one, else the dialog. */
 async function showSettings(page?: string, newProjects = false) {
-  if (isTauri()) {
+  if (NATIVE_SETTINGS_WINDOW && isTauri() && !nativeSettingsBroken) {
     try {
-      await call(commands.windowOpenSettings(page ?? null, newProjects, windowBackgroundHex()));
-      return;
+      const opened = await Promise.race([
+        call(commands.windowOpenSettings(page ?? null, newProjects, windowBackgroundHex())).then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2000)),
+      ]);
+      if (opened) return;
+      nativeSettingsBroken = true;
+      console.warn("settings window did not open in time, using the dialog");
     } catch (e) {
+      nativeSettingsBroken = true;
       console.warn("settings window unavailable, using the dialog", e);
     }
   }

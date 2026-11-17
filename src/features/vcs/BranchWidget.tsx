@@ -300,6 +300,7 @@ function BranchesPopup({ anchor, onClose }: { anchor: RefObject<HTMLElement | nu
       placement="bottom-start"
       aria-label="Git Branches"
       className={clsx(styles.popup, multi && styles.wide)}
+      closeOnDeactivate={false}
     >
       {multi ? (
         <MultiRepoPanel onClose={onClose} actions={actions} />
@@ -507,6 +508,7 @@ function SubMenu({
       autoFocus={false}
       onClose={onClose}
       className={styles.menuPopup}
+      closeOnDeactivate={false}
     >
       <MenuList items={items} onDone={onClose} onCloseLevel={onClose} aria-label={label} />
     </Popup>
@@ -747,6 +749,7 @@ function MultiRepoPanel({ onClose, actions: popupActions }: { onClose: () => voi
           autoFocus={repoMenu.focus}
           aria-label={tx`Branches of ${repoName(repoMenu.root)}`}
           onClose={closeRepoMenu}
+          closeOnDeactivate={false}
           className={styles.popup}
         >
           <BranchesPanel

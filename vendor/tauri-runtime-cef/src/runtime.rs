@@ -1774,7 +1774,9 @@ impl<T: UserEvent> WinitCefApp<T> {
                 }
             }
             Message::CreateWindow { window_id, webview_id, pending, after_window_creation, result_tx } => {
+                log::info!("create_window: received window_id={window_id:?} webview_id={webview_id:?}");
                 let result = self.create_window(event_loop, window_id, webview_id, pending, after_window_creation);
+                log::info!("create_window: finished ok={}", result.is_ok());
                 // The caller stopped waiting: see `RuntimeContext::wait_for_creation`.
                 if let Err(mpsc::SendError(Err(error))) = result_tx.send(result) {
                     log::error!("failed to create window: {error}");

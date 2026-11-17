@@ -804,11 +804,16 @@ pub fn open_settings_window(
     let builder = WebviewWindowBuilder::from_config(app, &config);
     // AppKit child windows can disappear when dragged to another display's Space.
     // The settings label already tracks ownership and parent-close cleanup.
-    #[cfg(not(target_os = "macos"))]
+    //
+    // Linux keeps no parent: the CEF runtime's create-window path never completes when
+    // the builder asks for one, which left "Settings..." doing nothing at all.
+    #[cfg(all(not(target_os = "macos"), not(target_os = "linux")))]
     let builder = builder.and_then(|b| b.parent(&parent));
+    tracing::info!("settings window: building {label}");
     let window = builder
         .and_then(|b| dev_font_preferences(b).build())
         .map_err(|e| IdeError::internal(format!("cannot create settings window: {e}")))?;
+    tracing::info!("settings window: built {label}");
     apply_zoom(app, &window);
     #[cfg(target_os = "macos")]
     align_titlebar(app, &window);

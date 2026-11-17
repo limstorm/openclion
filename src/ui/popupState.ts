@@ -69,9 +69,12 @@ export function onWindowDeactivate(fn: () => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const onBlur = () => {
     clearTimeout(timer);
+    // CEF under XWayland moves the X input focus between GTK's toplevel and Chromium's
+    // child window; the webview reports a blur that the next watchdog tick undoes. Wait
+    // long enough to see whether the focus comes back before closing the popup.
     timer = setTimeout(() => {
       if (!document.hasFocus()) fn();
-    }, 0);
+    }, 400);
   };
   window.addEventListener("blur", onBlur);
   return () => {

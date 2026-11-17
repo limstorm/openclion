@@ -101,6 +101,7 @@ export function CommitOptionsPopup({
       role="dialog"
       aria-label="Commit Options"
       className={styles.options}
+      closeOnDeactivate={false}
     >
       {/* IDEA opens the options without focusing the Author field. */}
       <div tabIndex={-1} data-autofocus className={styles.optFocus} />
