@@ -13,6 +13,7 @@ mod metrics;
 mod project;
 mod registry;
 mod splitter;
+mod textfit;
 mod tokens;
 mod tools;
 mod wash;

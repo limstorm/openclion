@@ -52,6 +52,8 @@ pub struct App {
     pub menu: bool,
     /// Which tool window the pointer is over; its header actions show only then.
     pub dock_hovered: Option<&'static str>,
+    /// Index of the tab under the pointer, if any.
+    pub tab_hovered: Option<usize>,
     pub palette_input: iced::advanced::widget::Id,
     /// Stable id for the editor widget; iced routes IME through focus, which needs one.
     editor_id: iced::advanced::widget::Id,
@@ -75,6 +77,8 @@ pub enum Message {
     ToggleMenu,
     /// The pointer entered or left a tool window island.
     HoverDock(Option<&'static str>),
+    /// The pointer entered or left an editor tab; its close button only shows then.
+    HoverTab(Option<usize>),
     PaletteInput(String),
     PaletteSubmit,
     RunCommand(&'static str),
@@ -129,6 +133,7 @@ impl App {
             palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
             menu: false,
             dock_hovered: None,
+            tab_hovered: None,
             palette_input: iced::advanced::widget::Id::unique(),
             editor_id: iced::advanced::widget::Id::unique(),
             status: i18n::t(Language::Zh, "status.ready").to_owned(),
@@ -238,6 +243,7 @@ impl App {
             }
             Message::OpenFile(path) => self.open_file(path),
             Message::HoverDock(id) => self.dock_hovered = id,
+            Message::HoverTab(index) => self.tab_hovered = index,
             Message::ToggleMenu => self.menu = !self.menu,
             Message::TogglePalette => {
                 self.palette = if self.palette.is_some() { None } else { Some(String::new()) };

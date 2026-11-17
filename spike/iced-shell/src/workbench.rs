@@ -11,7 +11,7 @@ use crate::app::{App, Message};
 use crate::metrics::*;
 use crate::registry::{Command, Dock, TOOL_WINDOWS};
 use crate::tokens::Tokens;
-use crate::{i18n, icons, project, tools};
+use crate::{i18n, icons, project, textfit, tools};
 
 pub fn view(app: &App) -> Element<'_, Message> {
     // `--island-gap: 6px` between every island; the stripe is transparent on the frame and
@@ -438,59 +438,91 @@ fn centre(app: &App) -> Element<'_, Message> {
     column.push(status(app)).width(Length::Fill).height(Length::Fill).into()
 }
 
+/// The editor tab strip, ported from `ui/Tabs.tsx` + `Tabs.module.css`: `.tabButton` is
+/// `padding: 0 10px` with `gap: 6px`, `.tabLabel` caps at 260px with an ellipsis,
+/// `.closeSlot` is 20px wide with `margin-right: 4px`, and the close button only shows on the
+/// selected tab or under the pointer.
 fn tabs(app: &App) -> Element<'_, Message> {
     let tokens = app.tokens();
     let mut tabs = row![].spacing(2).align_y(Alignment::Center);
 
     for (index, tab) in app.tabs.iter().enumerate() {
         let active = index == app.active_tab;
-        tabs = tabs.push(
-            button(
-                row![
-                    tools::file_tab_icon(tab.path.as_deref(), app.light),
-                    text(tab.title.clone()).size(FONT_UI).color(if active { tokens.fg } else { tokens.fg_secondary }),
-                    text("×").size(FONT_SMALL).color(tokens.fg_muted),
-                ]
-                .spacing(6)
-                .align_y(Alignment::Center)
-                .padding([0, 10]),
-            )
-            .padding([0, 0])
-            .height(Length::Fixed(TAB))
-            .style(move |_theme, status| {
-                let hovered = matches!(status, button::Status::Hovered);
-                let background = if active {
-                    tokens.tab_selected
-                } else if hovered {
-                    tokens.tab_hover
-                } else {
-                    tokens.app
-                };
-                button::Style {
-                    background: Some(background.into()),
-                    border: Border {
-                        color: if active { tokens.tab_selected_border } else { tokens.border },
-                        width: 1.0,
-                        radius: RADIUS_TAB.into(),
-                    },
-                    text_color: tokens.fg,
+        let hovered = app.tab_hovered == Some(index);
+        let label = textfit::ellipsize(&tab.title, 260.0, FONT_UI, iced::Font::default());
+
+        // `.closeSlot`: a 20px box; the `×` appears on hover or when selected.
+        let close: Element<'_, Message> = if active || hovered {
+            button(text("×").size(FONT_SMALL).color(tokens.fg_muted))
+                .padding([0, 0])
+                .width(Length::Fixed(20.0))
+                .style(|_theme, status| button::Style {
+                    background: matches!(status, button::Status::Hovered)
+                        .then(|| Color::from_rgba(0.0, 0.0, 0.0, 0.08).into()),
+                    border: Border { radius: RADIUS_SMALL.into(), ..Border::default() },
                     ..button::Style::default()
-                }
-            })
-            .on_press(Message::ActivateTab(index)),
+                })
+                .on_press(Message::CloseTab(index))
+                .into()
+        } else {
+            Space::new().width(Length::Fixed(20.0)).into()
+        };
+
+        let tab_button = button(
+            row![
+                tools::file_tab_icon(tab.path.as_deref(), app.light),
+                text(label).size(FONT_UI).color(if active { tokens.fg } else { tokens.fg_secondary }),
+                close,
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center)
+            .padding(iced::Padding { top: 0.0, right: 2.0, bottom: 0.0, left: 10.0 }),
+        )
+        .padding([0, 0])
+        .height(Length::Fixed(TAB))
+        .style(move |_theme, status| {
+            let hovered = matches!(status, button::Status::Hovered);
+            let background = if active {
+                tokens.tab_selected
+            } else if hovered {
+                tokens.tab_hover
+            } else {
+                tokens.app
+            };
+            button::Style {
+                background: Some(background.into()),
+                border: Border {
+                    color: if active { tokens.tab_selected_border } else { tokens.border },
+                    width: 1.0,
+                    radius: RADIUS_TAB.into(),
+                },
+                text_color: tokens.fg,
+                ..button::Style::default()
+            }
+        })
+        .on_press(Message::ActivateTab(index));
+
+        tabs = tabs.push(
+            iced::widget::mouse_area(tab_button)
+                .on_enter(Message::HoverTab(Some(index)))
+                .on_exit(Message::HoverTab(None)),
         );
     }
 
-    // The web puts a "+" after the tabs (and the editor actions on the right edge).
+    // `.tabActions`: 16px icon buttons, `gap: 2px`, `padding: 0 6px 0 8px` — split right and
+    // the tab's options menu, exactly the pair the web puts after the strip.
     tabs = tabs.push(
-        button(text("+").size(FONT_UI).color(tokens.fg_muted))
-            .padding([0, 8])
-            .height(Length::Fixed(TAB))
-            .style(|_theme, _status| button::Style { background: None, ..button::Style::default() }),
+        container(
+            row![
+                action_button(icons::split(app.light), tokens, None),
+                action_button(icons::tool_window_action(icons::ToolWindowAction::More, app.light), tokens, None),
+            ]
+            .spacing(2)
+            .padding(iced::Padding { top: 0.0, right: 6.0, bottom: 0.0, left: 8.0 }),
+        )
+        .center_y(Length::Fill),
     );
 
-    // Measured from the web build: the tab strip occupies 39px and a 1px border follows it,
-    // so the editor starts exactly 40px below the title bar.
     // The strip is part of the editor island, so it paints nothing itself. It occupies
     // `--h-tabbar` + 1: the web's strip is 39px tall with the 1px border under it.
     container(tabs).padding([5, 4]).height(Length::Fixed(TABBAR + 1.0)).width(Length::Fill).into()

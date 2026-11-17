@@ -53,6 +53,9 @@ icons! {
     MORE_LIGHT => "general/moreVertical.svg",
     HIDE_DARK => "general/remove_dark.svg",
     HIDE_LIGHT => "general/remove.svg",
+    // Editor tab strip actions.
+    SPLIT_DARK => "general/splitVertically_dark.svg",
+    SPLIT_LIGHT => "general/splitVertically.svg",
 }
 
 /// The `openclion/` set (window chrome), which sits at a different root than `expui/`.
@@ -183,6 +186,11 @@ pub fn tool_window_action(kind: ToolWindowAction, light_theme: bool) -> &'static
         ToolWindowAction::More => pick(MORE_DARK, MORE_LIGHT, light_theme),
         ToolWindowAction::Hide => pick(HIDE_DARK, HIDE_LIGHT, light_theme),
     }
+}
+
+/// The tab strip's "split right" icon.
+pub fn split(light_theme: bool) -> &'static [u8] {
+    pick(SPLIT_DARK, SPLIT_LIGHT, light_theme)
 }
 
 #[derive(Debug, Clone, Copy)]
