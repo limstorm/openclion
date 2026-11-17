@@ -56,6 +56,15 @@ cargo test --release             # registry 4 项：id 唯一、keymap 命令存
 | 面板与编辑区之间的分隔  | 6 px 分隔条                       | 未实现（仅有边框） | ⚠️ 待做               |
 | 工具窗/面板默认宽度     | 会话值（可拖拽）                  | 固定 260           | ⚠️ 会话值，需要可拖拽 |
 
+## 语法高亮
+
+打开文件时用 `ide_language::Syntax`（与 web 同一套 tree-sitter 语法与查询）算出
+`[from, to, kind]`，映射成 10 个类别，编辑器逐行把带颜色的片段覆盖绘制在默认色之上。
+颜色来自 `--syn-*`（浅色 `#0033b3`/`#067d17`/`#8c8c8c`/`#1750eb`…，深色另一套），
+代码字体是 web 的 JetBrains Mono 13px。
+
+`SHELL_OPEN=<path>` 可以在启动时直接打开某个文件，便于截图对照。
+
 ## 已知问题（下一步）
 
 1. **命令面板里的 Enter 不生效**：焦点在 `text_input` 时 iced 吞掉 Enter，`on_submit` 在 overlay 里没有触发

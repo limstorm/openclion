@@ -36,6 +36,15 @@ pub fn visible_rows<'a>(app: &'a crate::app::App) -> Vec<TreeRow<'a>> {
     rows
 }
 
+/// The icon a tab shows before its title: the file's own type icon.
+pub fn file_tab_icon<'a>(path: Option<&std::path::Path>, light: bool) -> Element<'a, Message> {
+    let bytes = match path.and_then(|path| path.file_name()).and_then(|name| name.to_str()) {
+        Some(name) => crate::icons::file_icon(name, light),
+        None => crate::icons::file_icon("welcome.md", light),
+    };
+    icon(bytes, 1.0)
+}
+
 /// One 16 px icon from the embedded SVG set.
 fn icon(bytes: &'static [u8], opacity: f32) -> Element<'static, Message> {
     Svg::new(Handle::from_memory(bytes)).width(16).height(16).opacity(opacity).into()

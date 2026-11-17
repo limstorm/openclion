@@ -2,4 +2,4 @@
 
 pub mod editor;
 
-pub use editor::{Editor, EditorState, Palette, Shared};
+pub use editor::{Editor, EditorState, Highlight, Palette, Shared, SyntaxClass, SyntaxColors};

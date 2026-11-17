@@ -108,3 +108,43 @@ mod tests {
         assert_eq!(display_name(Path::new("/")), "/");
     }
 }
+
+/// Highlights for a document, from the same `ide_language` grammars the web editor uses.
+///
+/// `SyntaxHighlights::data` is `[from, to, kind]` in UTF-16 offsets; the editor works in
+/// `char` offsets, which agree for everything outside the astral planes (fine here, noted for
+/// the real implementation).
+pub fn highlights(path: &Path, text: &str) -> Vec<iced_editor::Highlight> {
+    use iced_editor::SyntaxClass;
+
+    let language = registry().detect(path, None);
+    let Some(highlights) = syntax().highlights(&language, text) else {
+        return Vec::new();
+    };
+
+    let mut out = Vec::with_capacity(highlights.data.len() / 3);
+    for [from, to, kind] in highlights.data.as_chunks::<3>().0 {
+        let (from, to, kind) = (*from as usize, *to as usize, *kind as usize);
+        let Some(kind) = highlights.kinds.get(kind) else { continue };
+        use ide_language::SyntaxHighlightKind as Kind;
+
+        let class = match kind {
+            Kind::Keyword | Kind::Builtin | Kind::Macro | Kind::Attribute | Kind::Tag => SyntaxClass::Keyword,
+            Kind::String | Kind::StringSpecial | Kind::Escape | Kind::Regexp => SyntaxClass::String,
+            Kind::Number | Kind::Atom | Kind::Constant | Kind::Label => SyntaxClass::Number,
+            Kind::Comment | Kind::DocComment => SyntaxClass::Comment,
+            Kind::Function | Kind::FunctionCall => SyntaxClass::Function,
+            Kind::Type | Kind::Namespace => SyntaxClass::Type,
+            Kind::Property => SyntaxClass::Constant,
+            Kind::Operator | Kind::Punctuation => SyntaxClass::Punctuation,
+            Kind::Variable | Kind::SelfVariable => SyntaxClass::Variable,
+        };
+        out.push(iced_editor::Highlight { start: from, end: to, class });
+    }
+    out
+}
+
+fn syntax() -> &'static ide_language::Syntax {
+    static SYNTAX: std::sync::OnceLock<ide_language::Syntax> = std::sync::OnceLock::new();
+    SYNTAX.get_or_init(ide_language::Syntax::new)
+}

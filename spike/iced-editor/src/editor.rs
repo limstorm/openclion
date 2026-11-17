@@ -60,6 +60,8 @@ pub struct EditorState {
     dragging: bool,
     /// Draw the line-number gutter (the web editor always has one).
     pub gutter: bool,
+    /// Highlighted ranges, sorted by start; empty when the file is not highlighted.
+    highlights: Vec<Highlight>,
 }
 
 impl EditorState {
@@ -75,7 +77,14 @@ impl EditorState {
             preedit: None,
             dragging: false,
             gutter: true,
+            highlights: Vec::new(),
         }
+    }
+
+    /// Replaces the highlights; the shell recomputes them when the document changes.
+    pub fn set_highlights(&mut self, mut highlights: Vec<Highlight>) {
+        highlights.sort_by_key(|highlight| highlight.start);
+        self.highlights = highlights;
     }
 
     pub fn len_chars(&self) -> usize {
@@ -116,7 +125,7 @@ impl EditorState {
     fn position_at(&self, point: Point) -> usize {
         let line = self.scroll + (point.y / self.line_height).max(0.0) as usize;
         let line = line.min(self.line_count().saturating_sub(1));
-        let paragraph = paragraph(&self.line_text(line), self.font_size, self.line_height);
+        let paragraph = line_paragraph(&self.line_text(line), self.font_size, self.line_height);
         let column = column_at_x(
             &paragraph,
             self.line_text(line).chars().count(),
@@ -192,6 +201,61 @@ impl EditorState {
     }
 }
 
+/// The syntax classes the editor paints. The shell maps its highlighter's kinds onto these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SyntaxClass {
+    Keyword,
+    String,
+    Number,
+    Comment,
+    Function,
+    Type,
+    Constant,
+    Punctuation,
+    Variable,
+    Other,
+}
+
+/// One highlighted range, in `char` offsets into the buffer.
+#[derive(Debug, Clone, Copy)]
+pub struct Highlight {
+    pub start: usize,
+    pub end: usize,
+    pub class: SyntaxClass,
+}
+
+/// Syntax colours, mirroring the `--syn-*` variables of the web theme.
+#[derive(Debug, Clone, Copy)]
+pub struct SyntaxColors {
+    pub keyword: Color,
+    pub string: Color,
+    pub number: Color,
+    pub comment: Color,
+    pub function: Color,
+    pub ty: Color,
+    pub constant: Color,
+    pub punctuation: Color,
+    pub variable: Color,
+    pub other: Color,
+}
+
+impl SyntaxColors {
+    pub fn color(&self, class: SyntaxClass) -> Color {
+        match class {
+            SyntaxClass::Keyword => self.keyword,
+            SyntaxClass::String => self.string,
+            SyntaxClass::Number => self.number,
+            SyntaxClass::Comment => self.comment,
+            SyntaxClass::Function => self.function,
+            SyntaxClass::Type => self.ty,
+            SyntaxClass::Constant => self.constant,
+            SyntaxClass::Punctuation => self.punctuation,
+            SyntaxClass::Variable => self.variable,
+            SyntaxClass::Other => self.other,
+        }
+    }
+}
+
 /// Colours the widget draws with; the shell passes its tokens in so the editor follows the
 /// workbench theme instead of hardcoding one.
 #[derive(Debug, Clone, Copy)]
@@ -206,6 +270,8 @@ pub struct Palette {
     pub gutter_text: Color,
     /// `--fg-line-number-current`
     pub gutter_text_current: Color,
+    /// `--syn-*`
+    pub syntax: SyntaxColors,
 }
 
 impl Default for Palette {
@@ -219,6 +285,18 @@ impl Default for Palette {
             preedit_underline: Color::from_rgb(0.95, 0.70, 0.30),
             gutter_text: Color::from_rgb(0.294, 0.314, 0.349),
             gutter_text_current: Color::from_rgb(0.631, 0.639, 0.671),
+            syntax: SyntaxColors {
+                keyword: Color::from_rgb(0.812, 0.557, 0.427),
+                string: Color::from_rgb(0.416, 0.671, 0.451),
+                number: Color::from_rgb(0.165, 0.675, 0.722),
+                comment: Color::from_rgb(0.478, 0.494, 0.522),
+                function: Color::from_rgb(0.337, 0.659, 0.961),
+                ty: Color::from_rgb(0.737, 0.745, 0.769),
+                constant: Color::from_rgb(0.780, 0.490, 0.733),
+                punctuation: Color::from_rgb(0.737, 0.745, 0.769),
+                variable: Color::from_rgb(0.737, 0.745, 0.769),
+                other: Color::from_rgb(0.737, 0.745, 0.769),
+            },
         }
     }
 }
@@ -226,6 +304,7 @@ impl Default for Palette {
 pub struct Editor {
     state: Shared,
     palette: Palette,
+    font: Font,
     /// iced routes `Event::InputMethod` through the focus machinery, which needs an `Id`.
     /// It must be the *same* id every frame — a fresh `Id::unique()` per view loses focus
     /// (and with it every IME event) on the next redraw.
@@ -234,7 +313,13 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(state: Shared, id: Id) -> Self {
-        Self { state, id, palette: Palette::default() }
+        Self { state, id, palette: Palette::default(), font: Font::MONOSPACE }
+    }
+
+    /// `--font-mono`: the shell passes the family the web editor uses.
+    pub fn font(mut self, font: Font) -> Self {
+        self.font = font;
+        self
     }
 
     pub fn palette(mut self, palette: Palette) -> Self {
@@ -392,7 +477,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
             // Keep the candidate window at the caret, and let the runtime show the
             // composition if we ever decide not to draw it inline.
             let line_text = state.line_text(state.line());
-            let caret_x = column_x(&paragraph(&line_text, state.font_size, state.line_height), state.column());
+            let caret_x = column_x(&line_paragraph(&line_text, state.font_size, state.line_height), state.column());
             let caret = Rectangle::new(
                 Point::new(caret_x, (state.line() - state.scroll) as f32 * state.line_height),
                 Size::new(2.0, state.line_height),
@@ -422,6 +507,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         }
 
         let state = self.state.borrow();
+
         let font = Font::MONOSPACE;
         let size = Pixels::from(state.font_size);
         let line_height = state.line_height;
@@ -471,7 +557,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                     continue;
                 }
                 let text = state.line_text(line);
-                let paragraph = paragraph(&text, state.font_size, state.line_height);
+                let paragraph = line_paragraph(&text, state.font_size, state.line_height);
                 let x0 = origin + column_x(&paragraph, from - line_start);
                 let x1 = origin + column_x(&paragraph, (to - line_start).min(length));
                 let y = bounds.y + (line - first) as f32 * line_height;
@@ -512,6 +598,44 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
                 self.palette.text,
                 bounds,
             );
+
+            // Re-draw the highlighted runs on top, in their own colours. Spans never overlap
+            // and glyph positions are identical, so overdrawing is exact and cheap.
+            let line_start = state.rope.line_to_char(line);
+            let line_text = state.line_text(line);
+            let paragraph = line_paragraph(&line_text, state.font_size, state.line_height);
+            for highlight in &state.highlights {
+                if highlight.end <= line_start {
+                    continue;
+                }
+                if highlight.start >= line_start + line_text.chars().count() {
+                    break;
+                }
+                let from = highlight.start.saturating_sub(line_start);
+                let to = (highlight.end - line_start).min(line_text.chars().count());
+                if from >= to {
+                    continue;
+                }
+                let run: String = line_text.chars().skip(from).take(to - from).collect();
+                let x = bounds.x + origin + column_x(&paragraph, from);
+                renderer.fill_text(
+                    text::Text {
+                        content: run,
+                        bounds: Size::new(bounds.width, line_height),
+                        size,
+                        line_height: text::LineHeight::Absolute(Pixels::from(line_height)),
+                        font,
+                        align_x: text::Alignment::Left,
+                        align_y: iced::alignment::Vertical::Top,
+                        shaping: text::Shaping::Advanced,
+                        wrapping: text::Wrapping::None,
+                    },
+                    Point::new(x, y),
+                    self.palette.syntax.color(highlight.class),
+                    bounds,
+                );
+                let _ = highlight.class;
+            }
         }
 
         // The IME composition, drawn on the spot: underlined, at the caret.
@@ -520,9 +644,10 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         {
             let line = state.line();
             let line_text = state.line_text(line);
-            let x = bounds.x + column_x(&paragraph(&line_text, state.font_size, state.line_height), state.column());
+            let x =
+                bounds.x + column_x(&line_paragraph(&line_text, state.font_size, state.line_height), state.column());
             let y = bounds.y + (line - state.scroll) as f32 * line_height;
-            let preedit_width = paragraph(content, state.font_size, state.line_height).min_bounds().width;
+            let preedit_width = line_paragraph(content, state.font_size, state.line_height).min_bounds().width;
             renderer.fill_quad(
                 renderer::Quad {
                     bounds: Rectangle::new(Point::new(x, y + line_height - 2.0), Size::new(preedit_width, 1.0)),
@@ -551,7 +676,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
         if state.focused {
             let line = state.line();
             let text = state.line_text(line);
-            let paragraph = paragraph(&text, state.font_size, state.line_height);
+            let paragraph = line_paragraph(&text, state.font_size, state.line_height);
             let x = bounds.x + origin + column_x(&paragraph, state.column());
             let y = bounds.y + (line - state.scroll) as f32 * line_height;
             renderer.fill_quad(
@@ -577,7 +702,7 @@ impl<Message> Widget<Message, iced::Theme, iced::Renderer> for Editor {
 }
 
 /// Lays out one line, unbounded, with the same parameters the draw pass uses.
-fn paragraph(content: &str, size: f32, line_height: f32) -> <iced::Renderer as text::Renderer>::Paragraph {
+fn line_paragraph(content: &str, size: f32, line_height: f32) -> <iced::Renderer as text::Renderer>::Paragraph {
     <iced::Renderer as text::Renderer>::Paragraph::with_text(text::Text {
         content,
         bounds: Size::new(f32::INFINITY, line_height),

@@ -22,13 +22,35 @@ pub fn view(app: &App) -> Element<'_, Message> {
 /// native window has none, so drawing it is what makes the two line up.
 fn title_bar(app: &App) -> Element<'_, Message> {
     let tokens = app.tokens();
-    let title = match &app.project {
-        Some(project) => format!("{} – {}", project.name, app.tabs[app.active_tab].title),
-        None => i18n::t(app.language(), "app.title").to_owned(),
+    let project = app.project.as_ref().map(|project| project.name.clone());
+
+    // The web title bar is `[gap 44][18px project badge][8px][project name][chevron] …`.
+    let badge: Element<'_, Message> = match &project {
+        Some(name) => {
+            let initial = name.chars().next().unwrap_or('O').to_ascii_uppercase();
+            container(text(initial.to_string()).size(FONT_TINY).color(tokens.app))
+                .width(Length::Fixed(18.0))
+                .height(Length::Fixed(18.0))
+                .center_x(Length::Fixed(18.0))
+                .center_y(Length::Fixed(18.0))
+                .style(move |_theme| container::Style {
+                    background: Some(tokens.success.into()),
+                    border: Border { radius: 4.0.into(), ..Border::default() },
+                    ..container::Style::default()
+                })
+                .into()
+        }
+        None => Space::new().width(0).into(),
+    };
+
+    let name: Element<'_, Message> = match &project {
+        Some(name) => text(name.clone()).size(FONT_UI).color(tokens.fg).into(),
+        None => Space::new().width(0).into(),
     };
 
     container(
-        row![Space::new().width(STRIPE), text(title).size(FONT_UI).color(tokens.fg_secondary),]
+        row![Space::new().width(STRIPE + 8.0), badge, name, text("⌄").size(FONT_TINY).color(tokens.fg_muted),]
+            .spacing(8)
             .align_y(Alignment::Center),
     )
     .height(Length::Fixed(TITLEBAR))
@@ -192,13 +214,15 @@ fn tabs(app: &App) -> Element<'_, Message> {
         tabs = tabs.push(
             button(
                 row![
-                    text(tab.title.clone()).size(12).color(if active { tokens.fg } else { tokens.fg_muted }),
-                    text("×").size(11).color(tokens.fg_muted),
+                    tools::file_tab_icon(tab.path.as_deref(), app.light),
+                    text(tab.title.clone()).size(FONT_UI).color(if active { tokens.fg } else { tokens.fg_secondary }),
+                    text("×").size(FONT_SMALL).color(tokens.fg_muted),
                 ]
-                .spacing(8)
-                .align_y(Alignment::Center),
+                .spacing(6)
+                .align_y(Alignment::Center)
+                .padding([0, 10]),
             )
-            .padding([0, 10])
+            .padding([0, 0])
             .height(Length::Fixed(TAB))
             .style(move |_theme, _status| button::Style {
                 background: Some(if active { tokens.tab_selected } else { tokens.app }.into()),
@@ -213,6 +237,14 @@ fn tabs(app: &App) -> Element<'_, Message> {
             .on_press(Message::ActivateTab(index)),
         );
     }
+
+    // The web puts a "+" after the tabs (and the editor actions on the right edge).
+    tabs = tabs.push(
+        button(text("+").size(FONT_UI).color(tokens.fg_muted))
+            .padding([0, 8])
+            .height(Length::Fixed(TAB))
+            .style(|_theme, _status| button::Style { background: None, ..button::Style::default() }),
+    );
 
     // Measured from the web build: the tab strip occupies 39px and a 1px border follows it,
     // so the editor starts exactly 40px below the title bar.
@@ -254,9 +286,23 @@ fn editor_area(app: &App) -> Element<'_, Message> {
         preedit_underline: tokens.warning,
         gutter_text: tokens.gutter_text,
         gutter_text_current: tokens.gutter_text_current,
+        syntax: iced_editor::SyntaxColors {
+            keyword: tokens.syn.keyword,
+            string: tokens.syn.string,
+            number: tokens.syn.number,
+            comment: tokens.syn.comment,
+            function: tokens.syn.function,
+            ty: tokens.syn.ty,
+            constant: tokens.syn.constant,
+            punctuation: tokens.syn.punctuation,
+            variable: tokens.syn.variable,
+            other: tokens.fg,
+        },
     };
 
-    container(iced_editor::Editor::new(tab.editor.clone(), app.editor_id()).palette(palette))
+    let code_font = iced::Font { family: iced::font::Family::Name("JetBrains Mono"), ..iced::Font::default() };
+
+    container(iced_editor::Editor::new(tab.editor.clone(), app.editor_id()).palette(palette).font(code_font))
         .width(Length::Fill)
         .height(Length::Fill)
         .style(move |_theme| container::Style { background: Some(tokens.app.into()), ..container::Style::default() })

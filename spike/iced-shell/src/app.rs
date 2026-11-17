@@ -95,29 +95,32 @@ impl App {
             }
         }
 
-        (
-            Self {
-                tokens: Tokens::light(),
-                light: true,
-                language: Language::Zh,
-                project,
-                expanded,
-                children,
-                notice,
-                tabs: vec![welcome],
-                active_tab: 0,
-                left: Some("project"),
-                left_width: 403.0,
-                right: None,
-                bottom: None,
-                palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
-                palette_input: iced::advanced::widget::Id::unique(),
-                editor_id: iced::advanced::widget::Id::unique(),
-                status: i18n::t(Language::Zh, "status.ready").to_owned(),
-                selected: None,
-            },
-            Task::none(),
-        )
+        let mut app = Self {
+            tokens: Tokens::light(),
+            light: true,
+            language: Language::Zh,
+            project,
+            expanded,
+            children,
+            notice,
+            tabs: vec![welcome],
+            active_tab: 0,
+            left: Some("project"),
+            left_width: 403.0,
+            right: None,
+            bottom: None,
+            palette: std::env::var_os("SHELL_PALETTE").map(|_| String::new()),
+            palette_input: iced::advanced::widget::Id::unique(),
+            editor_id: iced::advanced::widget::Id::unique(),
+            status: i18n::t(Language::Zh, "status.ready").to_owned(),
+            selected: None,
+        };
+
+        if let Some(path) = std::env::var_os("SHELL_OPEN") {
+            app.open_file(PathBuf::from(path));
+        }
+
+        (app, Task::none())
     }
 
     pub fn title(&self) -> String {
@@ -192,28 +195,7 @@ impl App {
                     self.expanded.insert(path);
                 }
             }
-            Message::OpenFile(path) => {
-                self.selected = Some(path.clone());
-                if let Some(index) = self.tabs.iter().position(|tab| tab.path.as_deref() == Some(path.as_path())) {
-                    self.active_tab = index;
-                    return Task::none();
-                }
-                match fs::read_text(&path) {
-                    Ok(text) => {
-                        let mut state = EditorState::new(&text);
-                        state.font_size = crate::metrics::FONT_CODE;
-                        state.line_height = crate::metrics::EDITOR_LINE;
-                        self.tabs.push(Tab {
-                            title: fs::display_name(&path),
-                            path: Some(path),
-                            editor: Shared::new(state),
-                        });
-                        self.active_tab = self.tabs.len() - 1;
-                        self.notice = None;
-                    }
-                    Err(error) => self.notice = Some(error),
-                }
-            }
+            Message::OpenFile(path) => self.open_file(path),
             Message::TogglePalette => {
                 self.palette = if self.palette.is_some() { None } else { Some(String::new()) };
                 if self.palette.is_some() {
@@ -278,6 +260,28 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    /// Opens (or focuses) a file, computing its highlights with the language grammars.
+    pub fn open_file(&mut self, path: PathBuf) {
+        self.selected = Some(path.clone());
+        if let Some(index) = self.tabs.iter().position(|tab| tab.path.as_deref() == Some(path.as_path())) {
+            self.active_tab = index;
+            return;
+        }
+
+        match fs::read_text(&path) {
+            Ok(text) => {
+                let mut state = EditorState::new(&text);
+                state.font_size = crate::metrics::FONT_CODE;
+                state.line_height = crate::metrics::EDITOR_LINE;
+                state.set_highlights(fs::highlights(&path, &text));
+                self.tabs.push(Tab { title: fs::display_name(&path), path: Some(path), editor: Shared::new(state) });
+                self.active_tab = self.tabs.len() - 1;
+                self.notice = None;
+            }
+            Err(error) => self.notice = Some(error),
+        }
     }
 
     fn open_welcome(&mut self) {
