@@ -17,25 +17,24 @@ pub struct ToolWindow {
     pub id: &'static str,
     /// i18n key, not the label: the label depends on the current language.
     pub title_key: &'static str,
-    pub icon: &'static str,
     pub dock: Dock,
 }
 
 pub const TOOL_WINDOWS: &[ToolWindow] = &[
-    ToolWindow { id: "project", title_key: "tool.project", icon: "▤", dock: Dock::Left },
-    ToolWindow { id: "structure", title_key: "tool.structure", icon: "≡", dock: Dock::Left },
-    ToolWindow { id: "search", title_key: "tool.search", icon: "⌕", dock: Dock::Left },
-    ToolWindow { id: "git", title_key: "tool.git", icon: "◆", dock: Dock::Left },
-    ToolWindow { id: "commit", title_key: "tool.commit", icon: "✓", dock: Dock::Left },
-    ToolWindow { id: "problems", title_key: "tool.problems", icon: "▲", dock: Dock::Bottom },
-    ToolWindow { id: "find", title_key: "tool.find", icon: "⌕", dock: Dock::Bottom },
-    ToolWindow { id: "usages", title_key: "tool.usages", icon: "⇄", dock: Dock::Bottom },
-    ToolWindow { id: "terminal", title_key: "tool.terminal", icon: "▶", dock: Dock::Bottom },
-    ToolWindow { id: "run", title_key: "tool.run", icon: "⏵", dock: Dock::Bottom },
-    ToolWindow { id: "todo", title_key: "tool.todo", icon: "☑", dock: Dock::Bottom },
-    ToolWindow { id: "cmake", title_key: "tool.cmake", icon: "⚙", dock: Dock::Right },
-    ToolWindow { id: "build", title_key: "tool.build", icon: "🔨", dock: Dock::Right },
-    ToolWindow { id: "database", title_key: "tool.database", icon: "▤", dock: Dock::Right },
+    ToolWindow { id: "project", title_key: "tool.project", dock: Dock::Left },
+    ToolWindow { id: "structure", title_key: "tool.structure", dock: Dock::Left },
+    ToolWindow { id: "search", title_key: "tool.search", dock: Dock::Left },
+    ToolWindow { id: "git", title_key: "tool.git", dock: Dock::Left },
+    ToolWindow { id: "commit", title_key: "tool.commit", dock: Dock::Left },
+    ToolWindow { id: "problems", title_key: "tool.problems", dock: Dock::Bottom },
+    ToolWindow { id: "find", title_key: "tool.find", dock: Dock::Bottom },
+    ToolWindow { id: "usages", title_key: "tool.usages", dock: Dock::Bottom },
+    ToolWindow { id: "terminal", title_key: "tool.terminal", dock: Dock::Bottom },
+    ToolWindow { id: "run", title_key: "tool.run", dock: Dock::Bottom },
+    ToolWindow { id: "todo", title_key: "tool.todo", dock: Dock::Bottom },
+    ToolWindow { id: "cmake", title_key: "tool.cmake", dock: Dock::Right },
+    ToolWindow { id: "build", title_key: "tool.build", dock: Dock::Right },
+    ToolWindow { id: "database", title_key: "tool.database", dock: Dock::Right },
 ];
 
 impl ToolWindow {

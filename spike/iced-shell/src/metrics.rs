@@ -41,6 +41,10 @@ pub const TREE_INDENT: f32 = 12.0;
 pub const TREE_GAP: f32 = 5.0;
 /// Tree row horizontal padding.
 pub const TREE_PADDING: f32 = 8.0;
+/// `--island-gap: 6px` — the frame shows through between islands.
+pub const ISLAND_GAP: f32 = 6.0;
+/// `--island-radius: 10px`
+pub const ISLAND_RADIUS: f32 = 10.0;
 /// `--h-field: 28px`, `--h-button: 28px`
 pub const FIELD: f32 = 28.0;
 pub const BUTTON: f32 = 28.0;

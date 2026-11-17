@@ -22,12 +22,18 @@ pub struct SyntaxPalette {
 pub struct Tokens {
     /// `--bg-frame` — the window chrome between islands.
     pub frame: Color,
-    /// `--bg-app` — the editor surface.
+    /// `--bg-app` — the window surface under the islands.
     pub app: Color,
+    /// `--bg-island` — the rounded surfaces panels and the editor sit on.
+    pub island: Color,
     /// `--bg-elev` — panels.
     pub elev: Color,
     /// `--bg-hover`
     pub hover: Color,
+    /// `--bg-stripe-hover`, `--bg-stripe-selected`, `--fg-emphasis`
+    pub stripe_hover: Color,
+    pub stripe_selected: Color,
+    pub fg_emphasis: Color,
     /// `--bg-tab-hover`, `--bg-tree-hover`, `--bg-toolbar-hover`
     pub tab_hover: Color,
     pub tree_hover: Color,
@@ -70,11 +76,15 @@ impl Tokens {
     /// `:root` — Islands Dark.
     pub const fn dark() -> Self {
         Self {
-            frame: Color::from_rgb(0.149, 0.157, 0.173),      // #26282c
-            app: Color::from_rgb(0.098, 0.102, 0.110),        // #191a1c
-            elev: Color::from_rgb(0.129, 0.137, 0.149),       // #212326
-            hover: Color::from_rgb(0.180, 0.184, 0.188),      // #2e2f30
-            tab_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09), // #ffffff17
+            frame: Color::from_rgb(0.149, 0.157, 0.173),            // #26282c
+            app: Color::from_rgb(0.098, 0.102, 0.110),              // #191a1c
+            island: Color::from_rgb(0.098, 0.102, 0.110),           // #191a1c
+            elev: Color::from_rgb(0.129, 0.137, 0.149),             // #212326
+            hover: Color::from_rgb(0.180, 0.184, 0.188),            // #2e2f30
+            tab_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09),       // #ffffff17
+            stripe_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09),    // #ffffff17
+            stripe_selected: Color::from_rgba(1.0, 1.0, 1.0, 0.16), // #ffffff29
+            fg_emphasis: Color::from_rgb(0.820, 0.827, 0.839),      // #d1d3d9
             tree_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.05),
             toolbar_hover: Color::from_rgba(1.0, 1.0, 1.0, 0.09),
             border: Color::from_rgb(0.149, 0.157, 0.173),        // #26282c
@@ -113,9 +123,13 @@ impl Tokens {
         Self {
             frame: Color::from_rgb(0.914, 0.918, 0.933),             // #e9eaee
             app: Color::from_rgb(1.0, 1.0, 1.0),                     // #ffffff
+            island: Color::from_rgb(1.0, 1.0, 1.0),                  // #ffffff
             elev: Color::from_rgb(0.969, 0.973, 0.976),              // #f7f8f9
             hover: Color::from_rgb(0.929, 0.929, 0.929),             // #ededed
             tab_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.07),        // #00000012
+            stripe_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.07),     // #00000012
+            stripe_selected: Color::from_rgba(0.0, 0.0, 0.0, 0.125), // #00000020
+            fg_emphasis: Color::from_rgb(0.0, 0.0, 0.0),             // #000000
             tree_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.03),       // #00000008
             toolbar_hover: Color::from_rgba(0.0, 0.0, 0.0, 0.07),    // #00000012
             border: Color::from_rgb(0.914, 0.918, 0.933),            // #e9eaee

@@ -14,14 +14,22 @@ use crate::tokens::Tokens;
 use crate::{i18n, icons, project, tools};
 
 pub fn view(app: &App) -> Element<'_, Message> {
-    let base = column![title_bar(app), row![strip(app), left_dock(app), splitter(app), centre(app), right_dock(app)]];
+    // `--island-gap: 6px` between every island; the stripe is transparent on the frame and
+    // carries the gap itself (`--stripe-pad: var(--island-gap)`).
+    let base =
+        column![title_bar(app), row![strip(app), left_dock(app), splitter(app), centre(app), gap(), right_dock(app),],];
+
+    // The web's `.framed` paints `--bg-frame` under a radial wash of the project colour at 22%
+    // from the top-left corner. iced has no radial gradient, so the same tint is laid down as
+    // a steep linear gradient from that corner.
+    let framed = framed(app, base);
 
     if app.palette.is_some() {
-        stack![base, palette(app)].into()
+        stack![framed, palette(app)].into()
     } else if app.menu {
-        stack![base, main_menu(app)].into()
+        stack![framed, main_menu(app)].into()
     } else {
-        base.into()
+        framed
     }
 }
 
@@ -101,7 +109,6 @@ fn title_bar<'a>(app: &'a App) -> Element<'a, Message> {
     )
     .height(Length::Fixed(TITLEBAR))
     .width(Length::Fill)
-    .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
     .into()
 }
 
@@ -185,35 +192,78 @@ fn project_colors(name: &str) -> (Color, Color) {
     SLOTS[project::color_index(name) - 1]
 }
 
-/// The activity bar: every tool window, grouped by dock, the active one highlighted.
+/// `--island-gap`: the frame showing through between two islands.
+fn gap() -> Element<'static, Message> {
+    Space::new().width(Length::Fixed(ISLAND_GAP)).height(Length::Fill).into()
+}
+
+/// `.island`: a rounded `--bg-island` surface on the frame.
+fn island<'a>(content: impl Into<Element<'a, Message>>, tokens: &Tokens) -> Element<'a, Message> {
+    let tokens = *tokens;
+    container(content)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(move |_theme| container::Style {
+            background: Some(tokens.island.into()),
+            border: Border { radius: ISLAND_RADIUS.into(), ..Border::default() },
+            ..container::Style::default()
+        })
+        .into()
+}
+
+/// `.framed`: `--bg-frame` with the project colour washing in from the top-left corner at 22%.
+fn framed<'a>(app: &'a App, content: impl Into<Element<'a, Message>>) -> Element<'a, Message> {
+    let tokens = app.tokens();
+    let tint = app
+        .project
+        .as_ref()
+        .map(|project| Color { a: 0.22, ..project_colors(project.name.as_str()).0 })
+        .unwrap_or(Color::TRANSPARENT);
+
+    iced::widget::stack![
+        crate::wash::Wash { tint, frame: tokens.frame },
+        container(content).width(Length::Fill).height(Length::Fill),
+    ]
+    .into()
+}
+
+/// The activity stripe, ported from `ToolWindows.module.css`: 44px wide (32px button + 6px
+/// padding + 6px island gap), 32x32 buttons with `radius-popup`, an 18px icon, 2px apart, a
+/// transparent background (it sits on the window frame) and `--bg-stripe-*` states.
 fn strip(app: &App) -> Element<'_, Message> {
     let tokens = app.tokens();
-    let mut buttons = column![].spacing(2);
+    let light = app.light;
+    let mut buttons = column![].spacing(2).padding([0, 0]);
 
-    for dock in [Dock::Left, Dock::Bottom, Dock::Right] {
-        for tool in TOOL_WINDOWS.iter().filter(|tool| tool.dock == dock) {
-            let active = is_active(app, tool.id);
-            buttons = buttons.push(
-                button(text(tool.icon).size(16))
-                    .padding([0, 0])
-                    .width(Length::Fixed(STRIPE))
-                    .height(Length::Fixed(STRIPE_BUTTON))
-                    .style(move |_theme, _status| button::Style {
-                        background: active.then(|| tokens.selected.into()),
-                        text_color: if active { tokens.accent } else { tokens.fg_muted },
+    for tool in TOOL_WINDOWS {
+        let active = is_active(app, tool.id);
+        buttons = buttons.push(
+            button(Svg::new(Handle::from_memory(icons::tool_window(tool.id, light))).width(18).height(18))
+                .width(Length::Fixed(32.0))
+                .height(Length::Fixed(32.0))
+                .padding([0, 0])
+                .style(move |_theme, status| {
+                    let hovered = matches!(status, button::Status::Hovered);
+                    button::Style {
+                        background: if active {
+                            Some(tokens.stripe_selected.into())
+                        } else if hovered {
+                            Some(tokens.stripe_hover.into())
+                        } else {
+                            None
+                        },
+                        border: Border { radius: 8.0.into(), ..Border::default() },
                         ..button::Style::default()
-                    })
-                    .on_press(Message::ShowTool(tool.id)),
-            );
-        }
-        buttons = buttons.push(Space::new().height(6));
+                    }
+                })
+                .on_press(Message::ShowTool(tool.id)),
+        );
     }
 
     container(buttons)
-        .padding([0, 0])
+        .padding(iced::Padding { top: 0.0, right: 6.0, bottom: 6.0, left: 6.0 })
         .width(Length::Fixed(STRIPE))
         .height(Length::Fill)
-        .style(move |_theme| container::Style { background: Some(tokens.frame.into()), ..container::Style::default() })
         .into()
 }
 
@@ -282,7 +332,8 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
             .height(Length::Fixed(200.0))
             .width(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(tokens.elev.into()),
+                background: Some(tokens.island.into()),
+                border: Border { radius: ISLAND_RADIUS.into(), ..Border::default() },
                 ..container::Style::default()
             })
             .into()
@@ -291,7 +342,8 @@ fn dock(app: &App, dock: Dock, width: f32) -> Element<'_, Message> {
             .width(Length::Fixed(width))
             .height(Length::Fill)
             .style(move |_theme| container::Style {
-                background: Some(tokens.elev.into()),
+                background: Some(tokens.island.into()),
+                border: Border { radius: ISLAND_RADIUS.into(), ..Border::default() },
                 ..container::Style::default()
             })
             .into()
@@ -318,16 +370,19 @@ fn tool_body<'a>(app: &'a App, id: &'static str) -> Element<'a, Message> {
 
 /// Tab strip over the editor group, plus the bottom dock and the status bar.
 fn centre(app: &App) -> Element<'_, Message> {
-    column![
-        tabs(app),
-        divider(app.tokens()),
-        editor_area(app),
-        if app.bottom.is_some() { dock(app, Dock::Bottom, 0.0) } else { Space::new().height(0).into() },
-        status(app),
-    ]
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+    let tokens = app.tokens();
+    // The tab strip and the editor share one island; the hairline between them is the
+    // `--border-editor-tabs` line the web paints.
+    let editor = island(column![tabs(app), divider(tokens), editor_area(app)].height(Length::Fill), tokens);
+
+    let mut column = column![editor].height(Length::Fill);
+
+    if app.bottom.is_some() {
+        column = column.push(Space::new().height(Length::Fixed(ISLAND_GAP)));
+        column = column.push(container(dock(app, Dock::Bottom, 0.0)).height(Length::Fixed(200.0)).width(Length::Fill));
+    }
+
+    column.push(status(app)).width(Length::Fill).height(Length::Fill).into()
 }
 
 fn tabs(app: &App) -> Element<'_, Message> {
@@ -383,12 +438,9 @@ fn tabs(app: &App) -> Element<'_, Message> {
 
     // Measured from the web build: the tab strip occupies 39px and a 1px border follows it,
     // so the editor starts exactly 40px below the title bar.
-    container(tabs)
-        .padding([5, 4])
-        .height(Length::Fixed(TABBAR + 1.0))
-        .width(Length::Fill)
-        .style(move |_theme| container::Style { background: Some(tokens.elev.into()), ..container::Style::default() })
-        .into()
+    // The strip is part of the editor island, so it paints nothing itself. It occupies
+    // `--h-tabbar` + 1: the web's strip is 39px tall with the 1px border under it.
+    container(tabs).padding([5, 4]).height(Length::Fixed(TABBAR + 1.0)).width(Length::Fill).into()
 }
 
 /// The web paints a 1px `--border-editor-tabs` under the strip; a separate row keeps the tab

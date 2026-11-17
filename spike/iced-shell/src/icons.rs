@@ -57,6 +57,51 @@ macro_rules! chrome {
     };
 }
 
+/// The activity stripe's tool window icons, one pair per tool.
+macro_rules! toolwindows {
+    ($($name:ident => $path:literal),* $(,)?) => {
+        $(const $name: &[u8] = include_bytes!(concat!("../../../src/ui/expui/toolwindows/", $path));)*
+    };
+}
+
+toolwindows! {
+    TW_PROJECT_DARK => "project_dark.svg",
+    TW_PROJECT_LIGHT => "project.svg",
+    TW_STRUCTURE_DARK => "structure_dark.svg",
+    TW_STRUCTURE_LIGHT => "structure.svg",
+    TW_FIND_DARK => "find_dark.svg",
+    TW_FIND_LIGHT => "find.svg",
+    TW_VCS_DARK => "vcs_dark.svg",
+    TW_VCS_LIGHT => "vcs.svg",
+    TW_COMMIT_DARK => "commit_dark.svg",
+    TW_COMMIT_LIGHT => "commit.svg",
+    TW_PROBLEMS_DARK => "problems_dark.svg",
+    TW_PROBLEMS_LIGHT => "problems.svg",
+    TW_TERMINAL_DARK => "terminal_dark.svg",
+    TW_TERMINAL_LIGHT => "terminal.svg",
+    TW_RUN_DARK => "run_dark.svg",
+    TW_RUN_LIGHT => "run.svg",
+    TW_TODO_DARK => "todo_dark.svg",
+    TW_TODO_LIGHT => "todo.svg",
+    TW_BUILD_DARK => "build_dark.svg",
+    TW_BUILD_LIGHT => "build.svg",
+    TW_HIERARCHY_DARK => "hierarchy_dark.svg",
+    TW_HIERARCHY_LIGHT => "hierarchy.svg",
+}
+
+macro_rules! openclion_toolwindows {
+    ($($name:ident => $path:literal),* $(,)?) => {
+        $(const $name: &[u8] = include_bytes!(concat!("../../../src/ui/openclion/toolwindows/", $path));)*
+    };
+}
+
+openclion_toolwindows! {
+    TW_CMAKE_DARK => "cmake_dark.svg",
+    TW_CMAKE_LIGHT => "cmake.svg",
+    TW_DATABASE_DARK => "database.svg",
+    TW_DATABASE_LIGHT => "database.svg",
+}
+
 chrome! {
     MAIN_MENU => "general/mainMenu.svg",
     WINDOW_MINIMIZE => "general/windowMinimize.svg",
@@ -104,6 +149,27 @@ pub fn file_icon(name: &str, light_theme: bool) -> &'static [u8] {
 
 pub fn folder_icon(light_theme: bool) -> &'static [u8] {
     pick(FOLDER_DARK, FOLDER_LIGHT, light_theme)
+}
+
+/// The activity stripe's icon for a tool window id (18px in the web).
+pub fn tool_window(id: &str, light_theme: bool) -> &'static [u8] {
+    match id {
+        "project" => pick(TW_PROJECT_DARK, TW_PROJECT_LIGHT, light_theme),
+        "structure" => pick(TW_STRUCTURE_DARK, TW_STRUCTURE_LIGHT, light_theme),
+        "search" | "find" => pick(TW_FIND_DARK, TW_FIND_LIGHT, light_theme),
+        "git" => pick(TW_VCS_DARK, TW_VCS_LIGHT, light_theme),
+        "commit" => pick(TW_COMMIT_DARK, TW_COMMIT_LIGHT, light_theme),
+        "problems" => pick(TW_PROBLEMS_DARK, TW_PROBLEMS_LIGHT, light_theme),
+        "terminal" => pick(TW_TERMINAL_DARK, TW_TERMINAL_LIGHT, light_theme),
+        "run" => pick(TW_RUN_DARK, TW_RUN_LIGHT, light_theme),
+        "todo" => pick(TW_TODO_DARK, TW_TODO_LIGHT, light_theme),
+        "build" => pick(TW_BUILD_DARK, TW_BUILD_LIGHT, light_theme),
+        "usages" => pick(TW_HIERARCHY_DARK, TW_HIERARCHY_LIGHT, light_theme),
+        // `cmake` and `database` live in the `openclion/` set.
+        "cmake" => pick(TW_CMAKE_DARK, TW_CMAKE_LIGHT, light_theme),
+        "database" => pick(TW_DATABASE_DARK, TW_DATABASE_LIGHT, light_theme),
+        _ => pick(TW_PROJECT_DARK, TW_PROJECT_LIGHT, light_theme),
+    }
 }
 
 /// The ☰ menu button of the title bar.

@@ -15,6 +15,7 @@ mod registry;
 mod splitter;
 mod tokens;
 mod tools;
+mod wash;
 mod workbench;
 
 use iced::{Element, Subscription, Task, Theme};
