@@ -275,7 +275,11 @@ impl App {
                 let mut state = EditorState::new(&text);
                 state.font_size = crate::metrics::FONT_CODE;
                 state.line_height = crate::metrics::EDITOR_LINE;
-                state.set_highlights(fs::highlights(&path, &text));
+                let spans = fs::highlights(&path, &text);
+                if std::env::var_os("SHELL_TRACE").is_some() {
+                    eprintln!("highlights for {}: {} spans", path.display(), spans.len());
+                }
+                state.set_highlights(spans);
                 self.tabs.push(Tab { title: fs::display_name(&path), path: Some(path), editor: Shared::new(state) });
                 self.active_tab = self.tabs.len() - 1;
                 self.notice = None;

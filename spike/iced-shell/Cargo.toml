@@ -28,6 +28,16 @@ ropey = "1.6"
 # The domain layer, unchanged: the same crates the web shell calls through Tauri.
 ide-vfs = { path = "../../crates/ide-vfs" }
 ide-language = { path = "../../crates/ide-language" }
+
+# Grammar crates for the highlight engine: the queries they ship are copied into
+# `assets/queries`, because `include_str!` cannot reach into the cargo registry.
+tree-sitter = "0.25"
+tree-sitter-go = "0.25.0"
+tree-sitter-c = "0.24.2"
+tree-sitter-cpp = "0.23.4"
+tree-sitter-rust = "0.24.2"
+tree-sitter-python = "0.25.0"
+tree-sitter-javascript = "0.25.0"
 ide-core = { path = "../../crates/ide-core" }
 
 [profile.release]

@@ -2088,6 +2088,13 @@ dependencies = [
  "ide-language",
  "ide-vfs",
  "ropey",
+ "tree-sitter",
+ "tree-sitter-c",
+ "tree-sitter-cpp",
+ "tree-sitter-go",
+ "tree-sitter-javascript",
+ "tree-sitter-python",
+ "tree-sitter-rust",
 ]
 
 [[package]]

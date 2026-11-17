@@ -6,6 +6,7 @@
 
 mod app;
 mod fs;
+mod highlight;
 mod i18n;
 mod icons;
 mod metrics;

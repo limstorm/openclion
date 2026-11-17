@@ -58,10 +58,16 @@ cargo test --release             # registry 4 项：id 唯一、keymap 命令存
 
 ## 语法高亮
 
-打开文件时用 `ide_language::Syntax`（与 web 同一套 tree-sitter 语法与查询）算出
-`[from, to, kind]`，映射成 10 个类别，编辑器逐行把带颜色的片段覆盖绘制在默认色之上。
-颜色来自 `--syn-*`（浅色 `#0033b3`/`#067d17`/`#8c8c8c`/`#1750eb`…，深色另一套），
-代码字体是 web 的 JetBrains Mono 13px。
+web 版用 CodeMirror 的 Lezer 语法做即时高亮，Rust 侧没有对应实现；这里改用 **tree-sitter
+grammar 自带的 `queries/highlights.scm`**（Go / C / C++ / Rust / Python / JavaScript），
+抓取的 capture 名映射到 10 个类别，颜色取同一套 `--syn-*`（浅色 `#0033b3` 关键字、
+`#067d17` 字符串、`#8c8c8c` 注释、`#1750eb` 数字、`#00627a` 函数…）。
+
+> 注：`ide_language` 只为 7 个小众语言内置了 highlight 查询（Go/C/C++/Rust 等都没有），
+> 所以查询文件放在 `assets/queries/` 并在本 crate 里编译。分词边界与 Lezer 可能相差一两个
+> 字符，但同一份代码的观感一致。
+
+代码字体是 web 的 JetBrains Mono 13px；行号、代码列的像素位置见上表。
 
 `SHELL_OPEN=<path>` 可以在启动时直接打开某个文件，便于截图对照。
 

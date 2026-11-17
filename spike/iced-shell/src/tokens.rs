@@ -119,15 +119,15 @@ impl Tokens {
             tab_selected_border: Color::from_rgb(0.655, 0.773, 1.0), // #a7c5ff
             caret: Color::from_rgb(0.0, 0.0, 0.0),                   // #000000
             syn: SyntaxPalette {
-                keyword: Color::from_rgb(0.812, 0.557, 0.427),     // #cf8e6d
-                string: Color::from_rgb(0.416, 0.671, 0.451),      // #6aab73
-                number: Color::from_rgb(0.165, 0.675, 0.722),      // #2aacb8
-                comment: Color::from_rgb(0.478, 0.494, 0.522),     // #7a7e85
-                function: Color::from_rgb(0.337, 0.659, 0.961),    // #56a8f5
-                ty: Color::from_rgb(0.737, 0.745, 0.769),          // #bcbec4
-                constant: Color::from_rgb(0.780, 0.490, 0.733),    // #c77dbb
-                punctuation: Color::from_rgb(0.737, 0.745, 0.769), // #bcbec4
-                variable: Color::from_rgb(0.737, 0.745, 0.769),    // #bcbec4
+                keyword: Color::from_rgb(0.0, 0.200, 0.702),       // #0033b3
+                string: Color::from_rgb(0.024, 0.490, 0.090),      // #067d17
+                number: Color::from_rgb(0.090, 0.314, 0.922),      // #1750eb
+                comment: Color::from_rgb(0.549, 0.549, 0.549),     // #8c8c8c
+                function: Color::from_rgb(0.0, 0.384, 0.478),      // #00627a
+                ty: Color::from_rgb(0.0, 0.0, 0.0),                // #000000
+                constant: Color::from_rgb(0.529, 0.063, 0.580),    // #871094
+                punctuation: Color::from_rgb(0.031, 0.031, 0.031), // #080808
+                variable: Color::from_rgb(0.031, 0.031, 0.031),    // #080808
             },
             gutter_text: Color::from_rgb(0.294, 0.314, 0.349), // #4b5059
             excluded_row: Color::from_rgb(0.937, 0.902, 0.859), // #efe6db measured from the web

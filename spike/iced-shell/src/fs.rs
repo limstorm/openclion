@@ -118,7 +118,20 @@ pub fn highlights(path: &Path, text: &str) -> Vec<iced_editor::Highlight> {
     use iced_editor::SyntaxClass;
 
     let language = registry().detect(path, None);
-    let Some(highlights) = syntax().highlights(&language, text) else {
+    let engine = crate::highlight::spans(language.0.as_str(), text);
+    if !engine.is_empty() {
+        return engine;
+    }
+    let found = syntax().highlights(&language, text);
+    if std::env::var_os("SHELL_TRACE").is_some() {
+        eprintln!(
+            "syntax: lang={:?} tree-sitter={:?} highlights={}",
+            language,
+            registry().get(&language).and_then(|config| config.tree_sitter.clone()),
+            found.as_ref().map_or(0, |h| h.data.len() / 3)
+        );
+    }
+    let Some(highlights) = found else {
         return Vec::new();
     };
 
