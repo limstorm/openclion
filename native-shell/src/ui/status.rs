@@ -22,6 +22,14 @@ pub fn status_bar(state: State, pal: Palette) -> impl IntoElement {
         .pr(px(10.0))
         .child(breadcrumbs(state, pal))
         .child(view().flex_1())
+        .child(dynamic(move || {
+            let status = state.lsp_status.get();
+            if status.is_empty() || status.ends_with("ready") {
+                view().into_element()
+            } else {
+                text_ui(status, 11.0, pal.fg_subtle).into_element()
+            }
+        }))
         .child(
             text_ui(move || format!("{}:{}", state.cursor.get().0, state.cursor.get().1), 13.0, pal.fg_muted)
                 .flex_none(),

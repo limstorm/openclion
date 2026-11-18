@@ -115,6 +115,11 @@ pub struct State {
     pub vcs: Signal<Vec<crate::backend::VcsRow>>,
     pub vcs_branch: Signal<Option<String>>,
     pub vcs_loading: Signal<bool>,
+    pub lsp: Stored<Option<crate::lsp::Session>>,
+    pub diagnostics: Signal<Vec<nsh_base::editor::EditorDiagnostic>>,
+    pub diagnostics_cache: Stored<crate::lsp::DiagnosticsCache>,
+    pub diagnostics_rev: Signal<u32>,
+    pub lsp_status: Signal<String>,
     pub terminal_lines: Signal<Vec<String>>,
     pub terminal_input: Signal<String>,
     pub settings: Signal<bool>,
@@ -185,6 +190,11 @@ impl State {
             vcs: signal(Vec::new()),
             vcs_branch: signal(None),
             vcs_loading: signal(false),
+            lsp: stored(None),
+            diagnostics: signal(Vec::new()),
+            diagnostics_cache: stored(std::collections::HashMap::new()),
+            diagnostics_rev: signal(0),
+            lsp_status: signal(String::new()),
             terminal_lines: signal(vec![
                 "OpenCLion 2026.1  ·  native shell".to_owned(),
                 "A pure-Rust IDE shell: no JavaScript runtime, no web view.".to_owned(),
@@ -346,6 +356,10 @@ impl State {
         self.editor_seed.set(String::new());
         self.selected.set(None);
         self.status.set("Workspace opened".to_owned());
+        self.diagnostics_cache.with(|cache| cache.clear());
+        self.diagnostics_rev.update(|rev| *rev += 1);
+        self.lsp.replace(None);
+        crate::lsp::start(*self);
         self.refresh_cmake();
         self.refresh_vcs();
     }

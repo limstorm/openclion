@@ -6,6 +6,11 @@ use nsh_engine::{EngineConfig, Root};
 use nsh_testing::Headless;
 
 fn start() -> Headless {
+    // Headless runs must not leave clangd processes behind.
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| unsafe {
+        std::env::set_var("OPENCLION_NO_LSP", "1");
+    });
     let mut config = EngineConfig::new(Root::of::<openclion_native::App>());
     config.viewport = Size::new(px(1400.0), px(900.0));
     Headless::start(config).unwrap()

@@ -168,7 +168,12 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
         .indent_guides(true)
         .active_line(false)
         .classes(classes)
-        .on_change(move |text: &SharedString| state.update_active_text(text.to_string()))
+        .diagnostics(move || state.diagnostics.get())
+        .on_change(move |text: &SharedString| {
+            let text = text.to_string();
+            state.update_active_text(text.clone());
+            crate::lsp::change(state, &text);
+        })
         .on_selection_change(move |selections: &Vec<EditorSelection>| {
             if let Some(selection) = selections.last() {
                 state.cursor.set((selection.head.line + 1, selection.head.column + 1));

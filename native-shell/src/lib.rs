@@ -3,6 +3,7 @@
 
 mod backend;
 mod icons;
+mod lsp;
 mod model;
 mod theme;
 mod ui;
@@ -31,6 +32,17 @@ pub fn App() -> impl IntoElement {
     install_shortcuts(state);
     state.refresh_cmake();
     state.refresh_vcs();
+    lsp::start(state);
+    effect(move || {
+        let path = state.active_path.get();
+        let seed = state.editor_seed.get();
+        if path.as_os_str().is_empty() {
+            lsp::close(state);
+        } else {
+            let language = model::language_of(&path);
+            lsp::open(state, &path, &language, &seed);
+        }
+    });
     // The native editor and other nsh components follow the app's theme, not
     // only our own palette.
 

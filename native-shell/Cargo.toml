@@ -14,6 +14,10 @@ ide-core = { path = "../crates/ide-core" }
 ide-cmake = { path = "../crates/ide-cmake" }
 ide-vcs = { path = "../crates/ide-vcs" }
 ide-search = { path = "../crates/ide-search" }
+ide-lsp = { path = "../crates/ide-lsp" }
+ide-language = { path = "../crates/ide-language" }
+ide-text = { path = "../crates/ide-text" }
+tokio = { version = "1", features = ["sync"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nsh-platform-linux = { version = "0.6.0", default-features = false, features = ["editor", "highlight", "svg"] }

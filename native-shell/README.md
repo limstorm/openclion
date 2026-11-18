@@ -14,6 +14,8 @@ native-shell/
 │   ├── lib.rs               #[component] App, window chrome, shortcuts
 │   ├── main.rs              cargo run on the desktop backend
 │   ├── model.rs             workspace tree, tabs, search, terminal, signals
+│   ├── backend.rs           ide-cmake / ide-vcs / ide-search bridge
+│   ├── lsp.rs               clangd documents, diagnostics and status
 │   ├── theme.rs             Islands Light/Dark palette + bundled fonts
 │   ├── icons.rs             expui SVG icons inlined as SVG elements
 │   └── ui/
@@ -116,10 +118,10 @@ the backend's targets, and Commit reads git status.
 
 ## Theme
 
-The migration is in progress: CMake, git, search and build/run now use the
-main branch backend. clangd diagnostics/completion, DAP debugging and the PTY
-terminal are the next slices; the shell keeps the Islands layout while each
-lands.
+The migration is in progress: CMake, git, search, build/run and clangd
+diagnostics now use the main branch backend. clangd completion/goto, DAP
+debugging, the PTY terminal and the full settings/keymap surface are the next
+slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native

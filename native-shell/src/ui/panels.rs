@@ -435,24 +435,62 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
 }
 
 fn problems_body(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_1()
-        .w_full()
-        .items_center()
-        .justify_center()
-        .gap(px(8.0))
-        .child(icon(icons::PROBLEMS, 20.0, pal.success))
-        .child(text_ui("No problems in the workspace", 13.0, pal.fg_muted))
-        .child(
-            view()
-                .h(px(26.0))
-                .px(px(10.0))
+    view().flex_1().w_full().child(dynamic(move || {
+        state.diagnostics_rev.get();
+        let entries = state.diagnostics_cache.with(|cache| {
+            let mut rows: Vec<(std::path::PathBuf, String, u32, ide_core::Diagnostic)> = Vec::new();
+            for (path, items) in cache {
+                for item in items {
+                    rows.push((path.clone(), item.message.clone(), item.range.start.line, item.clone()));
+                }
+            }
+            rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.2.cmp(&b.2)));
+            rows
+        });
+        if entries.is_empty() {
+            return view()
+                .flex_1()
+                .w_full()
                 .items_center()
-                .rounded(px(6.0))
-                .hover(move |s| s.bg(pal.toolbar_hover))
-                .on_press(move || state.status.set("Re-analyzed the project".to_owned()))
-                .child(text_ui("Re-run inspection", 12.0, pal.fg_secondary)),
-        )
+                .justify_center()
+                .gap(px(8.0))
+                .child(icon(icons::PROBLEMS, 20.0, pal.success))
+                .child(text_ui("No problems in the workspace", 13.0, pal.fg_muted))
+                .into_element();
+        }
+        let count = entries.len();
+        view()
+            .flex_col()
+            .w_full()
+            .py(px(4.0))
+            .child(view().px(px(10.0)).pb(px(4.0)).child(text_muted(format!("{count} problems"), 11.0, pal)))
+            .children(entries.into_iter().map(move |(path, message, line, item)| {
+                let color = match item.severity {
+                    ide_core::Severity::Error => pal.danger,
+                    ide_core::Severity::Warning => pal.warning,
+                    ide_core::Severity::Info => pal.link,
+                    ide_core::Severity::Hint => pal.fg_muted,
+                };
+                let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                let target = path.clone();
+                view()
+                    .h(px(24.0))
+                    .flex_none()
+                    .mx(px(4.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .px(px(6.0))
+                    .rounded(px(5.0))
+                    .hover(move |s| s.bg(pal.tree_hover))
+                    .on_press(move || state.open_path(target.clone()))
+                    .child(icon(icons::PROBLEMS, 14.0, color))
+                    .child(text_ui(message, 12.0, pal.fg).truncate())
+                    .child(view().flex_1())
+                    .child(text_muted(format!("{name}:{}", line + 1), 11.0, pal))
+            }))
+            .into_element()
+    }))
 }
 
 fn run_body(state: State, pal: Palette) -> impl IntoElement {
