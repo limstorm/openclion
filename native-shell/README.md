@@ -53,6 +53,7 @@ backend uses.
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, stack frames and locals          |
 | File operations    | `std::fs` + native dialogs                            | Project header + / folder creates a file or folder beside the selection, opens it, and expands the tree                                     |
 | File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                    |
+| Settings           | nsh `Storage` + `serde_json`                          | editor font size, tool-window sizes/visibility and recent projects persist across runs; Settings shows a font stepper and recent list       |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -130,9 +131,10 @@ opens.
 
 The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
-the main branch backend. File operations now cover create + external-change
-refresh; rename/delete/context menus and the full settings/keymap surface are
-the next slices; the shell keeps the Islands layout while each lands.
+the main branch backend. File operations cover create + external-change
+refresh, and workbench settings persist through nsh storage. Rename/delete and
+context menus, DAP refinements and the keymap/plugins surface are the next
+slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native

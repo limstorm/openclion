@@ -89,6 +89,7 @@ fn left_button(state: State, pal: Palette, markup: &'static str, tool: LeftTool,
                 state.left_tool.set(tool);
                 state.show_left.set(true);
             }
+            crate::settings::save(state);
         })
         .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
             if state.left_tool.get() == tool && state.show_left.get() { pal.fg_strong } else { pal.fg_muted }
@@ -119,6 +120,7 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
                 state.bottom_tool.set(Some(tool));
                 state.show_bottom.set(true);
             }
+            crate::settings::save(state);
         })
         .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
             if state.bottom_tool.get() == Some(tool) && state.show_bottom.get() { pal.fg_strong } else { pal.fg_muted }
@@ -148,6 +150,7 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
                 state.right_tool.set(tool);
                 state.show_right.set(true);
             }
+            crate::settings::save(state);
         })
         .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
             if state.right_tool.get() == tool && state.show_right.get() { pal.fg_strong } else { pal.fg_muted }

@@ -6,6 +6,7 @@ mod debug;
 mod icons;
 mod lsp;
 mod model;
+mod settings;
 mod terminal;
 mod theme;
 mod ui;
@@ -31,6 +32,14 @@ fn native(registry: &mut Registry) {
 #[component]
 pub fn App() -> impl IntoElement {
     let state = State::new();
+    settings::load(state);
+    let initial = state.root.get().to_string_lossy().to_string();
+    state.recent.update(|recent| {
+        recent.retain(|item| item != &initial);
+        recent.insert(0, initial);
+        recent.truncate(8);
+    });
+    settings::save(state);
     configure_window();
     install_shortcuts(state);
     state.refresh_cmake();
@@ -82,6 +91,7 @@ fn install_shortcuts(state: State) {
     on_key("F9", move |_| {
         crate::debug::toggle_breakpoint(state, state.cursor.get().0.saturating_sub(1));
     });
+    on_key("mod+alt+s", move |_| state.settings.set(true));
     on_key("mod+s", move |_| state.save_active());
     on_key("mod+w", move |_| {
         let index = state.active.get();

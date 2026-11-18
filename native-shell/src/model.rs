@@ -117,6 +117,8 @@ pub struct State {
     pub search_query: Signal<String>,
     pub search_results: Signal<Vec<SearchHit>>,
     pub tree_rev: Signal<u32>,
+    pub editor_font: Signal<f32>,
+    pub recent: Signal<Vec<String>>,
     pub dialog: Signal<Option<FileDialog>>,
     pub dialog_input: Signal<String>,
     pub searching: Signal<bool>,
@@ -210,6 +212,8 @@ impl State {
             search_query: signal(String::new()),
             search_results: signal(Vec::new()),
             tree_rev: signal(0),
+            editor_font: signal(13.0),
+            recent: signal(Vec::new()),
             dialog: signal(None),
             dialog_input: signal(String::new()),
             searching: signal(false),
@@ -475,6 +479,13 @@ impl State {
         self.active_path.set(PathBuf::new());
         self.editor_seed.set(String::new());
         self.selected.set(None);
+        let key = self.root.get().to_string_lossy().to_string();
+        self.recent.update(|recent| {
+            recent.retain(|item| item != &key);
+            recent.insert(0, key);
+            recent.truncate(8);
+        });
+        crate::settings::save(*self);
         self.status.set("Workspace opened".to_owned());
         self.diagnostics_cache.with(|cache| cache.clear());
         self.diagnostics_rev.update(|rev| *rev += 1);

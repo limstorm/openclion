@@ -4491,6 +4491,8 @@ dependencies = [
  "nsh-platform-macos",
  "nsh-platform-windows",
  "nsh-testing",
+ "serde",
+ "serde_json",
  "tokio",
 ]
 

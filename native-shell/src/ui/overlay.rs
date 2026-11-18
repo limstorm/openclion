@@ -158,8 +158,23 @@ fn project_menu(state: State, pal: Palette) -> impl IntoElement {
                     state.project_menu.set(false);
                     choose_folder(state);
                 }))
-                .child(menu_item(pal, "Recent Projects", false, move || {
-                    state.status.set("Recent projects are kept by the desktop shell".to_owned());
+                .child(menu_item(pal, "Recent Projects", false, move || {}))
+                .child(dynamic(move || {
+                    let recent = state.recent.get();
+                    view()
+                        .flex_col()
+                        .children(recent.into_iter().take(4).map(move |path| {
+                            let target = PathBuf::from(&path);
+                            let label = target
+                                .file_name()
+                                .map(|name| name.to_string_lossy().to_string())
+                                .unwrap_or_else(|| path.clone());
+                            menu_item_owned(pal, label, move || {
+                                state.reload_workspace(target.clone());
+                                state.project_menu.set(false);
+                            })
+                        }))
+                        .into_element()
                 }))
                 .child(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border))
                 .child(menu_item(pal, "Close Project", false, move || {
@@ -172,6 +187,21 @@ fn project_menu(state: State, pal: Palette) -> impl IntoElement {
                 })),
         )
         .into_element()
+}
+
+fn menu_item_owned(pal: Palette, label: String, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(28.0))
+        .flex_none()
+        .mx(px(4.0))
+        .flex_row()
+        .items_center()
+        .gap(px(8.0))
+        .px(px(8.0))
+        .rounded(px(5.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(text_ui(label, 13.0, pal.fg))
 }
 
 fn menu_item(pal: Palette, label: &'static str, enabled: bool, on_press: impl Fn() + 'static) -> View {
@@ -332,9 +362,61 @@ fn settings_content(state: State, pal: Palette) -> impl IntoElement {
                 .child(setting_row(
                     pal,
                     "Editor font",
-                    "JetBrains Mono 13, line height 22 — drawn by the native NSH editor",
-                    text_ui("JetBrains Mono 13", 12.0, pal.fg_secondary),
+                    "JetBrains Mono, drawn by the native NSH editor",
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .child(font_button(pal, "-", -1.0, state))
+                        .child(
+                            text_ui(
+                                move || format!("{} px", state.editor_font.get()),
+                                12.0,
+                                pal.fg_secondary,
+                            )
+                            .w(px(54.0)),
+                        )
+                        .child(font_button(pal, "+", 1.0, state)),
                 ))
+                .child(
+                    view()
+                        .flex_col()
+                        .gap(px(4.0))
+                        .w_full()
+                        .child(text_ui("Recent projects", 13.0, pal.fg_strong))
+                        .child(dynamic(move || {
+                            let recent = state.recent.get();
+                            if recent.is_empty() {
+                                return text_muted("No recent projects yet", 12.0, pal).into_element();
+                            }
+                            view()
+                                .flex_col()
+                                .gap(px(1.0))
+                                .children(recent.into_iter().take(5).map(move |path| {
+                                    let target = std::path::PathBuf::from(&path);
+                                    let label = target
+                                        .file_name()
+                                        .map(|name| name.to_string_lossy().to_string())
+                                        .unwrap_or_else(|| path.clone());
+                                    view()
+                                        .h(px(24.0))
+                                        .w_full()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .px(px(6.0))
+                                        .rounded(px(4.0))
+                                        .hover(move |s| s.bg(pal.tree_hover))
+                                        .on_press(move || {
+                                            state.reload_workspace(target.clone());
+                                            state.settings.set(false);
+                                        })
+                                        .child(text_ui(label, 12.0, pal.fg))
+                                        .child(text_muted(path, 10.0, pal).truncate())
+                                }))
+                                .into_element()
+                        })),
+                )
                 .child(setting_row(
                     pal,
                     "Tool windows",
@@ -367,6 +449,18 @@ fn settings_content(state: State, pal: Palette) -> impl IntoElement {
                                 .border(px(1.0))
                                 .border_color(pal.border_strong)
                                 .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || crate::settings::restore_defaults(state))
+                                .child(text_ui("Restore Defaults", 13.0, pal.fg)),
+                        )
+                        .child(
+                            view()
+                                .h(px(28.0))
+                                .px(px(14.0))
+                                .items_center()
+                                .rounded(px(5.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .hover(move |s| s.bg(pal.toolbar_hover))
                                 .on_press(move || state.settings.set(false))
                                 .child(text_ui("Cancel", 13.0, pal.fg)),
                         )
@@ -383,6 +477,19 @@ fn settings_content(state: State, pal: Palette) -> impl IntoElement {
                         ),
                 ),
         )
+}
+
+fn font_button(pal: Palette, label: &'static str, delta: f32, state: State) -> View {
+    view()
+        .size(px(26.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(5.0))
+        .border(px(1.0))
+        .border_color(pal.border_strong)
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(move || crate::settings::set_editor_font(state, state.editor_font.get() + delta))
+        .child(text_ui(label, 13.0, pal.fg_secondary))
 }
 
 fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control: impl IntoElement) -> impl IntoElement {

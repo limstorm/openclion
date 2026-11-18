@@ -146,6 +146,7 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
     }
     let seed = state.editor_seed.get();
     let language = language_of(&path);
+    let font = state.editor_font.get();
     let scale = {
         let value = font_scale();
         if value > 0.1 { value } else { 1.0 }
@@ -162,8 +163,8 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
         .default_value(seed)
         .language(language)
         .font_family(SharedString::from("JetBrains Mono, monospace"))
-        .font_size(px(13.0 / scale))
-        .line_height(px(22.0 / scale))
+        .font_size(px(font / scale))
+        .line_height(px((font + 9.0) / scale))
         .line_numbers(true)
         .folding(true)
         .indent_guides(true)
