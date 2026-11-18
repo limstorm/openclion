@@ -5,7 +5,6 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 use nsh_core::prelude::*;
@@ -121,8 +120,11 @@ pub struct State {
     pub diagnostics_cache: Stored<crate::lsp::DiagnosticsCache>,
     pub diagnostics_rev: Signal<u32>,
     pub lsp_status: Signal<String>,
-    pub terminal_lines: Signal<Vec<String>>,
-    pub terminal_input: Signal<String>,
+    pub terminal_ref: nsh_core::element::ComponentRef<nsh_base::Terminal>,
+    pub terminal_session: Stored<Option<crate::terminal::Session>>,
+    pub terminal_started: Signal<bool>,
+    pub terminal_buffer: Stored<String>,
+    pub terminal_rev: Signal<u32>,
     pub settings: Signal<bool>,
     pub toast: Signal<Option<String>>,
     pub left_width: Signal<f32>,
@@ -197,12 +199,11 @@ impl State {
             diagnostics_cache: stored(std::collections::HashMap::new()),
             diagnostics_rev: signal(0),
             lsp_status: signal(String::new()),
-            terminal_lines: signal(vec![
-                "OpenCLion 2026.1  ·  native shell".to_owned(),
-                "A pure-Rust IDE shell: no JavaScript runtime, no web view.".to_owned(),
-                String::new(),
-            ]),
-            terminal_input: signal(String::new()),
+            terminal_ref: component_ref::<nsh_base::Terminal>(),
+            terminal_session: stored(None),
+            terminal_started: signal(false),
+            terminal_buffer: stored(String::new()),
+            terminal_rev: signal(0),
             settings: signal(false),
             toast: signal(None),
             left_width: signal(234.0),
@@ -364,34 +365,6 @@ impl State {
         crate::lsp::start(*self);
         self.refresh_cmake();
         self.refresh_vcs();
-    }
-
-    pub fn terminal_submit(&self) {
-        let command = self.terminal_input.get();
-        let command = command.trim().to_owned();
-        if command.is_empty() {
-            return;
-        }
-        let mut lines = self.terminal_lines.get();
-        lines.push(format!("$ {command}"));
-        let output = Command::new("sh").arg("-lc").arg(&command).current_dir(self.root.get()).output();
-        match output {
-            Ok(output) => {
-                for line in String::from_utf8_lossy(&output.stdout).lines() {
-                    lines.push(line.to_owned());
-                }
-                for line in String::from_utf8_lossy(&output.stderr).lines() {
-                    lines.push(line.to_owned());
-                }
-                if !output.status.success() {
-                    lines.push(format!("[exit {}]", output.status.code().unwrap_or(-1)));
-                }
-            }
-            Err(error) => lines.push(format!("error: {error}")),
-        }
-        lines.push(String::new());
-        self.terminal_input.set(String::new());
-        self.terminal_lines.set(lines);
     }
 }
 

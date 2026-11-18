@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use nsh_base::editor::{Editor, EditorClasses, EditorCompletionRequest, EditorSelection, editor};
+use nsh_base::editor::{EditorClasses, EditorCompletionRequest, EditorSelection, editor};
 use nsh_core::element::FontWeight;
 use nsh_core::prelude::*;
 

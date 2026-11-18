@@ -2,7 +2,6 @@
 //! bottom tool window (Terminal, Problems, Run, Services).
 
 use nsh_core::element::FontWeight;
-use nsh_core::element::input;
 use nsh_core::prelude::*;
 
 use crate::icons;
@@ -385,53 +384,32 @@ fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool,
 }
 
 fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
-    let log = element_ref();
-    let follow = log;
     effect(move || {
-        state.terminal_lines.get();
-        follow.scroll_to_end(false);
+        crate::terminal::ensure_started(state);
     });
-    view()
-        .flex_1()
-        .flex_col()
-        .min_h(px(0.0))
-        .w_full()
-        .child(
-            scroll().element_ref(&log).flex_1().min_h(px(0.0)).w_full().child(
-                view().flex_col().w_full().p(px(8.0)).gap(px(1.0)).children(
-                    state
-                        .terminal_lines
-                        .get()
-                        .into_iter()
-                        .map(|line| text_ui(line, 12.0, pal.fg).font_family(MONO_FONT.family)),
-                ),
-            ),
-        )
-        .child(
-            view()
-                .h(px(30.0))
-                .flex_none()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(8.0))
-                .border_t_1()
-                .border_color(pal.border)
-                .child(text_ui("$", 12.0, pal.success).font_family(MONO_FONT.family))
-                .child(
-                    input()
-                        .flex_1()
-                        .h(px(24.0))
-                        .bg(pal.bg_island)
-                        .text_color(pal.fg)
-                        .text_size(px(12.0))
-                        .font_family(MONO_FONT.family)
-                        .placeholder("Run a shell command")
-                        .value(move || state.terminal_input.get())
-                        .on_change(move |value: &str| state.terminal_input.set(value.to_owned()))
-                        .on_submit(move |_: &str| state.terminal_submit()),
-                ),
-        )
+    effect(move || {
+        state.terminal_rev.get();
+        crate::terminal::flush(state);
+        // The component's ref is registered after its first commit.
+        set_timeout(std::time::Duration::from_millis(150), move || {
+            crate::terminal::flush(state);
+        });
+    });
+    view().flex_1().w_full().min_h(px(0.0)).p(px(4.0)).bg(pal.bg_island).child(
+        nsh_base::terminal()
+            .component_ref(&state.terminal_ref)
+            .flex_1()
+            .w_full()
+            .font_family(MONO_FONT.family)
+            .font_size(px(12.0))
+            .line_height(px(18.0))
+            .on_data(move |data: &SharedString| crate::terminal::send(state, data))
+            .on_resize(move |event: &nsh_base::TerminalEvent| {
+                if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
+                    crate::terminal::resize(state, *cols, *rows);
+                }
+            }),
+    )
 }
 
 fn problems_body(state: State, pal: Palette) -> impl IntoElement {

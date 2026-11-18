@@ -10,6 +10,7 @@ fn start() -> Headless {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| unsafe {
         std::env::set_var("OPENCLION_NO_LSP", "1");
+        std::env::set_var("OPENCLION_NO_TERMINAL", "1");
     });
     let mut config = EngineConfig::new(Root::of::<openclion_native::App>());
     config.viewport = Size::new(px(1400.0), px(900.0));
@@ -40,7 +41,6 @@ fn the_bottom_panel_opens_and_shows_the_terminal() {
     app.wait_for("Project").unwrap();
     app.press("id:rail-terminal").unwrap();
     app.wait_for("Terminal").unwrap();
-    app.wait_for("Run a shell command").unwrap();
 }
 
 #[test]

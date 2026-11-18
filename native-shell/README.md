@@ -16,6 +16,7 @@ native-shell/
 │   ├── model.rs             workspace tree, tabs, search, terminal, signals
 │   ├── backend.rs           ide-cmake / ide-vcs / ide-search bridge
 │   ├── lsp.rs               clangd documents, diagnostics and status
+│   ├── terminal.rs          ide-terminal PTY + nsh Terminal bridge
 │   ├── theme.rs             Islands Light/Dark palette + bundled fonts
 │   ├── icons.rs             expui SVG icons inlined as SVG elements
 │   └── ui/
@@ -47,6 +48,7 @@ backend uses.
 | clangd diagnostics | `ide-lsp` + `ide-language`                            | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                            |
 | clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                       |
 | Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                     |
+| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                       |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -121,9 +123,10 @@ the backend's targets, and Commit reads git status.
 
 ## Theme
 
-The migration is in progress: CMake, git, search, build/run and clangd
-diagnostics now use the main branch backend. DAP debugging, the PTY terminal and the full
-settings/keymap surface are the next slices; the shell keeps the Islands layout while each lands.
+The migration is in progress: CMake, git, search, build/run, clangd
+diagnostics/completion/goto and the PTY terminal now use the main branch
+backend. DAP debugging, file operations and the full settings/keymap surface
+are the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native
@@ -138,4 +141,4 @@ half-coloured editor.
 | ------------------------------------------------- | ----------------------------------------------- |
 | ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
 | ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
-| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-terminal.png)     |
+| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)          |

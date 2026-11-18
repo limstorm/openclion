@@ -265,9 +265,11 @@ impl State {
         let configuration = build.configuration();
         let display = format!("{target_name} ({configuration})");
         self.status.set(format!("Building {display}…"));
-        self.terminal_lines.update(|lines| {
-            lines.push(format!("$ cmake --build {} --target {target_name} -j", build_dir.display()));
-        });
+        crate::terminal::ensure_started(*self);
+        crate::terminal::write_output(
+            *self,
+            &format!("\r\n$ cmake --build {} --target {target_name} -j\r\n", build_dir.display()),
+        );
         self.show_bottom.set(true);
         self.bottom_tool.set(Some(crate::model::BottomTool::Terminal));
         spawn(async move {
@@ -335,7 +337,7 @@ impl State {
             .await
             .ok();
             let (lines, exe) = result.unwrap_or_default();
-            state.terminal_lines.update(|all| all.extend(lines));
+            crate::terminal::write_output(state, &(lines.join("\r\n") + "\r\n"));
             state.status.set(match exe {
                 Some(exe) => format!("Ran {}", exe.display()),
                 None => format!("Build finished (no run)"),
@@ -356,13 +358,11 @@ impl State {
             .unwrap_or_else(|| "build".to_owned());
         let dir = root.join(&build_dir);
         self.status.set("Configuring CMake…".to_owned());
-        self.terminal_lines.update(|lines| {
-            lines.push(format!(
-                "$ cmake -S {} -B {} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-                root.display(),
-                dir.display()
-            ));
-        });
+        crate::terminal::ensure_started(*self);
+        crate::terminal::write_output(
+            *self,
+            &format!("\r\n$ cmake -S {} -B {} -DCMAKE_EXPORT_COMPILE_COMMANDS=ON\r\n", root.display(), dir.display()),
+        );
         self.show_bottom.set(true);
         self.bottom_tool.set(Some(crate::model::BottomTool::Terminal));
         spawn(async move {
@@ -394,7 +394,7 @@ impl State {
             })
             .await
             .unwrap_or_default();
-            state.terminal_lines.update(|all| all.extend(result));
+            crate::terminal::write_output(state, &(result.join("\r\n") + "\r\n"));
             state.status.set("CMake configured".to_owned());
             state.refresh_cmake();
         });

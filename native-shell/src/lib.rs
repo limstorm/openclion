@@ -5,6 +5,7 @@ mod backend;
 mod icons;
 mod lsp;
 mod model;
+mod terminal;
 mod theme;
 mod ui;
 
@@ -32,6 +33,7 @@ pub fn App() -> impl IntoElement {
     install_shortcuts(state);
     state.refresh_cmake();
     state.refresh_vcs();
+    terminal::ensure_started(state);
     lsp::start(state);
     effect(move || {
         let path = state.active_path.get();
