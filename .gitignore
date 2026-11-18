@@ -36,3 +36,8 @@ CLAUDE.md
 
 # Local reference screenshots
 pycharm-screenshots/
+
+# Local native-shell toolchain (nsh CLI, cargo home, GTK sysroot)
+.cargo-home/
+.sysroot/
+.tools/

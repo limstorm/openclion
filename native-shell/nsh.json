@@ -1,0 +1,73 @@
+{
+  "name": "OpenCLion",
+  "id": "com.openclion.ide",
+  "version": "0.1.33",
+  "build": 1,
+  "rust": ".",
+  "root": "App",
+  "window": {
+    "title": "OpenCLion",
+    "defaultSize": {
+      "width": 1400,
+      "height": 900
+    },
+    "minSize": {
+      "width": 960,
+      "height": 600
+    },
+    "titleBar": {
+      "style": "hidden",
+      "height": 40
+    }
+  },
+  "theme": {
+    "cssVars": {
+      "light": {
+        "background": "#ffffff",
+        "foreground": "#080808",
+        "card": "#ffffff",
+        "card-foreground": "#080808",
+        "popover": "#ffffff",
+        "popover-foreground": "#080808",
+        "primary": "#3871e1",
+        "primary-foreground": "#ffffff",
+        "secondary": "#f7f8f9",
+        "secondary-foreground": "#080808",
+        "muted": "#f7f8f9",
+        "muted-foreground": "#aeb3c2",
+        "accent": "#d0dffe",
+        "accent-foreground": "#080808",
+        "destructive": "#c54e58",
+        "border": "#ebecf0",
+        "input": "#d1d3d9",
+        "ring": "#3871e1",
+        "radius": "6px",
+        "font-sans": "Inter",
+        "font-mono": "JetBrains Mono"
+      },
+      "dark": {
+        "background": "#191a1c",
+        "foreground": "#bcbec4",
+        "card": "#191a1c",
+        "card-foreground": "#bcbec4",
+        "popover": "#26282c",
+        "popover-foreground": "#d1d3d9",
+        "primary": "#3871e1",
+        "primary-foreground": "#ffffff",
+        "secondary": "#212326",
+        "secondary-foreground": "#d1d3d9",
+        "muted": "#212326",
+        "muted-foreground": "#8c8f95",
+        "accent": "#2a4371",
+        "accent-foreground": "#d1d3d9",
+        "destructive": "#f57e84",
+        "border": "#26282c",
+        "input": "#40434a",
+        "ring": "#3871e1",
+        "radius": "6px",
+        "font-sans": "Inter",
+        "font-mono": "JetBrains Mono"
+      }
+    }
+  }
+}

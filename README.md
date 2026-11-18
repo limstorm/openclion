@@ -19,6 +19,16 @@ themes, search-everything and editor. What changed is what the IDE _knows about_
 — the project model, build, tests, debugger and inspections speak CMake and
 Clang.
 
+### Native shell (branch `native-shell`)
+
+The `native-shell/` app replaces the Tauri frontend with a pure-Rust
+[Native Shell](https://nsh.dev/) workbench: the same Islands title bar, tool
+window stripes, project tree, editor tabs, code editor, CMake window and
+status bar, all as native views. It links no WebView and no JavaScript engine;
+`cargo run` or `nsh run` in that directory starts it. See
+[`native-shell/README.md`](native-shell/README.md) for the file mapping,
+shortcuts and screenshots.
+
 ## What makes it a C/C++ IDE
 
 | Area                  |                                                                                                                                                                                             |
