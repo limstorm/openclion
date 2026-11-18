@@ -37,13 +37,16 @@ native-shell/
 The shell is not a mock: it links the same `crates/ide-*` crates the Tauri
 backend uses.
 
-| Feature       | Backend                                               | In the shell                                                                                                                                |
-| ------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| CMake model   | `ide-cmake` (`load`, File API reply, presets)         | CMake tool window: builds, targets, kinds, `compile_commands.json`; falls back to `add_executable`/`add_library` before the first configure |
-| Configure     | `cmake -S . -B build` + `ide_cmake::request`          | click the configuration widget; output streams into the Terminal panel                                                                      |
-| Build / Run   | `cmake --build … --target …` + the artifact           | title-bar green Run; output and the program's stdout land in the Terminal                                                                   |
-| Git status    | `ide-vcs` (`Repo::discover`, `status`, `branch_info`) | Commit tool window with branch, changed files and staged/unstaged letters; tree files are tinted by status                                  |
-| Find in Files | `ide-search` (ripgrep engine)                         | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                               |
+| Feature            | Backend                                               | In the shell                                                                                                                                |
+| ------------------ | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| CMake model        | `ide-cmake` (`load`, File API reply, presets)         | CMake tool window: builds, targets, kinds, `compile_commands.json`; falls back to `add_executable`/`add_library` before the first configure |
+| Configure          | `cmake -S . -B build` + `ide_cmake::request`          | click the configuration widget; output streams into the Terminal panel                                                                      |
+| Build / Run        | `cmake --build … --target …` + the artifact           | title-bar green Run; output and the program's stdout land in the Terminal                                                                   |
+| Git status         | `ide-vcs` (`Repo::discover`, `status`, `branch_info`) | Commit tool window with branch, changed files and staged/unstaged letters; tree files are tinted by status                                  |
+| Find in Files      | `ide-search` (ripgrep engine)                         | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                               |
+| clangd diagnostics | `ide-lsp` + `ide-language`                            | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                            |
+| clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                       |
+| Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                     |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -112,16 +115,15 @@ cargo test
 ```
 
 Seven headless tests run the real nsh engine at 1400×900 and press real
-views: the workbench mounts, a tree file opens in the editor, a folder
+views (LSP is disabled there so no clangd process leaks): the workbench mounts, a tree file opens in the editor, a folder
 expands, Find in Files opens, the terminal panel opens, the CMake window lists
 the backend's targets, and Commit reads git status.
 
 ## Theme
 
 The migration is in progress: CMake, git, search, build/run and clangd
-diagnostics now use the main branch backend. clangd completion/goto, DAP
-debugging, the PTY terminal and the full settings/keymap surface are the next
-slices; the shell keeps the Islands layout while each lands.
+diagnostics now use the main branch backend. DAP debugging, the PTY terminal and the full
+settings/keymap surface are the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native
@@ -132,7 +134,8 @@ half-coloured editor.
 
 ## Screenshots
 
-|                                             |                                             |
-| ------------------------------------------- | ------------------------------------------- |
-| ![Workbench](docs/native-shell-light.png)   | ![Terminal](docs/native-shell-terminal.png) |
-| ![Settings](docs/native-shell-settings.png) |                                             |
+|                                                   |                                                 |
+| ------------------------------------------------- | ----------------------------------------------- |
+| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
+| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
+| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-terminal.png)     |

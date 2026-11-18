@@ -9,13 +9,18 @@ use std::{
 };
 
 use ide_core::{
-    Diagnostic, DocId, EventSink, IdeEvent, LanguageId, Pos, Range, Severity, SharedSink, event::ServerStatus,
+    CancellationToken, Diagnostic, DocId, EventSink, IdeEvent, LanguageId, Pos, Range, Severity, SharedSink,
+    event::ServerStatus,
 };
 use ide_language::LanguageRegistry;
 use ide_lsp::LspManager;
 use ide_text::AppliedChange;
-use nsh_base::editor::{EditorDiagnostic, EditorDiagnosticSeverity, EditorDiagnosticTag, EditorPosition, EditorRange};
+use nsh_base::editor::{
+    Editor, EditorApi, EditorCompletionItem, EditorCompletionKind, EditorCompletionRequest, EditorDiagnostic,
+    EditorDiagnosticSeverity, EditorDiagnosticTag, EditorPosition, EditorRange, EditorSelection,
+};
 use nsh_core::prelude::*;
+use std::time::Duration;
 
 use crate::model::State;
 
@@ -190,6 +195,98 @@ fn end_position(text: &str) -> Pos {
         }
     }
     Pos::new(line, col)
+}
+
+/// Answers a completion request with clangd's items, presented in the native
+/// completion list.
+pub fn completion(state: State, request: &EditorCompletionRequest, editor: ComponentRef<Editor>) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let manager = session.manager.clone();
+    let request = request.clone();
+    spawn(async move {
+        let position = Pos::new(request.position.line, request.position.column);
+        let Ok(list) = manager.completion(DOC, position, request.character.clone(), CancellationToken::new()).await
+        else {
+            return;
+        };
+        let items: Vec<EditorCompletionItem> = list.items.iter().map(complete).collect();
+        if let Some(api) = editor.api::<EditorApi>() {
+            api.present_completions(request.id, items, Some(list.is_incomplete));
+        }
+    });
+}
+
+fn complete(item: &ide_lsp::types::CompletionItem) -> EditorCompletionItem {
+    let mut out = EditorCompletionItem::new(item.label.clone());
+    out.kind = item.kind.map(|kind| match kind {
+        ide_lsp::types::CompletionKind::Text => EditorCompletionKind::Text,
+        ide_lsp::types::CompletionKind::Method => EditorCompletionKind::Method,
+        ide_lsp::types::CompletionKind::Function => EditorCompletionKind::Function,
+        ide_lsp::types::CompletionKind::Constructor => EditorCompletionKind::Constructor,
+        ide_lsp::types::CompletionKind::Field => EditorCompletionKind::Field,
+        ide_lsp::types::CompletionKind::Variable => EditorCompletionKind::Variable,
+        ide_lsp::types::CompletionKind::Class => EditorCompletionKind::Class,
+        ide_lsp::types::CompletionKind::Interface => EditorCompletionKind::Interface,
+        ide_lsp::types::CompletionKind::Module => EditorCompletionKind::Module,
+        ide_lsp::types::CompletionKind::Property => EditorCompletionKind::Property,
+        ide_lsp::types::CompletionKind::Unit => EditorCompletionKind::Unit,
+        ide_lsp::types::CompletionKind::Value => EditorCompletionKind::Value,
+        ide_lsp::types::CompletionKind::Enum => EditorCompletionKind::Enum,
+        ide_lsp::types::CompletionKind::Keyword => EditorCompletionKind::Keyword,
+        ide_lsp::types::CompletionKind::Snippet => EditorCompletionKind::Snippet,
+        ide_lsp::types::CompletionKind::Color => EditorCompletionKind::Color,
+        ide_lsp::types::CompletionKind::File => EditorCompletionKind::File,
+        ide_lsp::types::CompletionKind::Reference => EditorCompletionKind::Reference,
+        ide_lsp::types::CompletionKind::Folder => EditorCompletionKind::Folder,
+        ide_lsp::types::CompletionKind::EnumMember => EditorCompletionKind::EnumMember,
+        ide_lsp::types::CompletionKind::Constant => EditorCompletionKind::Constant,
+        ide_lsp::types::CompletionKind::Struct => EditorCompletionKind::Struct,
+        ide_lsp::types::CompletionKind::Event => EditorCompletionKind::Event,
+        ide_lsp::types::CompletionKind::Operator => EditorCompletionKind::Operator,
+        ide_lsp::types::CompletionKind::TypeParameter => EditorCompletionKind::TypeParameter,
+    });
+    out.detail = item.detail.clone().or_else(|| item.label_detail.clone()).map(Into::into);
+    out.documentation = item.documentation.as_ref().map(|markup| markup.value.clone().into());
+    out.insert_text = Some(item.insert_text.clone().into());
+    out.filter_text = item.filter_text.clone().map(Into::into);
+    out.sort_text = item.sort_text.clone().map(Into::into);
+    out.range = item.replace_range.map(|range| {
+        EditorRange::new(
+            EditorPosition::new(range.start.line, range.start.col),
+            EditorPosition::new(range.end.line, range.end.col),
+        )
+    });
+    out
+}
+
+/// Go to definition (F12 or Mod-click): opens the target file and places the
+/// caret at the definition.
+pub fn definition(state: State, position: EditorPosition, editor: ComponentRef<Editor>) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let manager = session.manager.clone();
+    spawn(async move {
+        let pos = Pos::new(position.line, position.column);
+        let Ok(locations) = manager.goto(DOC, pos, ide_lsp::types::GotoKind::Definition).await else {
+            return;
+        };
+        let Some(location) = locations.into_iter().next() else {
+            return;
+        };
+        let target = location.path.into_path_buf();
+        let line = location.range.start.line;
+        let col = location.range.start.col;
+        state.open_path(target);
+        set_timeout(Duration::from_millis(80), move || {
+            if let Some(api) = editor.api::<EditorApi>() {
+                api.set_selections(vec![EditorSelection::caret(EditorPosition::new(line, col))]);
+                api.scroll_to_line(line);
+            }
+        });
+    });
 }
 
 /// Diagnostics cached for every path, so switching tabs is immediate.

@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use nsh_base::editor::{EditorClasses, EditorSelection, editor};
+use nsh_base::editor::{Editor, EditorClasses, EditorCompletionRequest, EditorSelection, editor};
 use nsh_core::element::FontWeight;
 use nsh_core::prelude::*;
 
@@ -154,6 +154,7 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
     classes.line_number = Some("text-[12px]".into());
     classes.content = Some("pl-2".into());
     editor()
+        .component_ref(&state.editor)
         .key(format!("{}-{}", path.to_string_lossy(), pal.dark))
         .flex_1()
         .w_full()
@@ -167,12 +168,25 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
         .folding(true)
         .indent_guides(true)
         .active_line(false)
+        .completion(true)
+        .completion_trigger_characters(vec![
+            SharedString::from("."),
+            SharedString::from("->"),
+            SharedString::from("::"),
+            SharedString::from("<"),
+        ])
         .classes(classes)
         .diagnostics(move || state.diagnostics.get())
         .on_change(move |text: &SharedString| {
             let text = text.to_string();
             state.update_active_text(text.clone());
             crate::lsp::change(state, &text);
+        })
+        .on_completion_request(move |request: &EditorCompletionRequest| {
+            crate::lsp::completion(state, request, state.editor);
+        })
+        .on_definition_request(move |request: &nsh_base::editor::EditorDefinitionRequest| {
+            crate::lsp::definition(state, request.position, state.editor);
         })
         .on_selection_change(move |selections: &Vec<EditorSelection>| {
             if let Some(selection) = selections.last() {
