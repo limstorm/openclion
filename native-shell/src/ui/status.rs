@@ -21,6 +21,14 @@ pub fn status_bar(state: State, pal: Palette) -> impl IntoElement {
         .pl(px(12.0))
         .pr(px(10.0))
         .child(breadcrumbs(state, pal))
+        .child(dynamic(move || {
+            let message = state.status.get();
+            if message.is_empty() {
+                view().into_element()
+            } else {
+                text_ui(message, 11.0, pal.fg_faint).ml(px(12.0)).max_w(px(420.0)).truncate().into_element()
+            }
+        }))
         .child(view().flex_1())
         .child(dynamic(move || {
             let status = state.lsp_status.get();

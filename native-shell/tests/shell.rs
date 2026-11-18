@@ -11,6 +11,7 @@ fn start() -> Headless {
     ONCE.call_once(|| unsafe {
         std::env::set_var("OPENCLION_NO_LSP", "1");
         std::env::set_var("OPENCLION_NO_TERMINAL", "1");
+        std::env::set_var("OPENCLION_NO_DEBUG", "1");
     });
     let mut config = EngineConfig::new(Root::of::<openclion_native::App>());
     config.viewport = Size::new(px(1400.0), px(900.0));

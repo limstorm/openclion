@@ -3097,6 +3097,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "ide-dap"
+version = "0.1.33"
+dependencies = [
+ "base64 0.22.1",
+ "ide-core",
+ "ide-jsonrpc",
+ "ide-language",
+ "memchr",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "specta",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "ide-jsonrpc"
 version = "0.1.33"
 dependencies = [
@@ -4458,6 +4475,7 @@ dependencies = [
  "gtk4",
  "ide-cmake",
  "ide-core",
+ "ide-dap",
  "ide-language",
  "ide-lsp",
  "ide-search",

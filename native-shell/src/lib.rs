@@ -2,6 +2,7 @@
 //! nsh's retained native views. No WebView, no JavaScript engine.
 
 mod backend;
+mod debug;
 mod icons;
 mod lsp;
 mod model;
@@ -34,6 +35,7 @@ pub fn App() -> impl IntoElement {
     state.refresh_cmake();
     state.refresh_vcs();
     terminal::ensure_started(state);
+    debug::init(state);
     lsp::start(state);
     effect(move || {
         let path = state.active_path.get();
@@ -74,6 +76,9 @@ fn install_shortcuts(state: State) {
     on_key("mod+p", move |_| {
         state.quick_query.set(String::new());
         state.quick_open.set(true);
+    });
+    on_key("F9", move |_| {
+        crate::debug::toggle_breakpoint(state, state.cursor.get().0.saturating_sub(1));
     });
     on_key("mod+s", move |_| state.save_active());
     on_key("mod+w", move |_| {

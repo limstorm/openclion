@@ -335,6 +335,7 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
         .bg(pal.bg_island)
         .child(bottom_tabs(state, pal))
         .child(view().flex_1().min_h(px(0.0)).w_full().child(dynamic(move || match state.bottom_tool.get() {
+            Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
             Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
             Some(BottomTool::Problems) => problems_body(state, pal).into_element(),
             Some(BottomTool::Run) => run_body(state, pal).into_element(),
@@ -354,6 +355,10 @@ fn bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
             .px(px(6.0))
             .border_b_1()
             .border_color(pal.border)
+            .child(dynamic(move || {
+                (state.debug_active.get() || !state.debug_frames.get().is_empty())
+                    .then(|| bottom_tab(state, pal, "Debug", BottomTool::Debug, current).into_element())
+            }))
             .child(bottom_tab(state, pal, "Terminal", BottomTool::Terminal, current))
             .child(bottom_tab(state, pal, "Problems", BottomTool::Problems, current))
             .child(bottom_tab(state, pal, "Run", BottomTool::Run, current))
@@ -381,6 +386,120 @@ fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool,
             state.show_bottom.set(true);
         })
         .child(text_ui(label, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
+}
+
+fn debug_body(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_1()
+        .flex_col()
+        .min_h(px(0.0))
+        .w_full()
+        .child(
+            view()
+                .h(px(30.0))
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .px(px(6.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(tool_button(pal, icons::RUN, "Continue", move || crate::debug::resume(state)))
+                .child(tool_button(pal, icons::CHEVRON_DOWN, "Step Over", move || {
+                    crate::debug::step(state, ide_dap::StepKind::Over)
+                }))
+                .child(tool_button(pal, icons::CHEVRON_DOWN, "Step In", move || {
+                    crate::debug::step(state, ide_dap::StepKind::Into)
+                }))
+                .child(tool_button(pal, icons::CHEVRON_RIGHT, "Step Out", move || {
+                    crate::debug::step(state, ide_dap::StepKind::Out)
+                }))
+                .child(tool_button(pal, icons::CLOSE, "Stop", move || crate::debug::stop(state)))
+                .child(text_ui(move || state.debug_status.get(), 11.0, pal.fg_muted).ml(px(8.0))),
+        )
+        .child(
+            view()
+                .flex_1()
+                .flex_row()
+                .min_h(px(0.0))
+                .w_full()
+                .child(scroll().w(px(420.0)).flex_none().child(dynamic(move || {
+                    let frames = state.debug_frames.get();
+                    if frames.is_empty() {
+                        return view().p(px(10.0)).child(text_muted("Not debugging", 12.0, pal)).into_element();
+                    }
+                    view()
+                        .flex_col()
+                        .w_full()
+                        .py(px(4.0))
+                        .children(frames.into_iter().enumerate().map(move |(index, frame)| {
+                            let label = format!(
+                                "{}  {}:{}",
+                                frame.name,
+                                frame
+                                    .path
+                                    .as_ref()
+                                    .and_then(|p| p.file_name())
+                                    .map(|n| n.to_string_lossy().to_string())
+                                    .unwrap_or_default(),
+                                frame.line + 1
+                            );
+                            view()
+                                .h(px(22.0))
+                                .flex_none()
+                                .mx(px(4.0))
+                                .flex_row()
+                                .items_center()
+                                .gap(px(4.0))
+                                .px(px(6.0))
+                                .rounded(px(4.0))
+                                .hover(move |s| s.bg(pal.tree_hover))
+                                .on_press(move || crate::debug::select_frame(state, index))
+                                .child(icon(icons::RUN, 12.0, pal.fg_muted))
+                                .child(text_ui(label, 11.0, pal.fg).truncate())
+                        }))
+                        .into_element()
+                })))
+                .child(view().w(px(1.0)).flex_none().h_full().bg(pal.border))
+                .child(scroll().flex_1().child(dynamic(move || {
+                    let vars = state.debug_vars.get();
+                    if vars.is_empty() {
+                        return view().p(px(10.0)).child(text_muted("No variables", 12.0, pal)).into_element();
+                    }
+                    view()
+                        .flex_col()
+                        .w_full()
+                        .py(px(4.0))
+                        .children(vars.into_iter().map(move |var| {
+                            view()
+                                .h(px(20.0))
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.0))
+                                .px(px(8.0))
+                                .child(text_ui(var.name, 11.0, pal.fg))
+                                .child(text_ui("=", 11.0, pal.fg_faint))
+                                .child(text_ui(var.value, 11.0, pal.link).truncate())
+                                .child(view().flex_1())
+                                .child(text_muted(var.scope, 10.0, pal))
+                        }))
+                        .into_element()
+                }))),
+        )
+}
+
+fn tool_button(pal: Palette, markup: &'static str, label: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(22.0))
+        .px(px(6.0))
+        .flex_row()
+        .items_center()
+        .gap(px(3.0))
+        .rounded(px(4.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(icon(markup, 12.0, pal.fg_secondary))
+        .child(text_ui(label, 11.0, pal.fg_secondary))
 }
 
 fn terminal_body(state: State, pal: Palette) -> impl IntoElement {

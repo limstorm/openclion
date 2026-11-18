@@ -32,7 +32,7 @@ pub fn bar(state: State, pal: Palette) -> impl IntoElement {
         )
         .child(
             tool_button(icons::DEBUG_COLORED, 30.0, 16.0, pal.fg_secondary, pal, move || {
-                state.status.set("No run configuration — select one first".to_owned());
+                crate::debug::start(state);
             })
             .window_drag(false),
         )

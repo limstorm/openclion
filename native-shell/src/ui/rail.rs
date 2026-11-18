@@ -99,6 +99,7 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
     rail_button_base(pal)
         .label(title)
         .test_id(match tool {
+            BottomTool::Debug => "rail-debug",
             BottomTool::Terminal => "rail-terminal",
             BottomTool::Problems => "rail-problems",
             BottomTool::Run => "rail-run",

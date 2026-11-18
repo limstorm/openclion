@@ -18,6 +18,7 @@ ide-lsp = { path = "../crates/ide-lsp" }
 ide-language = { path = "../crates/ide-language" }
 ide-text = { path = "../crates/ide-text" }
 ide-terminal = { path = "../crates/ide-terminal" }
+ide-dap = { path = "../crates/ide-dap" }
 tokio = { version = "1", features = ["sync"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]

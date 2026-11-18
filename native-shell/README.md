@@ -49,6 +49,7 @@ backend uses.
 | clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                       |
 | Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                     |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                       |
+| Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, stack frames and locals          |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -124,8 +125,8 @@ the backend's targets, and Commit reads git status.
 ## Theme
 
 The migration is in progress: CMake, git, search, build/run, clangd
-diagnostics/completion/goto and the PTY terminal now use the main branch
-backend. DAP debugging, file operations and the full settings/keymap surface
+diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
+the main branch backend. File operations and the full settings/keymap surface
 are the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
@@ -142,3 +143,4 @@ half-coloured editor.
 | ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
 | ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
 | ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)          |
+| ![Debugging](docs/native-shell-debug.png)         |                                                 |

@@ -177,6 +177,10 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
         ])
         .classes(classes)
         .diagnostics(move || state.diagnostics.get())
+        .decorations(move || crate::debug::decorations(state))
+        .on_line_number_press(move |line: &u32| {
+            crate::debug::toggle_breakpoint(state, *line);
+        })
         .on_change(move |text: &SharedString| {
             let text = text.to_string();
             state.update_active_text(text.clone());
