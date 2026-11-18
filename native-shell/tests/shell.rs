@@ -1,11 +1,14 @@
 //! Headless tests of the native shell: the workspace tree, opening files and
 //! switching tabs run on nsh's real engine without a window.
 
+use nsh_core::geometry::{Size, px};
 use nsh_engine::{EngineConfig, Root};
 use nsh_testing::Headless;
 
 fn start() -> Headless {
-    Headless::start(EngineConfig::new(Root::of::<openclion_native::App>())).unwrap()
+    let mut config = EngineConfig::new(Root::of::<openclion_native::App>());
+    config.viewport = Size::new(px(1400.0), px(900.0));
+    Headless::start(config).unwrap()
 }
 
 #[test]
@@ -50,4 +53,21 @@ fn find_in_files_opens_from_the_rail() {
     app.press("id:rail-search").unwrap();
     app.wait_for("Find in Files").unwrap();
     app.wait_for("Search in files").unwrap();
+}
+
+#[test]
+fn the_cmake_panel_lists_the_backends_targets() {
+    let mut app = start();
+    app.wait_for("CMake").unwrap();
+    app.wait_for("Targets").unwrap();
+    app.wait_for("acme_tests").unwrap();
+    app.wait_for("executable").unwrap();
+}
+
+#[test]
+fn the_commit_panel_reads_git_status() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:rail-commit").unwrap();
+    app.wait_for("Commit").unwrap();
 }

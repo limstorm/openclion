@@ -109,6 +109,7 @@ fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElem
     let path = row.path.clone();
     let path_for_bg = row.path.clone();
     let row_path_for_chevron = row.path.clone();
+    let path_for_vcs = row.path.clone();
     let name = row.name.clone();
     let is_dir = row.dir;
     let depth = row.depth;
@@ -155,7 +156,22 @@ fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElem
                 .into_element()
         })))
         .child(icon(icon_markup, icon_size, icon_color))
-        .child(text_ui(name, 13.0, pal.fg).truncate())
+        .child(text_ui(name, 13.0, pal.fg).truncate().text_color(move || {
+            let Some(row) = state.vcs.get().into_iter().find(|row| row.path.to_string_lossy() == path_for_vcs) else {
+                return pal.fg;
+            };
+            if row.conflicted {
+                pal.danger
+            } else {
+                match row.letter {
+                    "A" => pal.vcs_added,
+                    "U" => pal.vcs_untracked,
+                    "D" => pal.vcs_deleted,
+                    "C" => pal.danger,
+                    _ => pal.vcs_modified,
+                }
+            }
+        }))
 }
 
 fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
@@ -170,20 +186,30 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                 .flex_row()
                 .items_center()
                 .gap(px(2.0))
+                .child(dynamic(move || {
+                    let branch = state.vcs_branch.get();
+                    let label = branch.map(|b| format!("on {b}")).unwrap_or_else(|| "no repository".to_owned());
+                    text_muted(label, 11.0, pal).into_element()
+                }))
                 .child(header_action(pal, icons::REFRESH, move || {
-                    state.status.set("Refreshed VCS status".to_owned());
+                    state.refresh_vcs();
                 }))
                 .child(header_action(pal, icons::MORE_HORIZONTAL, move || {})),
         ))
-        .child(
-            scroll().flex_1().child(
-                view()
+        .child(scroll().flex_1().child(dynamic(move || {
+            let rows = state.vcs.get();
+            let loading = state.vcs_loading.get();
+            if loading && rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("Reading git status…", 12.0, pal)).into_element();
+            }
+            if rows.is_empty() {
+                return view()
                     .flex_col()
                     .p(px(8.0))
                     .gap(px(6.0))
                     .child(
                         view()
-                            .h(px(60.0))
+                            .h(px(52.0))
                             .w_full()
                             .items_center()
                             .justify_center()
@@ -191,9 +217,42 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                             .child(icon(icons::COMMIT, 20.0, pal.fg_muted))
                             .child(text_ui("No changes", 13.0, pal.fg_muted)),
                     )
-                    .child(text_muted("The workspace is clean. Commit and push appear here.", 12.0, pal)),
-            ),
-        )
+                    .child(text_muted("The working tree is clean. Changed files appear here.", 12.0, pal))
+                    .into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .py(px(4.0))
+                .children(rows.into_iter().map(move |row| vcs_row(state, pal, row)))
+                .into_element()
+        })))
+}
+
+fn vcs_row(state: State, pal: Palette, row: crate::backend::VcsRow) -> View {
+    let path = row.path.clone();
+    let letter_color = if row.conflicted {
+        pal.danger
+    } else if row.staged {
+        pal.success
+    } else {
+        pal.link
+    };
+    view()
+        .h(px(24.0))
+        .flex_none()
+        .mx(px(4.0))
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(6.0))
+        .rounded(px(5.0))
+        .hover(move |s| s.bg(pal.tree_hover))
+        .on_press(move || state.open_path(path.clone()))
+        .child(icon(crate::icons::file_icon(&row.rel), 16.0, pal.fg_muted))
+        .child(text_ui(row.rel, 13.0, pal.fg).truncate())
+        .child(view().flex_1())
+        .child(text_ui(row.letter, 11.0, letter_color))
 }
 
 fn structure_panel(state: State, pal: Palette) -> impl IntoElement {
@@ -280,7 +339,7 @@ fn search_panel(state: State, pal: Palette) -> impl IntoElement {
                                 .on_change(move |value: &str| {
                                     state.search_query.set(value.to_owned());
                                 })
-                                .on_submit(move |_: &str| state.search()),
+                                .on_submit(move |_: &str| state.search_backend()),
                         )
                         .child(
                             view()
@@ -289,7 +348,7 @@ fn search_panel(state: State, pal: Palette) -> impl IntoElement {
                                 .justify_center()
                                 .rounded(px(5.0))
                                 .bg(pal.accent)
-                                .on_press(move || state.search())
+                                .on_press(move || state.search_backend())
                                 .child(icon(icons::SEARCH, 16.0, white().into())),
                         ),
                 )
@@ -300,19 +359,17 @@ fn search_panel(state: State, pal: Palette) -> impl IntoElement {
 fn search_results(state: State, pal: Palette) -> impl IntoElement {
     let hits = state.search_results.get();
     if hits.is_empty() {
-        return view()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .child(text_muted("No results", 12.0, pal))
-            .into_element();
+        let label = if state.searching.get() { "Searching…" } else { "No results" };
+        return view().flex_1().items_center().justify_center().child(text_muted(label, 12.0, pal)).into_element();
     }
     let count = hits.len();
+    let summary =
+        if state.searching.get() { format!("{count} matches · searching…") } else { format!("{count} matches") };
     view()
         .flex_col()
         .w_full()
         .gap(px(1.0))
-        .child(text_muted(format!("{count} matches"), 11.0, pal))
+        .child(text_muted(summary, 11.0, pal))
         .children(hits.into_iter().map(move |hit| search_hit(state, pal, hit)))
         .into_element()
 }

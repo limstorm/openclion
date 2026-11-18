@@ -10,6 +10,10 @@ publish = false
 nsh-core = "0.6.0"
 nsh-base = { version = "0.6.0", default-features = false, features = ["editor", "highlight"] }
 env_logger = "0.11"
+ide-core = { path = "../crates/ide-core" }
+ide-cmake = { path = "../crates/ide-cmake" }
+ide-vcs = { path = "../crates/ide-vcs" }
+ide-search = { path = "../crates/ide-search" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 nsh-platform-linux = { version = "0.6.0", default-features = false, features = ["editor", "highlight", "svg"] }

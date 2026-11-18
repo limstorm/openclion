@@ -110,6 +110,11 @@ pub struct State {
     pub status: Signal<String>,
     pub search_query: Signal<String>,
     pub search_results: Signal<Vec<SearchHit>>,
+    pub searching: Signal<bool>,
+    pub cmake: Signal<Option<ide_cmake::CmakeModel>>,
+    pub vcs: Signal<Vec<crate::backend::VcsRow>>,
+    pub vcs_branch: Signal<Option<String>>,
+    pub vcs_loading: Signal<bool>,
     pub terminal_lines: Signal<Vec<String>>,
     pub terminal_input: Signal<String>,
     pub settings: Signal<bool>,
@@ -175,6 +180,11 @@ impl State {
             status: signal(String::new()),
             search_query: signal(String::new()),
             search_results: signal(Vec::new()),
+            searching: signal(false),
+            cmake: signal(None),
+            vcs: signal(Vec::new()),
+            vcs_branch: signal(None),
+            vcs_loading: signal(false),
             terminal_lines: signal(vec![
                 "OpenCLion 2026.1  ·  native shell".to_owned(),
                 "A pure-Rust IDE shell: no JavaScript runtime, no web view.".to_owned(),
@@ -336,39 +346,8 @@ impl State {
         self.editor_seed.set(String::new());
         self.selected.set(None);
         self.status.set("Workspace opened".to_owned());
-    }
-
-    pub fn search(&self) {
-        let query = self.search_query.get();
-        if query.trim().is_empty() {
-            self.search_results.set(Vec::new());
-            return;
-        }
-        let root = self.root.get();
-        let files = self.files();
-        let mut hits = Vec::new();
-        let needle = query.to_lowercase();
-        'files: for path in files {
-            let Ok(meta) = fs::metadata(&path) else { continue };
-            if meta.len() > 768 * 1024 {
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(&path) else { continue };
-            for (index, line) in text.lines().enumerate() {
-                if line.to_lowercase().contains(&needle) {
-                    hits.push(SearchHit {
-                        display: path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().to_string(),
-                        path: path.clone(),
-                        line: index + 1,
-                        text: line.trim().to_owned(),
-                    });
-                    if hits.len() >= 200 {
-                        break 'files;
-                    }
-                }
-            }
-        }
-        self.search_results.set(hits);
+        self.refresh_cmake();
+        self.refresh_vcs();
     }
 
     pub fn terminal_submit(&self) {
@@ -415,12 +394,18 @@ fn read_node(path: &Path, depth: usize, files: &mut Vec<PathBuf>) -> FsNode {
     }
     let mut children = Vec::new();
     if path.is_dir() && depth < 12 {
+        // A configured CMake build directory is generated output: IDEA keeps it
+        // out of the project tree, and it can hold hundreds of thousands of files.
+        let generated = path.join("CMakeCache.txt").is_file();
         if let Ok(entries) = fs::read_dir(path) {
             let mut dirs = Vec::new();
             let mut rest = Vec::new();
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if SKIP_DIRS.contains(&name.as_str()) {
+                if SKIP_DIRS.contains(&name.as_str()) || name == "compile_commands.json" {
+                    continue;
+                }
+                if generated && name != "CMakeCache.txt" {
                     continue;
                 }
                 let child = read_node(&entry.path(), depth + 1, files);

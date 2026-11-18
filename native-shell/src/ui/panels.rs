@@ -47,7 +47,7 @@ fn right_header(state: State, pal: Palette) -> impl IntoElement {
         .child(text_strong(title, 13.0, pal))
         .child(view().flex_1())
         .child(header_action(pal, icons::REFRESH, move || {
-            state.status.set("CMake project reloaded".to_owned());
+            state.refresh_cmake();
         }))
         .child(header_action(pal, icons::MORE_HORIZONTAL, move || {
             state.status.set("CMake tool window actions".to_owned());
@@ -70,36 +70,99 @@ fn header_action(pal: Palette, markup: &'static str, on_press: impl Fn() + 'stat
 }
 
 fn cmake_body(state: State, pal: Palette) -> impl IntoElement {
-    let root = state.root_name();
-    scroll().flex_1().w_full().min_h(px(0.0)).child(
-        view()
-            .flex_col()
-            .w_full()
-            .py(px(6.0))
-            .child(panel_row(pal, 0, true, icons::CMAKE, root, None, true))
-            .child(panel_row(pal, 1, true, icons::CMAKE, "Debug".to_owned(), Some("build".to_owned()), false))
-            .child(panel_row(pal, 2, true, icons::FOLDER, "Targets".to_owned(), None, false))
-            .child(panel_row(pal, 3, false, icons::CMAKE, "acme".to_owned(), Some("01".to_owned()), false))
-            .child(panel_row(pal, 3, false, icons::CMAKE, "acme_tests".to_owned(), Some("01".to_owned()), false))
-            .child(panel_row(
-                pal,
-                4,
-                false,
-                icons::CMAKE,
-                "greeter".to_owned(),
-                Some("static library".to_owned()),
-                false,
-            ))
-            .child(panel_row(
-                pal,
-                1,
-                false,
-                crate::icons::file_icon("compile_commands.json"),
-                "compile_commands.json".to_owned(),
-                None,
-                false,
-            )),
-    )
+    scroll().flex_1().w_full().min_h(px(0.0)).child(dynamic(move || {
+        let model = state.cmake.get();
+        let mut rows: Vec<View> = Vec::new();
+        match &model {
+            None => {
+                rows.push(panel_row(pal, 0, false, icons::CMAKE, "Loading CMake model…".to_owned(), None, false));
+            }
+            Some(model) if !model.has_project => {
+                rows.push(panel_row(
+                    pal,
+                    0,
+                    false,
+                    icons::CMAKE,
+                    "No CMakeLists.txt".to_owned(),
+                    Some("open a CMake project".to_owned()),
+                    false,
+                ));
+            }
+            Some(model) => {
+                let root = state.root_name();
+                rows.push(panel_row(pal, 0, true, icons::CMAKE, root, None, true));
+                if model.builds.is_empty() {
+                    rows.push(panel_row(
+                        pal,
+                        1,
+                        false,
+                        icons::FOLDER,
+                        "No configured build directory".to_owned(),
+                        Some("run CMake configure".to_owned()),
+                        false,
+                    ));
+                }
+                for build in &model.builds {
+                    rows.push(panel_row(
+                        pal,
+                        1,
+                        true,
+                        icons::CMAKE,
+                        build.configuration(),
+                        Some(build.dir.clone()),
+                        false,
+                    ));
+                    if !build.targets.is_empty() {
+                        rows.push(panel_row(pal, 2, true, icons::FOLDER, "Targets".to_owned(), None, false));
+                    }
+                    for target in &build.targets {
+                        let kind = match target.kind {
+                            ide_cmake::CmakeTargetKind::Executable => "executable",
+                            ide_cmake::CmakeTargetKind::StaticLibrary => "static library",
+                            ide_cmake::CmakeTargetKind::SharedLibrary => "shared library",
+                            ide_cmake::CmakeTargetKind::ModuleLibrary => "module",
+                            ide_cmake::CmakeTargetKind::ObjectLibrary => "object library",
+                            ide_cmake::CmakeTargetKind::InterfaceLibrary => "interface",
+                            ide_cmake::CmakeTargetKind::Utility => "utility",
+                            ide_cmake::CmakeTargetKind::Unknown => "target",
+                        };
+                        rows.push(panel_row(
+                            pal,
+                            3,
+                            false,
+                            icons::CMAKE,
+                            target.name.clone(),
+                            Some(kind.to_owned()),
+                            false,
+                        ));
+                    }
+                    if let Some(db) = &build.compile_commands {
+                        rows.push(panel_row(
+                            pal,
+                            1,
+                            false,
+                            crate::icons::file_icon(db),
+                            "compile_commands.json".to_owned(),
+                            None,
+                            false,
+                        ));
+                    }
+                }
+                for preset in &model.presets {
+                    rows.push(panel_row(
+                        pal,
+                        1,
+                        false,
+                        icons::CMAKE,
+                        preset.name.clone(),
+                        Some(preset.kind.clone()),
+                        false,
+                    ));
+                }
+            }
+        }
+        view().flex_col().w_full().py(px(4.0)).children(rows)
+    }))
 }
 
 fn panel_row(
@@ -322,13 +385,19 @@ fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool,
 }
 
 fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
+    let log = element_ref();
+    let follow = log;
+    effect(move || {
+        state.terminal_lines.get();
+        follow.scroll_to_end(false);
+    });
     view()
         .flex_1()
         .flex_col()
         .min_h(px(0.0))
         .w_full()
         .child(
-            scroll().flex_1().min_h(px(0.0)).w_full().child(
+            scroll().element_ref(&log).flex_1().min_h(px(0.0)).w_full().child(
                 view().flex_col().w_full().p(px(8.0)).gap(px(1.0)).children(
                     state
                         .terminal_lines

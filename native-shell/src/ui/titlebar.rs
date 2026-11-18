@@ -26,7 +26,7 @@ pub fn bar(state: State, pal: Palette) -> impl IntoElement {
         .child(config_widget(state, pal))
         .child(
             tool_button(icons::RUN_COLORED, 30.0, 16.0, pal.fg_secondary, pal, move || {
-                state.status.set("No run configuration — select one first".to_owned());
+                state.run_active_configuration();
             })
             .window_drag(false),
         )
@@ -101,9 +101,7 @@ fn config_widget(state: State, pal: Palette) -> impl IntoElement {
         .hover(move |s| s.bg(pal.toolbar_hover))
         .active(move |s| s.bg(pal.toolbar_pressed))
         .window_drag(false)
-        .on_press(move || {
-            state.status.set("Run configurations: acme (Debug), acme_tests".to_owned());
-        })
+        .on_press(move || state.configure_cmake())
         .child(text_ui("Select Configuration", 13.0, pal.fg_secondary))
         .child(icon(icons::CHEVRON_DOWN, 12.0, pal.fg_muted))
 }

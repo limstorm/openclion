@@ -1,6 +1,7 @@
 //! OpenCLion's native shell: the whole workbench is written in Rust with
 //! nsh's retained native views. No WebView, no JavaScript engine.
 
+mod backend;
 mod icons;
 mod model;
 mod theme;
@@ -28,6 +29,8 @@ pub fn App() -> impl IntoElement {
     let state = State::new();
     configure_window();
     install_shortcuts(state);
+    state.refresh_cmake();
+    state.refresh_vcs();
     // The native editor and other nsh components follow the app's theme, not
     // only our own palette.
 
@@ -85,6 +88,9 @@ fn install_shortcuts(state: State) {
 fn set_gtk_dark(dark: bool) {
     spawn(async move {
         let _ = run_on_main_thread(move || {
+            if !gtk4::is_initialized() {
+                return;
+            }
             if let Some(settings) = gtk4::Settings::default() {
                 settings.set_gtk_application_prefer_dark_theme(dark);
                 // The workbench draws its own title bar and window buttons.
