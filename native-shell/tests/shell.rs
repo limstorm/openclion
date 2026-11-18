@@ -77,3 +77,11 @@ fn the_commit_panel_reads_git_status() {
     app.press("id:rail-commit").unwrap();
     app.wait_for("Commit").unwrap();
 }
+
+#[test]
+fn the_project_header_opens_the_new_file_dialog() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:project-new-file").unwrap();
+    app.wait_for("New File").unwrap();
+}

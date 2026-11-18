@@ -9,6 +9,7 @@ mod model;
 mod terminal;
 mod theme;
 mod ui;
+mod watch;
 
 use nsh_core::desktop::{TitleBarOptions, TitleBarStyle, WindowAttributes};
 use nsh_core::element::desktop::current_window;
@@ -36,6 +37,7 @@ pub fn App() -> impl IntoElement {
     state.refresh_vcs();
     terminal::ensure_started(state);
     debug::init(state);
+    watch::start(state);
     lsp::start(state);
     effect(move || {
         let path = state.active_path.get();

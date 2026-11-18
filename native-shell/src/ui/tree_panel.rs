@@ -59,6 +59,18 @@ fn project_panel(state: State, pal: Palette) -> impl IntoElement {
                 .flex_row()
                 .items_center()
                 .gap(px(2.0))
+                .child(
+                    header_action(pal, icons::ADD, move || {
+                        state.open_new_file();
+                    })
+                    .test_id("project-new-file"),
+                )
+                .child(
+                    header_action(pal, icons::FOLDER, move || {
+                        state.open_new_folder();
+                    })
+                    .test_id("project-new-folder"),
+                )
                 .child(header_action(pal, icons::COLLAPSE_ALL, move || {
                     state.expanded.set(Vec::new());
                 }))
@@ -68,6 +80,7 @@ fn project_panel(state: State, pal: Palette) -> impl IntoElement {
         ))
         .child(scroll().flex_1().w_full().min_h(px(0.0)).child(
             view().flex_col().w_full().pt(px(0.0)).pb(px(8.0)).child(root_row(state, pal)).child(dynamic(move || {
+                state.tree_rev.get();
                 let rows = state.rows();
                 view().flex_col().w_full().children(rows.into_iter().map(|row| tree_row(state, pal, row)))
             })),
@@ -97,6 +110,7 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
         .hover(move |s| s.bg(pal.tree_hover))
         .on_press(move || {
             let root = state.root.get().to_string_lossy().to_string();
+            state.selected.set(Some(root.clone()));
             state.toggle_dir(&root);
         })
         .child(icon(icons::CHEVRON_DOWN, 12.0, pal.fg_muted))
@@ -146,7 +160,12 @@ fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElem
             }
         })
         .hover(move |s| s.bg(pal.tree_hover))
-        .on_press(move || state.open_path(std::path::PathBuf::from(&path)))
+        .on_press(move || {
+            if is_dir {
+                state.selected.set(Some(path.clone()));
+            }
+            state.open_path(std::path::PathBuf::from(&path));
+        })
         .child(view().w(px(12.0)).flex_none().items_center().justify_center().child(dynamic(move || {
             if !is_dir {
                 return view().into_element();

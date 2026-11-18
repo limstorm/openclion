@@ -17,6 +17,7 @@ native-shell/
 │   ├── backend.rs           ide-cmake / ide-vcs / ide-search bridge
 │   ├── lsp.rs               clangd documents, diagnostics and status
 │   ├── terminal.rs          ide-terminal PTY + nsh Terminal bridge
+│   ├── watch.rs             notify-based tree/VCS refresh
 │   ├── theme.rs             Islands Light/Dark palette + bundled fonts
 │   ├── icons.rs             expui SVG icons inlined as SVG elements
 │   └── ui/
@@ -50,6 +51,8 @@ backend uses.
 | Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                     |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                       |
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, stack frames and locals          |
+| File operations    | `std::fs` + native dialogs                            | Project header + / folder creates a file or folder beside the selection, opens it, and expands the tree                                     |
+| File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                    |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -117,17 +120,19 @@ cd native-shell
 cargo test
 ```
 
-Seven headless tests run the real nsh engine at 1400×900 and press real
-views (LSP is disabled there so no clangd process leaks): the workbench mounts, a tree file opens in the editor, a folder
+Eight headless tests run the real nsh engine at 1400×900 and press real
+views (LSP, PTY and debug are disabled there so no processes leak): the workbench mounts, a tree file opens in the editor, a folder
 expands, Find in Files opens, the terminal panel opens, the CMake window lists
-the backend's targets, and Commit reads git status.
+the backend's targets, Commit reads git status, and the New File dialog
+opens.
 
 ## Theme
 
 The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
-the main branch backend. File operations and the full settings/keymap surface
-are the next slices; the shell keeps the Islands layout while each lands.
+the main branch backend. File operations now cover create + external-change
+refresh; rename/delete/context menus and the full settings/keymap surface are
+the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native

@@ -82,6 +82,12 @@ pub struct Row {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FileDialog {
+    NewFile { base: PathBuf },
+    NewFolder { base: PathBuf },
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct SearchHit {
     pub path: PathBuf,
     pub display: String,
@@ -110,6 +116,9 @@ pub struct State {
     pub status: Signal<String>,
     pub search_query: Signal<String>,
     pub search_results: Signal<Vec<SearchHit>>,
+    pub tree_rev: Signal<u32>,
+    pub dialog: Signal<Option<FileDialog>>,
+    pub dialog_input: Signal<String>,
     pub searching: Signal<bool>,
     pub cmake: Signal<Option<ide_cmake::CmakeModel>>,
     pub vcs: Signal<Vec<crate::backend::VcsRow>>,
@@ -200,6 +209,9 @@ impl State {
             status: signal(String::new()),
             search_query: signal(String::new()),
             search_results: signal(Vec::new()),
+            tree_rev: signal(0),
+            dialog: signal(None),
+            dialog_input: signal(String::new()),
             searching: signal(false),
             cmake: signal(None),
             vcs: signal(Vec::new()),
@@ -256,6 +268,88 @@ impl State {
     pub fn active_tab(&self) -> Option<Tab> {
         let tabs = self.tabs.get();
         tabs.get(self.active.get()).cloned()
+    }
+
+    /// Starts "New File" beside the selected entry (a folder itself, else its
+    /// parent, else the project root).
+    pub fn open_new_file(&self) {
+        let base = self.selection_dir();
+        self.dialog_input.set(String::new());
+        self.dialog.set(Some(FileDialog::NewFile { base }));
+    }
+
+    pub fn open_new_folder(&self) {
+        let base = self.selection_dir();
+        self.dialog_input.set(String::new());
+        self.dialog.set(Some(FileDialog::NewFolder { base }));
+    }
+
+    fn selection_dir(&self) -> PathBuf {
+        let root = self.root.get();
+        let Some(selected) = self.selected.get() else {
+            return root;
+        };
+        let path = PathBuf::from(selected);
+        if path.is_dir() { path } else { path.parent().map(Path::to_path_buf).unwrap_or(root) }
+    }
+
+    /// Creates what the open dialog names, then refreshes the tree and opens
+    /// the new file.
+    pub fn confirm_dialog(&self) {
+        let Some(dialog) = self.dialog.get() else {
+            return;
+        };
+        let name = self.dialog_input.get().trim().to_owned();
+        if name.is_empty() {
+            self.status.set("A name is required".to_owned());
+            return;
+        }
+        if name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+            self.status.set("The name cannot contain a path separator".to_owned());
+            return;
+        }
+        let (base, folder) = match &dialog {
+            FileDialog::NewFile { base } => (base.clone(), false),
+            FileDialog::NewFolder { base } => (base.clone(), true),
+        };
+        let path = base.join(&name);
+        let result = if folder {
+            fs::create_dir_all(&path)
+        } else {
+            if let Some(parent) = path.parent() {
+                let _ = fs::create_dir_all(parent);
+            }
+            fs::write(&path, "")
+        };
+        match result {
+            Ok(()) => {
+                self.dialog.set(None);
+                let mut expanded = self.expanded.get();
+                let base_key = base.to_string_lossy().to_string();
+                if !expanded.iter().any(|item| item == &base_key) {
+                    expanded.push(base_key);
+                }
+                self.expanded.set(expanded);
+                self.reload_tree();
+                if folder {
+                    self.status.set(format!("Created {name}"));
+                } else {
+                    self.open_path(path);
+                    self.status.set(format!("Created {name}"));
+                }
+            }
+            Err(error) => {
+                self.status.set(format!("Cannot create {name}: {error}"));
+            }
+        }
+    }
+
+    /// Rebuilds the tree from disk, keeping the expanded set and open tabs.
+    pub fn reload_tree(&self) {
+        let root = self.root.get();
+        let tree = Tree::load(&root);
+        self.tree.replace(tree);
+        self.tree_rev.update(|rev| *rev += 1);
     }
 
     pub fn toggle_dir(&self, path: &str) {

@@ -4482,6 +4482,8 @@ dependencies = [
  "ide-terminal",
  "ide-text",
  "ide-vcs",
+ "notify",
+ "notify-debouncer-full",
  "nsh-base",
  "nsh-core",
  "nsh-engine",

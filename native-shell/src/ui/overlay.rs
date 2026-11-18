@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || file_dialog(state, pal).into_element()))
         .child(dynamic(move || toast(state, pal).into_element()))
 }
 
@@ -396,6 +397,81 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(text_muted(detail, 12.0, pal))
         .child(view().h(px(4.0)))
         .child(control)
+}
+
+fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
+    let Some(dialog) = state.dialog.get() else {
+        return view().into_element();
+    };
+    let (title, base, action) = match &dialog {
+        crate::model::FileDialog::NewFile { base } => ("New File", base.clone(), "Create File"),
+        crate::model::FileDialog::NewFolder { base } => ("New Folder", base.clone(), "Create Folder"),
+    };
+    let base = base.to_string_lossy().to_string();
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .items_center()
+        .justify_center()
+        .bg(c(0x00000040))
+        .child(
+            view()
+                .w(px(460.0))
+                .flex_col()
+                .gap(px(10.0))
+                .p(px(14.0))
+                .rounded(px(8.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .child(text_strong(title, 13.0, pal))
+                .child(text_muted(base, 11.0, pal).truncate())
+                .child(
+                    input()
+                        .h(px(30.0))
+                        .px(px(8.0))
+                        .rounded(px(5.0))
+                        .border(px(1.0))
+                        .border_color(pal.accent)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(13.0))
+                        .placeholder("Name")
+                        .auto_focus(true)
+                        .value(move || state.dialog_input.get())
+                        .on_change(move |value: &str| state.dialog_input.set(value.to_owned()))
+                        .on_submit(move |_: &str| state.confirm_dialog()),
+                )
+                .child(
+                    view()
+                        .flex_row()
+                        .justify_end()
+                        .gap(px(6.0))
+                        .child(
+                            view()
+                                .h(px(26.0))
+                                .px(px(12.0))
+                                .items_center()
+                                .rounded(px(5.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.dialog.set(None))
+                                .child(text_ui("Cancel", 12.0, pal.fg)),
+                        )
+                        .child(
+                            view()
+                                .h(px(26.0))
+                                .px(px(14.0))
+                                .items_center()
+                                .rounded(px(5.0))
+                                .bg(pal.accent)
+                                .on_press(move || state.confirm_dialog())
+                                .child(text_ui(action, 12.0, white().into())),
+                        ),
+                ),
+        )
+        .into_element()
 }
 
 fn toast(state: State, _pal: Palette) -> impl IntoElement {
