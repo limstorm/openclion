@@ -51,7 +51,7 @@ pub fn ensure_started(state: State) {
             spawn(async move {
                 tokio::time::sleep(std::time::Duration::from_millis(450)).await;
                 let _ = manager_for_prompt
-                    .write(id, " PS1='\\w $ '; PROMPT='%~ $ '; RPROMPT=''; precmd_functions=(); clear\n");
+                    .write(id, " PS1='\\w $'; PROMPT='%~ $'; RPROMPT=''; precmd_functions=(); clear\n");
             });
             spawn(async move {
                 while let Some(data) = rx.recv().await {

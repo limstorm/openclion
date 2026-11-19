@@ -1,5 +1,5 @@
 //! The right tool window (CMake, Notifications, AI, SSH, Notebooks) and the
-//! bottom tool window (Terminal, Problems, Run, Services).
+//! bottom tool window (Terminal, Problems, Run, Git, CMake).
 
 use nsh_core::element::FontWeight;
 use nsh_core::element::input;
@@ -21,7 +21,6 @@ pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
         .bg(pal.bg_island)
         .child(right_header(state, pal))
         .child(view().flex_1().min_h(px(0.0)).child(dynamic(move || match state.right_tool.get() {
-            RightTool::Cmake => cmake_body(state, pal).into_element(),
             RightTool::Notifications => notifications_body(state, pal).into_element(),
             RightTool::Agents => agents_body(state, pal).into_element(),
             RightTool::Ssh => ssh_body(state, pal).into_element(),
@@ -31,7 +30,6 @@ pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
 
 fn right_header(state: State, pal: Palette) -> impl IntoElement {
     let title = match state.right_tool.get() {
-        RightTool::Cmake => "CMake",
         RightTool::Notifications => "Notifications",
         RightTool::Agents => "AI Assistant",
         RightTool::Ssh => "SSH",
@@ -48,25 +46,6 @@ fn right_header(state: State, pal: Palette) -> impl IntoElement {
         .pr(px(6.0))
         .child(text_strong(title, 13.0, pal))
         .child(view().flex_1())
-        .child(dynamic(move || {
-            if state.right_tool.get() != RightTool::Cmake {
-                return view().into_element();
-            }
-            view()
-                .flex_row()
-                .items_center()
-                .gap(px(2.0))
-                .child(header_action(pal, icons::REFRESH, move || {
-                    state.configure_cmake();
-                }))
-                .child(header_action(pal, icons::BUILD_PROJECT, move || {
-                    state.build_active_configuration();
-                }))
-                .child(header_action(pal, icons::MORE_HORIZONTAL, move || {
-                    state.status.set("CMake tool window actions".to_owned());
-                }))
-                .into_element()
-        }))
         .child(header_action(pal, icons::CLOSE, move || {
             state.show_right.set(false);
         }))
@@ -82,10 +61,6 @@ fn header_action(pal: Palette, markup: &'static str, on_press: impl Fn() + 'stat
         .hover(move |s| s.bg(pal.toolbar_hover))
         .on_press(on_press)
         .child(icon(markup, 16.0, pal.fg_muted))
-}
-
-fn cmake_body(state: State, pal: Palette) -> impl IntoElement {
-    cmake_tree(state, pal)
 }
 
 fn cmake_tree(state: State, pal: Palette) -> impl IntoElement {
@@ -487,7 +462,6 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
             Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
             Some(BottomTool::Problems) => problems_body(state, pal).into_element(),
             Some(BottomTool::Run) => run_body(state, pal).into_element(),
-            Some(BottomTool::Services) => services_body(state, pal).into_element(),
             Some(BottomTool::Git) => git_bottom(state, pal).into_element(),
             Some(BottomTool::Cmake) => cmake_tree(state, pal).into_element(),
         })))
@@ -681,7 +655,6 @@ fn bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
             .child(bottom_tab(state, pal, "Terminal", BottomTool::Terminal, current))
             .child(bottom_tab(state, pal, "Problems", BottomTool::Problems, current))
             .child(bottom_tab(state, pal, "Run", BottomTool::Run, current))
-            .child(bottom_tab(state, pal, "Services", BottomTool::Services, current))
             .child(view().flex_1())
             .child(header_action(pal, icons::CLOSE, move || {
                 state.show_bottom.set(false);
@@ -1203,85 +1176,4 @@ fn run_body(state: State, pal: Palette) -> impl IntoElement {
             view().flex_col().w_full().gap(px(2.0)).children(rows).into_element()
         }),
     )
-}
-
-fn services_body(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_col()
-        .w_full()
-        .p(px(8.0))
-        .gap(px(4.0))
-        .child(
-            view()
-                .h(px(22.0))
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .child(icon(icons::SERVICES, 14.0, pal.fg_muted))
-                .child(dynamic(move || {
-                    let label = state
-                        .docker
-                        .get()
-                        .map(|docker| docker.status)
-                        .unwrap_or_else(|| "Loading Docker services…".to_owned());
-                    text_ui(label, 11.0, pal.fg_muted).into_element()
-                }))
-                .child(view().flex_1())
-                .child(debug_text_button(pal, "Refresh", move || state.refresh_docker())),
-        )
-        .child(scroll().flex_1().child(dynamic(move || {
-            let Some(docker) = state.docker.get() else {
-                return view().p(px(8.0)).child(text_muted("Loading…", 12.0, pal)).into_element();
-            };
-            if !docker.ready {
-                return view().p(px(8.0)).child(text_muted(docker.status, 12.0, pal)).into_element();
-            }
-            let mut rows: Vec<View> = Vec::new();
-            for container in docker.containers {
-                let name = container.name.clone();
-                let image = container.image.clone();
-                let status = container.status.clone();
-                let running = container.running;
-                let id = container.id.clone();
-                rows.push(
-                    view()
-                        .h(px(26.0))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(6.0))
-                        .px(px(6.0))
-                        .rounded(px(4.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
-                        .child(icon(icons::SERVICES, 13.0, if running { pal.success } else { pal.fg_faint }))
-                        .child(text_ui(name, 12.0, pal.fg))
-                        .child(text_muted(image, 10.0, pal).truncate())
-                        .child(view().flex_1())
-                        .child(text_muted(status, 10.0, pal))
-                        .child(
-                            view()
-                                .h(px(18.0))
-                                .px(px(6.0))
-                                .items_center()
-                                .rounded(px(3.0))
-                                .border(px(1.0))
-                                .border_color(pal.border_strong)
-                                .hover(move |s| s.bg(pal.toolbar_hover))
-                                .on_press(move || state.docker_container_op(id.clone(), !running))
-                                .child(text_ui(if running { "Stop" } else { "Start" }, 10.0, pal.fg_secondary)),
-                        ),
-                );
-            }
-            view()
-                .flex_col()
-                .w_full()
-                .gap(px(2.0))
-                .child(text_muted(format!("{} containers · {} images", rows.len(), docker.images), 10.0, pal))
-                .children(rows)
-                .child(if docker.errors.is_empty() {
-                    view().into_element()
-                } else {
-                    text_ui(docker.errors.join(" · "), 10.0, pal.danger).into_element()
-                })
-                .into_element()
-        })))
 }

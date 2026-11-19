@@ -35,7 +35,6 @@ pub enum LeftTool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RightTool {
-    Cmake,
     Notifications,
     Agents,
     Ssh,
@@ -52,7 +51,6 @@ pub enum BottomTool {
     Terminal,
     Problems,
     Run,
-    Services,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -218,8 +216,6 @@ pub struct State {
     pub debug_selected: Signal<usize>,
     pub run_target: Signal<Option<String>>,
     pub run_chooser: Signal<bool>,
-    pub docker: Signal<Option<crate::backend::DockerView>>,
-    pub docker_busy: Signal<bool>,
     pub commit_message: Signal<String>,
     pub commit_checked: Stored<std::collections::HashSet<PathBuf>>,
     pub commit_amend: Signal<bool>,
@@ -299,7 +295,7 @@ impl State {
             active_path: signal(initial.clone()),
             editor_seed: signal(fs::read_to_string(&initial).unwrap_or_default()),
             left_tool: signal(LeftTool::Project),
-            right_tool: signal(RightTool::Cmake),
+            right_tool: signal(RightTool::Notifications),
             bottom_tool: signal(None),
             quick_open: signal(false),
             quick_query: signal(String::new()),
@@ -348,8 +344,6 @@ impl State {
             debug_selected: signal(0),
             run_target: signal(None),
             run_chooser: signal(false),
-            docker: signal(None),
-            docker_busy: signal(false),
             commit_message: signal(String::new()),
             commit_checked: stored(std::collections::HashSet::new()),
             commit_amend: signal(false),
@@ -381,7 +375,7 @@ impl State {
             right_width: signal(294.0),
             bottom_height: signal(260.0),
             show_left: signal(true),
-            show_right: signal(true),
+            show_right: signal(false),
             show_bottom: signal(false),
         }
     }

@@ -41,7 +41,7 @@ backend uses.
 
 | Feature            | Backend                                        | In the shell                                                                                                                                                                                     |
 | ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| CMake model        | `ide-cmake` (`load`, File API reply, presets)  | CMake header Reload/Build icons, bottom CMake dock with the target tree, and builds/`compile_commands.json`                                                                                      |
+| CMake model        | `ide-cmake` (`load`, File API reply, presets)  | bottom CMake dock with Reload / Build / Run and the target tree; Build builds the selected target without running                                                                                |
 | Configure          | `cmake -S . -B build` + `ide_cmake::request`   | click the configuration widget; output streams into the Terminal panel                                                                                                                           |
 | Build / Run        | `cmake --build … --target …` + the artifact    | header/bottom Build builds the selected CMake target without running; Run builds then runs it; the target tree is clickable                                                                      |
 | Run configurations | `ide-cmake` executables                        | the title-bar widget opens a chooser of CMake executable targets; the selected target drives Run, Debug and the Run tool window                                                                  |
@@ -58,7 +58,6 @@ backend uses.
 | Type hierarchy     | `ide-lsp` `prepareTypeHierarchy`               | Ctrl+Alt+H lists supertypes/subtypes in a Hierarchy dock; clicking opens the declaration                                                                                                         |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, 13pt JetBrains Mono, no padding; a clean single-line path prompt (right-side Node/time RPROMPT removed) and a block cursor at the prompt                                       |
 | Debugging          | `ide-dap` + lldb-dap                           | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
-| Services (Docker)  | `ide-docker`                                   | Services tool window shows daemon status, containers and image count; Start/Stop acts on a container and refreshes the snapshot                                                                  |
 | SSH                | `~/.ssh/config`                                | right-rail SSH window lists concrete hosts with Refresh; clicking opens the Terminal and runs `ssh <host>`                                                                                       |
 | Notebooks          | `std::fs` + `serde_json`                       | right-rail window lists `.ipynb` files; clicking opens a native cell viewer (Markdown/Code) instead of raw JSON                                                                                  |
 | AI Assistant       | native views                                   | local chat surface that can start a build, explain the open file or open Find in Files (no model backend embedded)                                                                               |
@@ -87,7 +86,7 @@ through signals, so the workbench never stalls while CMake or git works.
 | `src/ui/expui/**` icons                              | `assets/icons/*.svg` (inlined) |
 
 The layout follows the CSS constants exactly: 40 pt title bar, 6 pt island
-gaps, 10 pt island radius, 240 pt left tool window, 296 pt CMake tool window,
+gaps, 10 pt island radius, 234 pt left tool window and a full-width bottom dock;
 38 pt tab strip, 22 pt editor rows, 34 pt status bar.
 
 ## Run
@@ -130,7 +129,7 @@ cargo run
 | CMake dock          | Alt+8, or the bottom-left CMake rail button          |
 | Project             | Alt+1                                                |
 | Toggle tool windows | rail buttons, Ctrl+B (left), Ctrl+J (bottom)         |
-| Settings            | title-bar gear or the status-bar gear                |
+| Settings            | title-bar gear                                       |
 | Open project        | project name → Open… (system folder picker)          |
 
 ## Tests
@@ -152,7 +151,7 @@ The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
-Debug watch/condition/logpoints and the Docker Services window are done;
+Debug watch/condition/logpoints and the bottom Git/CMake docks are done;
 SSH, Notebook and AI tool windows are the next slices, while
 the shell keeps the Islands layout.
 

@@ -64,6 +64,8 @@ fn find_in_files_opens_from_the_rail() {
 #[test]
 fn the_cmake_panel_lists_the_backends_targets() {
     let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:rail-cmake").unwrap();
     app.wait_for("CMake").unwrap();
     app.wait_for("Targets").unwrap();
     app.wait_for("acme_tests").unwrap();
@@ -105,15 +107,6 @@ fn choosing_a_run_target_updates_the_title_bar_widget() {
 }
 
 #[test]
-fn the_services_panel_lists_docker() {
-    let mut app = start();
-    app.wait_for("Project").unwrap();
-    app.press("id:rail-services").unwrap();
-    app.wait_for("Services").unwrap();
-    app.wait_for("Refresh").unwrap();
-}
-
-#[test]
 fn the_menu_button_opens_the_application_menu() {
     let mut app = start();
     app.wait_for("Project").unwrap();
@@ -143,6 +136,7 @@ fn the_right_rail_opens_ssh_and_notebooks() {
 fn selecting_a_cmake_target_updates_the_selection() {
     let mut app = start();
     app.wait_for("Project").unwrap();
+    app.press("id:rail-cmake").unwrap();
     app.wait_for("acme_tests").unwrap();
     app.press("id:cmake-target-acme_tests").unwrap();
     app.wait_for("Selected CMake target acme_tests").unwrap();

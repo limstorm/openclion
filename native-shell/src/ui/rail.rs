@@ -27,13 +27,9 @@ pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
         .child(view().flex_1())
         .child(bottom_button(state, pal, icons::CMAKE, BottomTool::Cmake, "CMake"))
         .child(bottom_button(state, pal, icons::BRANCH, BottomTool::Git, "Git  Alt+9"))
-        .child(bottom_button(state, pal, icons::SERVICES, BottomTool::Services, "Services"))
         .child(bottom_button(state, pal, icons::RUN, BottomTool::Run, "Run  Alt+4"))
         .child(bottom_button(state, pal, icons::TERMINAL, BottomTool::Terminal, "Terminal  Alt+F12"))
         .child(bottom_button(state, pal, icons::PROBLEMS, BottomTool::Problems, "Problems  Alt+6"))
-        .child(rail_action(pal, icons::SETTINGS, move || {
-            state.settings.set(true);
-        }))
 }
 
 pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
@@ -47,8 +43,8 @@ pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
         .pb(px(6.0))
         .gap(px(2.0))
         .child(right_button(state, pal, icons::NOTIFICATIONS, RightTool::Notifications, "Notifications"))
-        .child(right_button(state, pal, icons::TERMINAL, RightTool::Ssh, "SSH"))
-        .child(right_button(state, pal, icons::BOOKMARKS, RightTool::Notebook, "Notebooks"))
+        .child(right_button(state, pal, icons::SERVER, RightTool::Ssh, "SSH"))
+        .child(right_button(state, pal, icons::FILE_TEXT, RightTool::Notebook, "Notebooks"))
         .child(right_action(state, pal, AI_TARGET, RightTool::Agents))
 }
 
@@ -61,10 +57,6 @@ fn rail_button_base(pal: Palette) -> View {
         .rounded(px(8.0))
         .hover(move |s| s.bg(pal.toolbar_hover))
         .active(move |s| s.bg(pal.toolbar_pressed))
-}
-
-fn rail_action(pal: Palette, markup: &'static str, on_press: impl Fn() + 'static) -> View {
-    rail_button_base(pal).on_press(on_press).child(icon(markup, 20.0, pal.fg_muted))
 }
 
 fn left_button(state: State, pal: Palette, markup: &'static str, tool: LeftTool, title: &'static str) -> View {
@@ -110,7 +102,6 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
             BottomTool::Terminal => "rail-terminal",
             BottomTool::Problems => "rail-problems",
             BottomTool::Run => "rail-run",
-            BottomTool::Services => "rail-services",
         })
         .bg(move || {
             if state.bottom_tool.get() == Some(tool) && state.show_bottom.get() {
@@ -137,7 +128,6 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
     rail_button_base(pal)
         .label(title)
         .test_id(match tool {
-            RightTool::Cmake => "rail-cmake",
             RightTool::Notifications => "rail-notifications",
             RightTool::Agents => "rail-agents",
             RightTool::Ssh => "rail-ssh",

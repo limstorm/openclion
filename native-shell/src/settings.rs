@@ -31,7 +31,7 @@ impl Default for Persisted {
             editor_font: 13.0,
             recent: Vec::new(),
             show_left: true,
-            show_right: true,
+            show_right: false,
             show_bottom: false,
             run_target: None,
         }

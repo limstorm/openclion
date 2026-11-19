@@ -35,6 +35,7 @@ pub fn App() -> impl IntoElement {
     settings::load(state);
     // The project tree is the workbench's anchor: always start with it open.
     state.show_left.set(true);
+    state.show_right.set(false);
     state.left_tool.set(crate::model::LeftTool::Project);
     let initial = state.root.get().to_string_lossy().to_string();
     state.recent.update(|recent| {
@@ -47,7 +48,6 @@ pub fn App() -> impl IntoElement {
     install_shortcuts(state);
     state.refresh_cmake();
     state.refresh_vcs();
-    state.refresh_docker();
     terminal::ensure_started(state);
     debug::init(state);
     watch::start(state);
@@ -107,10 +107,12 @@ fn install_shortcuts(state: State) {
     on_key("alt+1", move |_| {
         state.left_tool.set(crate::model::LeftTool::Project);
         state.show_left.set(true);
+        state.show_right.set(false);
     });
     on_key("ctrl+k", move |_| {
         state.left_tool.set(crate::model::LeftTool::Commit);
         state.show_left.set(true);
+        state.show_right.set(false);
     });
     on_key("mod+f", move |_| {
         state.find_open.set(true);
@@ -140,6 +142,7 @@ fn install_shortcuts(state: State) {
     on_key("mod+shift+f", move |_| {
         state.left_tool.set(model::LeftTool::Search);
         state.show_left.set(true);
+        state.show_right.set(false);
     });
     on_key("mod+`", move |_| {
         state.bottom_tool.set(Some(model::BottomTool::Terminal));

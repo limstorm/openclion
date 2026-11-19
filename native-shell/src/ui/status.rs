@@ -84,17 +84,6 @@ pub fn status_bar(state: State, pal: Palette) -> impl IntoElement {
                 .child(icon(icons::DATABASE, 13.0, pal.fg_muted))
                 .child(text_ui(move || format!("OpenCLion {}M", rss_mb()), 12.0, pal.fg_secondary)),
         )
-        .child(
-            view()
-                .size(px(24.0))
-                .flex_none()
-                .items_center()
-                .justify_center()
-                .rounded(px(4.0))
-                .hover(move |s| s.bg(pal.toolbar_hover))
-                .on_press(move || state.settings.set(true))
-                .child(icon(icons::SETTINGS, 16.0, pal.fg_muted)),
-        )
 }
 
 fn item(pal: Palette, label: &'static str) -> View {

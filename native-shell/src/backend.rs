@@ -9,7 +9,6 @@ use std::{
 };
 
 use ide_core::CancellationToken;
-use ide_docker::{ContainerOp, DockerEndpoint};
 use ide_search::{FileMatches, SearchQuery, SearchScope};
 use ide_vcs::{ChangeKind, Repo};
 use nsh_core::prelude::*;
@@ -29,24 +28,6 @@ pub struct GitLogRow {
     pub author: String,
     pub date: String,
     pub refs: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DockerContainerRow {
-    pub id: String,
-    pub name: String,
-    pub image: String,
-    pub status: String,
-    pub running: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct DockerView {
-    pub ready: bool,
-    pub status: String,
-    pub containers: Vec<DockerContainerRow>,
-    pub images: usize,
-    pub errors: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -104,41 +85,6 @@ fn letter_of(kind: Option<ChangeKind>) -> &'static str {
         Some(ChangeKind::Untracked) => "U",
         Some(ChangeKind::Conflicted) => "C",
         Some(ChangeKind::Ignored) | None => " ",
-    }
-}
-
-/// Docker's containers and images for the Services tool window.
-pub fn docker_snapshot() -> DockerView {
-    let snapshot = ide_docker::snapshot(&DockerEndpoint::Default);
-    let (ready, status) = match &snapshot.availability {
-        ide_docker::DockerAvailability::Ready { client_version, server_version, context } => (
-            true,
-            format!(
-                "Docker {client_version} · engine {server_version}{}",
-                context.as_ref().map(|context| format!(" · {context}")).unwrap_or_default()
-            ),
-        ),
-        ide_docker::DockerAvailability::NotInstalled => (false, "Docker is not installed".to_owned()),
-        ide_docker::DockerAvailability::DaemonDown { message, .. } => {
-            (false, format!("Docker daemon unavailable: {message}"))
-        }
-    };
-    DockerView {
-        ready,
-        status,
-        containers: snapshot
-            .containers
-            .iter()
-            .map(|container| DockerContainerRow {
-                id: container.id.clone(),
-                name: container.name.clone(),
-                image: container.image.clone(),
-                status: container.status.clone(),
-                running: container.running(),
-            })
-            .collect(),
-        images: snapshot.images.len(),
-        errors: snapshot.errors,
     }
 }
 
@@ -288,32 +234,6 @@ impl State {
                 .unwrap_or_else(|| "CMake: no project".to_owned());
             state.cmake.set(model);
             state.status.set(summary);
-        });
-    }
-
-    /// Reloads the Docker services snapshot in the background.
-    pub fn refresh_docker(&self) {
-        let state = *self;
-        self.docker_busy.set(true);
-        spawn(async move {
-            let view = blocking(docker_snapshot).await.ok();
-            state.docker.set(view);
-            state.docker_busy.set(false);
-        });
-    }
-
-    /// Starts or stops a container, then reloads the snapshot.
-    pub fn docker_container_op(&self, id: String, start: bool) {
-        let state = *self;
-        self.docker_busy.set(true);
-        spawn(async move {
-            let _ = blocking(move || {
-                let op = if start { ContainerOp::Start } else { ContainerOp::Stop };
-                ide_docker::container_op(&DockerEndpoint::Default, &[id], op)
-            })
-            .await;
-            state.docker_busy.set(false);
-            state.refresh_docker();
         });
     }
 
