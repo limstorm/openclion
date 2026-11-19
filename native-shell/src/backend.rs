@@ -16,6 +16,28 @@ use nsh_core::prelude::*;
 use crate::model::{SearchHit, State};
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GitBranchRow {
+    pub name: String,
+    pub current: bool,
+    pub remote: bool,
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GitStashRow {
+    pub index: u32,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct GitDiffView {
+    pub title: String,
+    pub staged: bool,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CmakeSelection {
     pub build_dir: String,
     pub target: String,
@@ -322,6 +344,182 @@ impl State {
                     state.refresh_vcs();
                 }
                 Err(error) => state.status.set(format!("Commit failed: {error}")),
+            }
+        });
+    }
+
+    /// Loads branches and stashes for the Git dock.
+    pub fn refresh_git_refs(&self) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let (branches, stashes) = blocking(move || {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return (Vec::new(), Vec::new());
+                };
+                let branches = repo
+                    .branches()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|branch| GitBranchRow {
+                        name: branch.name,
+                        current: branch.current,
+                        remote: branch.remote,
+                        ahead: branch.ahead,
+                        behind: branch.behind,
+                    })
+                    .collect();
+                let stashes = repo
+                    .stashes()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|stash| GitStashRow { index: stash.index, message: stash.message })
+                    .collect();
+                (branches, stashes)
+            })
+            .await
+            .unwrap_or_default();
+            state.git_branches.set(branches);
+            state.git_stashes.set(stashes);
+        });
+    }
+
+    /// Stages or unstages one path, then refreshes git state.
+    pub fn stage_path(&self, path: PathBuf, stage: bool) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                if stage {
+                    repo.stage(&[path]).map_err(|error| error.message)
+                } else {
+                    repo.unstage(&[path]).map_err(|error| error.message)
+                }
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set(if stage { "Staged" } else { "Unstaged" }.to_owned());
+                    state.refresh_vcs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Git: {error}")),
+                Err(error) => state.status.set(format!("Git task: {error}")),
+            }
+        });
+    }
+
+    /// Loads the unified diff of one file into the Git dock.
+    pub fn show_diff(&self, path: PathBuf, staged: bool) {
+        let state = *self;
+        let root = self.root.get();
+        let title = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().to_string();
+        spawn(async move {
+            let text = blocking(move || {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return String::new();
+                };
+                repo.diff_text(&path, staged, ide_vcs::TextEncoding::from(encoding_rs::UTF_8)).unwrap_or_default()
+            })
+            .await
+            .unwrap_or_default();
+            state.git_diff.set(Some(GitDiffView { title, staged, text }));
+            state.git_tab.set(4);
+            state.bottom_tool.set(Some(crate::model::BottomTool::Git));
+            state.show_bottom.set(true);
+        });
+    }
+
+    pub fn checkout_branch(&self, branch: String) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.checkout(&branch, false).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Branch checked out".to_owned());
+                    state.refresh_vcs();
+                    state.refresh_git_log();
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Checkout failed: {error}")),
+                Err(error) => state.status.set(format!("Checkout task: {error}")),
+            }
+        });
+    }
+
+    pub fn stash_all(&self) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.stash_push(Some("OpenCLion stash"), true, false).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Stashed working tree".to_owned());
+                    state.refresh_vcs();
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Stash failed: {error}")),
+                Err(error) => state.status.set(format!("Stash task: {error}")),
+            }
+        });
+    }
+
+    pub fn stash_apply(&self, index: u32, pop: bool) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.stash_apply(index, pop, false).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set(if pop { "Stash popped" } else { "Stash applied" }.to_owned());
+                    state.refresh_vcs();
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Stash failed: {error}")),
+                Err(error) => state.status.set(format!("Stash task: {error}")),
+            }
+        });
+    }
+
+    pub fn stash_drop(&self, index: u32) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.stash_drop(index).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Stash dropped".to_owned());
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Stash failed: {error}")),
+                Err(error) => state.status.set(format!("Stash task: {error}")),
             }
         });
     }

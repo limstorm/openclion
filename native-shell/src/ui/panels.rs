@@ -354,42 +354,6 @@ fn section_header(state: State, pal: Palette, title: &'static str) -> impl IntoE
         }))
 }
 
-fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
-    let tab = state.git_tab.get();
-    let label = |text: &'static str, index: u8| {
-        let active = tab == index;
-        view()
-            .h(px(26.0))
-            .px(px(10.0))
-            .items_center()
-            .justify_center()
-            .rounded(px(5.0))
-            .bg(if active { pal.tab_selected } else { transparent_black().into() })
-            .hover(move |s| s.bg(pal.tab_hover))
-            .on_press(move || state.git_tab.set(index))
-            .child(text_ui(text, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
-    };
-    view()
-        .h(px(36.0))
-        .flex_none()
-        .w_full()
-        .flex_row()
-        .items_center()
-        .gap(px(2.0))
-        .px(px(6.0))
-        .border_b_1()
-        .border_color(pal.border)
-        .child(text_strong("Git", 12.0, pal).mr(px(6.0)))
-        .child(label("Log", 0))
-        .child(label("Console", 1))
-        .child(label("Worktrees", 2))
-        .child(view().flex_1())
-        .child(debug_text_button(pal, "Refresh", move || state.refresh_git_log()))
-        .child(header_action(pal, icons::CLOSE, move || {
-            state.show_bottom.set(false);
-        }))
-}
-
 fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
     view()
         .h(px(36.0))
@@ -411,24 +375,77 @@ fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
         }))
 }
 
+fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
+    let labels: [(&'static str, u8); 7] =
+        [("Changes", 3), ("Log", 0), ("Console", 1), ("Branches", 5), ("Stashes", 6), ("Worktrees", 2), ("Diff", 4)];
+    view()
+        .h(px(36.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(2.0))
+        .px(px(6.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_strong("Git", 12.0, pal).mr(px(6.0)))
+        .child(dynamic(move || {
+            let current = state.git_tab.get();
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .children(labels.into_iter().map(move |(label, index)| {
+                    let active = current == index;
+                    view()
+                        .h(px(26.0))
+                        .px(px(9.0))
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(5.0))
+                        .bg(if active { pal.tab_selected } else { transparent_black().into() })
+                        .hover(move |s| s.bg(pal.tab_hover))
+                        .on_press(move || state.git_tab.set(index))
+                        .child(text_ui(label, 11.0, if active { pal.fg_strong } else { pal.fg_secondary }))
+                }))
+                .into_element()
+        }))
+        .child(view().flex_1())
+        .child(debug_text_button(pal, "Refresh", move || {
+            state.refresh_vcs();
+            state.refresh_git_log();
+            state.refresh_git_refs();
+        }))
+        .child(header_action(pal, icons::CLOSE, move || {
+            state.show_bottom.set(false);
+        }))
+}
+
 fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
     effect(move || {
         if state.bottom_tool.get() == Some(BottomTool::Git) {
+            state.refresh_vcs();
             state.refresh_git_log();
+            state.refresh_git_refs();
         }
     });
-    let tab = state.git_tab.get();
-    if tab == 1 {
-        return git_console(state, pal).into_element();
-    }
-    if tab == 2 {
-        return view()
+    match state.git_tab.get() {
+        1 => git_console(state, pal).into_element(),
+        2 => view()
             .flex_1()
             .items_center()
             .justify_center()
             .child(text_muted("No worktrees in this repository", 12.0, pal))
-            .into_element();
+            .into_element(),
+        3 => git_changes(state, pal).into_element(),
+        4 => git_diff(state, pal).into_element(),
+        5 => git_branches(state, pal).into_element(),
+        6 => git_stashes(state, pal).into_element(),
+        _ => git_log(state, pal).into_element(),
     }
+}
+
+fn git_log(state: State, pal: Palette) -> impl IntoElement {
     view()
         .flex_col()
         .flex_1()
@@ -484,6 +501,177 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
                         .child(text_muted(row.author, 10.0, pal).w(px(110.0)).truncate())
                         .child(text_muted(row.date, 10.0, pal).w(px(86.0)))
                         .child(text_ui(row.short_id, 10.0, pal.link).w(px(70.0)))
+                }))
+                .into_element()
+        })))
+        .into_element()
+}
+
+fn git_changes(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(dynamic(move || {
+            let rows = state.vcs.get();
+            if rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("No local changes", 12.0, pal)).into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(rows.into_iter().map(move |row| {
+                    let path_for_diff = row.path.clone();
+                    let path_for_stage = row.path.clone();
+                    let path_for_unstage = row.path.clone();
+                    let staged = row.staged;
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(10.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .on_press(move || state.show_diff(path_for_diff.clone(), staged))
+                        .child(text_ui(row.letter, 10.0, pal.link).w(px(14.0)))
+                        .child(text_ui(row.rel, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate())
+                        .child(small_git_button(pal, "Stage", move || state.stage_path(path_for_stage.clone(), true)))
+                        .child(small_git_button(pal, "Unstage", move || {
+                            state.stage_path(path_for_unstage.clone(), false)
+                        }))
+                }))
+                .into_element()
+        }))
+        .into_element()
+}
+
+fn small_git_button(pal: Palette, label: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(19.0))
+        .px(px(6.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(3.0))
+        .border(px(1.0))
+        .border_color(pal.border)
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(text_ui(label, 9.0, pal.fg_secondary))
+}
+
+fn git_diff(state: State, pal: Palette) -> impl IntoElement {
+    let Some(diff) = state.git_diff.get() else {
+        return view().p(px(10.0)).child(text_muted("Select a changed file to see its diff", 12.0, pal)).into_element();
+    };
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(view().h(px(24.0)).flex_none().px(px(10.0)).items_center().child(text_ui(
+            format!("{}  ({})", diff.title, if diff.staged { "index" } else { "working tree" }),
+            11.0,
+            pal.fg_secondary,
+        )))
+        .child(scroll().flex_1().child(view().flex_col().w_full().p(px(8.0)).children(diff.text.lines().map(
+            move |line| {
+                let color = if line.starts_with('+') && !line.starts_with("+++") {
+                    pal.success
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    pal.danger
+                } else if line.starts_with("@@") {
+                    pal.link
+                } else {
+                    pal.fg_secondary
+                };
+                text_ui(line.to_owned(), 11.0, color)
+            },
+        ))))
+        .into_element()
+}
+
+fn git_branches(state: State, pal: Palette) -> impl IntoElement {
+    scroll().flex_1().child(dynamic(move || {
+        let rows = state.git_branches.get();
+        if rows.is_empty() {
+            return view().p(px(10.0)).child(text_muted("No branches", 12.0, pal)).into_element();
+        }
+        view()
+            .flex_col()
+            .w_full()
+            .children(rows.into_iter().map(move |branch| {
+                let name = branch.name.clone();
+                let current = branch.current;
+                view()
+                    .h(px(24.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .px(px(10.0))
+                    .hover(move |s| s.bg(pal.tree_hover))
+                    .on_press(move || {
+                        if !current {
+                            state.checkout_branch(name.clone());
+                        }
+                    })
+                    .child(icon(icons::BRANCH, 12.0, if current { pal.success } else { pal.fg_muted }))
+                    .child(text_ui(branch.name, 11.0, pal.fg))
+                    .child(text_muted(if branch.remote { "remote" } else { "local" }, 9.0, pal))
+                    .child(view().flex_1())
+                    .child(text_muted(
+                        if branch.ahead + branch.behind > 0 {
+                            format!("↑{} ↓{}", branch.ahead, branch.behind)
+                        } else {
+                            String::new()
+                        },
+                        9.0,
+                        pal,
+                    ))
+            }))
+            .into_element()
+    }))
+}
+
+fn git_stashes(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(debug_text_button(pal, "Stash All", move || state.stash_all()))
+                .child(text_muted("Stashes", 10.0, pal)),
+        )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let rows = state.git_stashes.get();
+            if rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("No stashes", 12.0, pal)).into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(rows.into_iter().map(move |stash| {
+                    let index = stash.index;
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(10.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .child(text_ui(format!("stash@{{{index}}}"), 10.0, pal.link))
+                        .child(text_ui(stash.message, 11.0, pal.fg).flex_1().truncate())
+                        .child(small_git_button(pal, "Apply", move || state.stash_apply(index, false)))
+                        .child(small_git_button(pal, "Pop", move || state.stash_apply(index, true)))
+                        .child(small_git_button(pal, "Drop", move || state.stash_drop(index)))
                 }))
                 .into_element()
         })))

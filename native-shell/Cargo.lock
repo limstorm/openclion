@@ -4471,6 +4471,7 @@ dependencies = [
 name = "openclion-native"
 version = "0.1.33"
 dependencies = [
+ "encoding_rs",
  "env_logger",
  "gtk4",
  "ide-cmake",
