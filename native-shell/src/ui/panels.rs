@@ -325,7 +325,14 @@ fn bottom_content(state: State, pal: Palette) -> impl IntoElement {
             .child(hierarchy_body(state, pal))
             .into_element(),
         Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
-        Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
+        Some(BottomTool::Terminal) | None => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(terminal_header(state, pal))
+            .child(terminal_body(state, pal))
+            .into_element(),
     }
 }
 
@@ -875,6 +882,49 @@ fn tool_button(pal: Palette, markup: &'static str, label: &'static str, on_press
         .child(text_ui(label, 11.0, pal.fg_secondary))
 }
 
+fn terminal_header(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .h(px(32.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(8.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_muted("Terminal", 11.0, pal))
+        .child(
+            view()
+                .h(px(24.0))
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(8.0))
+                .rounded(px(4.0))
+                .bg(pal.tab_selected)
+                .child(text_ui("Local", 11.0, pal.fg))
+                .child(
+                    view()
+                        .size(px(16.0))
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(3.0))
+                        .hover(move |s| s.bg(pal.tab_hover))
+                        .on_press(move || state.show_bottom.set(false))
+                        .child(icon(icons::CLOSE, 9.0, pal.fg_muted)),
+                ),
+        )
+        .child(header_action(pal, icons::ADD, move || {
+            crate::terminal::ensure_started(state);
+            state.status.set("The native terminal runs a single local shell".to_owned());
+        }))
+        .child(header_action(pal, icons::CHEVRON_DOWN, move || {
+            state.bottom_tool.set(Some(BottomTool::Terminal));
+        }))
+        .child(view().flex_1())
+}
+
 fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
     effect(move || {
         crate::terminal::ensure_started(state);
@@ -899,7 +949,7 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             .component_ref(&state.terminal_ref)
             .flex_1()
             .w_full()
-            .cursor_class("bg-[#1f2329] -ml-[3px]")
+            .cursor_class("bg-[#1f2329] w-[2px]")
             .on_data(move |data: &SharedString| crate::terminal::send(state, data))
             .on_resize(move |event: &nsh_base::TerminalEvent| {
                 if let nsh_base::TerminalEvent::Resize(cols, rows) = event {

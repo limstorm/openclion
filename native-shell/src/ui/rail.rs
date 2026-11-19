@@ -46,7 +46,7 @@ pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
 
 fn rail_button_base(pal: Palette) -> View {
     view()
-        .size(px(32.0))
+        .size(px(28.0))
         .flex_none()
         .items_center()
         .justify_center()
@@ -81,9 +81,11 @@ fn left_button(state: State, pal: Palette, markup: &'static str, tool: LeftTool,
             }
             crate::settings::save(state);
         })
-        .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
-            if state.left_tool.get() == tool && state.show_left.get() { pal.fg_strong } else { pal.fg_muted }
-        }))
+        .child(view().w_full().items_center().justify_center().child(icon(markup, 20.0, pal.fg_muted).text_color(
+            move || {
+                if state.left_tool.get() == tool && state.show_left.get() { pal.fg_strong } else { pal.fg_muted }
+            },
+        )))
 }
 
 fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomTool, title: &'static str) -> View {
@@ -115,9 +117,15 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
             }
             crate::settings::save(state);
         })
-        .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
-            if state.bottom_tool.get() == Some(tool) && state.show_bottom.get() { pal.fg_strong } else { pal.fg_muted }
-        }))
+        .child(view().w_full().items_center().justify_center().child(icon(markup, 20.0, pal.fg_muted).text_color(
+            move || {
+                if state.bottom_tool.get() == Some(tool) && state.show_bottom.get() {
+                    pal.fg_strong
+                } else {
+                    pal.fg_muted
+                }
+            },
+        )))
 }
 
 fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightTool, title: &'static str) -> View {
@@ -142,7 +150,9 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
             }
             crate::settings::save(state);
         })
-        .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
-            if state.right_tool.get() == tool && state.show_right.get() { pal.fg_strong } else { pal.fg_muted }
-        }))
+        .child(view().w_full().items_center().justify_center().child(icon(markup, 20.0, pal.fg_muted).text_color(
+            move || {
+                if state.right_tool.get() == tool && state.show_right.get() { pal.fg_strong } else { pal.fg_muted }
+            },
+        )))
 }
