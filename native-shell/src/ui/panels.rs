@@ -431,12 +431,7 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
     });
     match state.git_tab.get() {
         1 => git_console(state, pal).into_element(),
-        2 => view()
-            .flex_1()
-            .items_center()
-            .justify_center()
-            .child(text_muted("No worktrees in this repository", 12.0, pal))
-            .into_element(),
+        2 => git_worktrees(state, pal).into_element(),
         3 => git_changes(state, pal).into_element(),
         4 => git_diff(state, pal).into_element(),
         5 => git_branches(state, pal).into_element(),
@@ -453,7 +448,7 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
         .min_h(px(0.0))
         .child(
             view()
-                .h(px(24.0))
+                .h(px(28.0))
                 .flex_none()
                 .w_full()
                 .flex_row()
@@ -462,6 +457,22 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                 .px(px(10.0))
                 .border_b_1()
                 .border_color(pal.border)
+                .child(
+                    input()
+                        .w(px(220.0))
+                        .h(px(22.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .border(px(1.0))
+                        .border_color(pal.border)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(11.0))
+                        .placeholder("Filter commits")
+                        .value(move || state.git_log_filter.get())
+                        .on_change(move |value: &str| state.git_log_filter.set(value.to_owned()))
+                        .on_submit(move |_: &str| state.refresh_git_log()),
+                )
                 .child(text_muted("Subject", 10.0, pal).flex_1())
                 .child(text_muted("Author", 10.0, pal).w(px(110.0)))
                 .child(text_muted("Date", 10.0, pal).w(px(86.0)))
@@ -687,23 +698,82 @@ fn git_console(state: State, pal: Palette) -> impl IntoElement {
         .min_h(px(0.0))
         .p(px(8.0))
         .gap(px(2.0))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .child(debug_text_button(pal, "Clear", move || state.git_console.set(Vec::new())))
+                .child(view().flex_1()),
+        )
         .child(text_muted(
             format!(
-                "{}  ·  {} changed file(s)",
+                "{}  ·  {} changed file(s)  ·  git console",
                 state.vcs_branch.get().unwrap_or_else(|| "detached".to_owned()),
                 rows.len()
             ),
             11.0,
             pal,
         ))
-        .child(scroll().flex_1().children(rows.into_iter().map(move |row| {
+        .child(scroll().flex_1().child(dynamic(move || {
+            let lines = state.git_console.get();
+            if lines.is_empty() {
+                return view().child(text_muted("Git commands will appear here", 11.0, pal)).into_element();
+            }
             view()
-                .h(px(20.0))
+                .flex_col()
+                .children(lines.into_iter().map(move |line| text_ui(format!("$ {line}"), 11.0, pal.fg_secondary)))
+                .into_element()
+        })))
+        .into_element()
+}
+
+fn git_worktrees(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
                 .flex_row()
                 .items_center()
                 .gap(px(6.0))
-                .child(text_ui(row.letter, 10.0, pal.link).w(px(14.0)))
-                .child(text_ui(row.rel, 11.0, pal.fg).truncate())
+                .px(px(8.0))
+                .child(debug_text_button(pal, "Refresh", move || state.refresh_git_refs()))
+                .child(text_muted("Worktrees", 10.0, pal)),
+        )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let rows = state.git_worktrees.get();
+            if rows.is_empty() {
+                return view()
+                    .p(px(10.0))
+                    .child(text_muted("No worktrees in this repository", 12.0, pal))
+                    .into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(rows.into_iter().map(move |tree| {
+                    let path = tree.path.clone();
+                    let current = std::path::Path::new(&path) == state.root.get().as_path();
+                    let target = std::path::PathBuf::from(&path);
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(10.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .child(icon(icons::BRANCH, 12.0, if current { pal.success } else { pal.fg_muted }))
+                        .child(text_ui(tree.branch, 11.0, pal.fg))
+                        .child(text_muted(tree.head, 10.0, pal).w(px(70.0)))
+                        .child(text_muted(path, 10.0, pal).flex_1().truncate())
+                        .child(small_git_button(pal, "Open", move || state.reload_workspace(target.clone())))
+                }))
+                .into_element()
         })))
         .into_element()
 }

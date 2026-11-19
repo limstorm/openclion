@@ -31,6 +31,13 @@ pub struct GitStashRow {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GitWorktreeRow {
+    pub path: String,
+    pub branch: String,
+    pub head: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GitDiffView {
     pub title: String,
     pub staged: bool,
@@ -353,9 +360,9 @@ impl State {
         let state = *self;
         let root = self.root.get();
         spawn(async move {
-            let (branches, stashes) = blocking(move || {
+            let (branches, stashes, worktrees) = blocking(move || {
                 let Ok(Some(repo)) = Repo::discover(&root) else {
-                    return (Vec::new(), Vec::new());
+                    return (Vec::new(), Vec::new(), Vec::new());
                 };
                 let branches = repo
                     .branches()
@@ -375,12 +382,55 @@ impl State {
                     .into_iter()
                     .map(|stash| GitStashRow { index: stash.index, message: stash.message })
                     .collect();
-                (branches, stashes)
+                let worktrees = Command::new("git")
+                    .args(["worktree", "list", "--porcelain"])
+                    .current_dir(&root)
+                    .output()
+                    .ok()
+                    .map(|output| {
+                        let mut rows = Vec::new();
+                        let mut path = String::new();
+                        let mut branch = String::new();
+                        let mut head = String::new();
+                        for line in String::from_utf8_lossy(&output.stdout).lines() {
+                            if let Some(rest) = line.strip_prefix("worktree ") {
+                                path = rest.to_owned();
+                                branch.clear();
+                                head.clear();
+                            } else if let Some(rest) = line.strip_prefix("HEAD ") {
+                                head = rest.chars().take(8).collect();
+                            } else if let Some(rest) = line.strip_prefix("branch ") {
+                                branch = rest.strip_prefix("refs/heads/").unwrap_or(rest).to_owned();
+                            } else if line.is_empty() && !path.is_empty() {
+                                rows.push(GitWorktreeRow {
+                                    path: std::mem::take(&mut path),
+                                    branch: std::mem::take(&mut branch),
+                                    head: std::mem::take(&mut head),
+                                });
+                            }
+                        }
+                        if !path.is_empty() {
+                            rows.push(GitWorktreeRow { path, branch, head });
+                        }
+                        rows
+                    })
+                    .unwrap_or_default();
+                (branches, stashes, worktrees)
             })
             .await
             .unwrap_or_default();
             state.git_branches.set(branches);
             state.git_stashes.set(stashes);
+            state.git_worktrees.set(worktrees);
+        });
+    }
+
+    fn log_git(&self, line: String) {
+        self.git_console.update(|lines| {
+            lines.push(line);
+            if lines.len() > 200 {
+                lines.remove(0);
+            }
         });
     }
 
@@ -388,6 +438,7 @@ impl State {
     pub fn stage_path(&self, path: PathBuf, stage: bool) {
         let state = *self;
         let root = self.root.get();
+        let path_display = path.to_string_lossy().to_string();
         spawn(async move {
             let result = blocking(move || -> Result<(), String> {
                 let Ok(Some(repo)) = Repo::discover(&root) else {
@@ -403,6 +454,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set(if stage { "Staged" } else { "Unstaged" }.to_owned());
+                    state.log_git(format!("git {} {}", if stage { "add" } else { "restore --staged" }, path_display));
                     state.refresh_vcs();
                 }
                 Ok(Err(error)) => state.status.set(format!("Git: {error}")),
@@ -435,6 +487,7 @@ impl State {
     pub fn checkout_branch(&self, branch: String) {
         let state = *self;
         let root = self.root.get();
+        let branch_for_log = branch.clone();
         spawn(async move {
             let result = blocking(move || -> Result<(), String> {
                 let Ok(Some(repo)) = Repo::discover(&root) else {
@@ -446,6 +499,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Branch checked out".to_owned());
+                    state.log_git(format!("git checkout {branch_for_log}"));
                     state.refresh_vcs();
                     state.refresh_git_log();
                     state.refresh_git_refs();
@@ -470,6 +524,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Stashed working tree".to_owned());
+                    state.log_git("git stash push -u".to_owned());
                     state.refresh_vcs();
                     state.refresh_git_refs();
                 }
@@ -493,6 +548,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set(if pop { "Stash popped" } else { "Stash applied" }.to_owned());
+                    state.log_git(format!("git stash {} stash@{{{index}}}", if pop { "pop" } else { "apply" }));
                     state.refresh_vcs();
                     state.refresh_git_refs();
                 }
@@ -516,6 +572,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Stash dropped".to_owned());
+                    state.log_git(format!("git stash drop stash@{{{index}}}"));
                     state.refresh_git_refs();
                 }
                 Ok(Err(error)) => state.status.set(format!("Stash failed: {error}")),
@@ -528,6 +585,7 @@ impl State {
     pub fn refresh_git_log(&self) {
         let state = *self;
         let root = self.root.get();
+        let filter = self.git_log_filter.get();
         self.git_log_loading.set(true);
         spawn(async move {
             let rows = blocking(move || {
@@ -538,7 +596,7 @@ impl State {
                     branch: None,
                     path: None,
                     author: None,
-                    text: None,
+                    text: if filter.trim().is_empty() { None } else { Some(filter) },
                     skip: 0,
                     limit: 50,
                     range: None,
