@@ -351,7 +351,11 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
         .overflow_hidden()
         .rounded(px(10.0))
         .bg(pal.bg_island)
-        .child(bottom_tabs(state, pal))
+        .child(dynamic(move || match state.bottom_tool.get() {
+            Some(BottomTool::Git) => git_tabs(state, pal).into_element(),
+            Some(BottomTool::Cmake) => cmake_bottom_tabs(state, pal).into_element(),
+            _ => bottom_tabs(state, pal).into_element(),
+        }))
         .child(view().flex_1().min_h(px(0.0)).w_full().child(dynamic(move || match state.bottom_tool.get() {
             Some(BottomTool::Usages) => usages_body(state, pal).into_element(),
             Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
@@ -359,7 +363,174 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
             Some(BottomTool::Problems) => problems_body(state, pal).into_element(),
             Some(BottomTool::Run) => run_body(state, pal).into_element(),
             Some(BottomTool::Services) => services_body(state, pal).into_element(),
+            Some(BottomTool::Git) => git_bottom(state, pal).into_element(),
+            Some(BottomTool::Cmake) => cmake_tree(state, pal).into_element(),
         })))
+}
+
+fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
+    let tab = state.git_tab.get();
+    let label = |text: &'static str, index: u8| {
+        let active = tab == index;
+        view()
+            .h(px(26.0))
+            .px(px(10.0))
+            .items_center()
+            .justify_center()
+            .rounded(px(5.0))
+            .bg(if active { pal.tab_selected } else { transparent_black().into() })
+            .hover(move |s| s.bg(pal.tab_hover))
+            .on_press(move || state.git_tab.set(index))
+            .child(text_ui(text, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
+    };
+    view()
+        .h(px(36.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(2.0))
+        .px(px(6.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_strong("Git", 12.0, pal).mr(px(6.0)))
+        .child(label("Log", 0))
+        .child(label("Console", 1))
+        .child(label("Worktrees", 2))
+        .child(view().flex_1())
+        .child(debug_text_button(pal, "Refresh", move || state.refresh_git_log()))
+        .child(header_action(pal, icons::CLOSE, move || {
+            state.show_bottom.set(false);
+        }))
+}
+
+fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .h(px(36.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(4.0))
+        .px(px(6.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_strong("CMake", 12.0, pal))
+        .child(view().flex_1())
+        .child(debug_text_button(pal, "Reload", move || state.configure_cmake()))
+        .child(debug_text_button(pal, "Build & Run", move || state.run_active_configuration()))
+        .child(header_action(pal, icons::CLOSE, move || {
+            state.show_bottom.set(false);
+        }))
+}
+
+fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
+    effect(move || {
+        if state.bottom_tool.get() == Some(BottomTool::Git) {
+            state.refresh_git_log();
+        }
+    });
+    let tab = state.git_tab.get();
+    if tab == 1 {
+        return git_console(state, pal).into_element();
+    }
+    if tab == 2 {
+        return view()
+            .flex_1()
+            .items_center()
+            .justify_center()
+            .child(text_muted("No worktrees in this repository", 12.0, pal))
+            .into_element();
+    }
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(
+            view()
+                .h(px(24.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(8.0))
+                .px(px(10.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(text_muted("Subject", 10.0, pal).flex_1())
+                .child(text_muted("Author", 10.0, pal).w(px(110.0)))
+                .child(text_muted("Date", 10.0, pal).w(px(86.0)))
+                .child(text_muted("Hash", 10.0, pal).w(px(70.0))),
+        )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let rows = state.git_log.get();
+            if state.git_log_loading.get() && rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("Reading git log…", 12.0, pal)).into_element();
+            }
+            if rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("No commits", 12.0, pal)).into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(rows.into_iter().take(50).map(move |row| {
+                    view()
+                        .h(px(24.0))
+                        .flex_none()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(10.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .child(
+                            view()
+                                .flex_row()
+                                .items_center()
+                                .gap(px(6.0))
+                                .flex_1()
+                                .min_w(px(0.0))
+                                .overflow_hidden()
+                                .child(icon(icons::COMMIT, 12.0, pal.link))
+                                .child(text_ui(row.summary, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate()),
+                        )
+                        .child(text_muted(row.author, 10.0, pal).w(px(110.0)).truncate())
+                        .child(text_muted(row.date, 10.0, pal).w(px(86.0)))
+                        .child(text_ui(row.short_id, 10.0, pal.link).w(px(70.0)))
+                }))
+                .into_element()
+        })))
+        .into_element()
+}
+
+fn git_console(state: State, pal: Palette) -> impl IntoElement {
+    let rows = state.vcs.get();
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .p(px(8.0))
+        .gap(px(2.0))
+        .child(text_muted(
+            format!(
+                "{}  ·  {} changed file(s)",
+                state.vcs_branch.get().unwrap_or_else(|| "detached".to_owned()),
+                rows.len()
+            ),
+            11.0,
+            pal,
+        ))
+        .child(scroll().flex_1().children(rows.into_iter().map(move |row| {
+            view()
+                .h(px(20.0))
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .child(text_ui(row.letter, 10.0, pal.link).w(px(14.0)))
+                .child(text_ui(row.rel, 11.0, pal.fg).truncate())
+        })))
+        .into_element()
 }
 
 fn bottom_tabs(state: State, pal: Palette) -> impl IntoElement {

@@ -112,3 +112,19 @@ fn the_services_panel_lists_docker() {
     app.wait_for("Services").unwrap();
     app.wait_for("Refresh").unwrap();
 }
+
+#[test]
+fn the_menu_button_opens_the_application_menu() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:app-menu-button").unwrap();
+    app.wait_for("New File…").unwrap();
+}
+
+#[test]
+fn the_git_rail_button_opens_the_git_panel() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:rail-git").unwrap();
+    app.wait_for("Worktrees").unwrap();
+}

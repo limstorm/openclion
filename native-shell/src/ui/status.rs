@@ -48,6 +48,44 @@ pub fn status_bar(state: State, pal: Palette) -> impl IntoElement {
         .child(item(pal, "4 spaces"))
         .child(
             view()
+                .h(px(24.0))
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(6.0))
+                .rounded(px(4.0))
+                .hover(move |s| s.bg(pal.toolbar_hover))
+                .on_press(move || {
+                    state.bottom_tool.set(Some(crate::model::BottomTool::Git));
+                    state.show_bottom.set(true);
+                    state.refresh_git_log();
+                })
+                .child(icon(icons::BRANCH, 14.0, pal.fg_muted))
+                .child(text_ui(
+                    move || state.vcs_branch.get().unwrap_or_else(|| "no branch".to_owned()),
+                    12.0,
+                    pal.fg_secondary,
+                )),
+        )
+        .child(
+            view()
+                .h(px(24.0))
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(6.0))
+                .rounded(px(4.0))
+                .hover(move |s| s.bg(pal.toolbar_hover))
+                .on_press(move || {
+                    state.status.set(format!("OpenCLion is using {} MB of memory", rss_mb()));
+                })
+                .child(icon(icons::DATABASE, 13.0, pal.fg_muted))
+                .child(text_ui(move || format!("OpenCLion {}M", rss_mb()), 12.0, pal.fg_secondary)),
+        )
+        .child(
+            view()
                 .size(px(24.0))
                 .flex_none()
                 .items_center()
@@ -101,4 +139,12 @@ fn breadcrumbs(state: State, pal: Palette) -> impl IntoElement {
                     .child(text_ui(crumb, 13.0, pal.fg_secondary))
             }))
     }))
+}
+
+fn rss_mb() -> u64 {
+    let Ok(statm) = std::fs::read_to_string("/proc/self/statm") else {
+        return 0;
+    };
+    let pages: u64 = statm.split_whitespace().nth(1).and_then(|value| value.parse().ok()).unwrap_or(0);
+    pages.saturating_mul(4) / 1024
 }

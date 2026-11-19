@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || app_menu(state, pal).into_element()))
         .child(dynamic(move || tree_menu(state, pal).into_element()))
         .child(dynamic(move || run_chooser(state, pal).into_element()))
         .child(dynamic(move || file_dialog(state, pal).into_element()))
@@ -221,7 +222,7 @@ fn menu_item(pal: Palette, label: &'static str, enabled: bool, on_press: impl Fn
         .child(text_ui(label, 13.0, if enabled { pal.fg } else { pal.fg_faint }))
 }
 
-fn choose_folder(state: State) {
+pub(crate) fn choose_folder(state: State) {
     let picked = pick_paths(OpenDialog::folders().multiple(false).button_label("Open"));
     spawn(async move {
         match picked.await {
@@ -695,6 +696,110 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(text_muted(detail, 12.0, pal))
         .child(view().h(px(4.0)))
         .child(control)
+}
+
+fn app_menu(state: State, pal: Palette) -> impl IntoElement {
+    if !state.app_menu.get() {
+        return view().into_element();
+    }
+    let mut items: Vec<View> = Vec::new();
+    macro_rules! push {
+        ($label:expr, $shortcut:expr, $action:expr) => {
+            items.push(app_menu_item(pal, $label, $shortcut, {
+                move || {
+                    state.app_menu.set(false);
+                    $action();
+                }
+            }))
+        };
+    }
+    push!("New File…", "Ctrl+Alt+N", Box::new(move || state.open_new_file()));
+    push!("Open Project…", "", Box::new(move || choose_folder(state)));
+    push!(
+        "Close Project",
+        "",
+        Box::new(move || {
+            state.tabs.set(Vec::new());
+            state.active.set(0);
+            state.active_path.set(PathBuf::new());
+            state.editor_seed.set(String::new());
+            state.status.set("Project closed".to_owned());
+        })
+    );
+    items.push(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border));
+    push!(
+        "Find in Files",
+        "Ctrl+Shift+F",
+        Box::new(move || {
+            state.left_tool.set(crate::model::LeftTool::Search);
+            state.show_left.set(true);
+        })
+    );
+    push!(
+        "Git",
+        "Alt+9",
+        Box::new(move || {
+            state.bottom_tool.set(Some(crate::model::BottomTool::Git));
+            state.show_bottom.set(true);
+        })
+    );
+    push!(
+        "CMake",
+        "",
+        Box::new(move || {
+            state.bottom_tool.set(Some(crate::model::BottomTool::Cmake));
+            state.show_bottom.set(true);
+        })
+    );
+    push!(
+        "Terminal",
+        "Alt+F12",
+        Box::new(move || {
+            state.bottom_tool.set(Some(crate::model::BottomTool::Terminal));
+            state.show_bottom.set(true);
+        })
+    );
+    items.push(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border));
+    push!("Run", "Shift+F10", Box::new(move || state.run_active_configuration()));
+    push!("Debug", "Shift+F9", Box::new(move || crate::debug::start(state)));
+    items.push(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border));
+    push!("Settings…", "Ctrl+Alt+S", Box::new(move || state.settings.set(true)));
+    push!("Exit", "", Box::new(move || nsh_core::element::desktop::current_window().close()));
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .child(view().absolute().inset(px(0.0)).on_press(move || state.app_menu.set(false)))
+        .child(
+            view()
+                .absolute()
+                .left(px(6.0))
+                .top(px(42.0))
+                .w(px(280.0))
+                .flex_col()
+                .py(px(5.0))
+                .rounded(px(8.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .children(items),
+        )
+        .into_element()
+}
+
+fn app_menu_item(pal: Palette, label: &'static str, shortcut: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(26.0))
+        .flex_none()
+        .mx(px(4.0))
+        .flex_row()
+        .items_center()
+        .gap(px(8.0))
+        .px(px(8.0))
+        .rounded(px(5.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(text_ui(label, 12.0, pal.fg).flex_1())
+        .child(text_muted(shortcut, 10.0, pal))
 }
 
 fn run_chooser(state: State, pal: Palette) -> impl IntoElement {

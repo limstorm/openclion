@@ -25,6 +25,8 @@ pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
         .child(left_button(state, pal, icons::BOOKMARKS, LeftTool::Bookmarks, "Bookmarks"))
         .child(left_button(state, pal, icons::SEARCH, LeftTool::Search, "Find in Files  Ctrl+Shift+F"))
         .child(view().flex_1())
+        .child(bottom_button(state, pal, icons::CMAKE, BottomTool::Cmake, "CMake"))
+        .child(bottom_button(state, pal, icons::COMMIT, BottomTool::Git, "Git  Alt+9"))
         .child(bottom_button(state, pal, icons::SERVICES, BottomTool::Services, "Services"))
         .child(bottom_button(state, pal, icons::RUN, BottomTool::Run, "Run  Alt+4"))
         .child(bottom_button(state, pal, icons::TERMINAL, BottomTool::Terminal, "Terminal  Alt+F12"))
@@ -100,6 +102,8 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
     rail_button_base(pal)
         .label(title)
         .test_id(match tool {
+            BottomTool::Cmake => "rail-cmake",
+            BottomTool::Git => "rail-git",
             BottomTool::Usages => "rail-usages",
             BottomTool::Debug => "rail-debug",
             BottomTool::Terminal => "rail-terminal",

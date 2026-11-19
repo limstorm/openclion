@@ -17,6 +17,15 @@ use nsh_core::prelude::*;
 use crate::model::{SearchHit, State};
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GitLogRow {
+    pub short_id: String,
+    pub summary: String,
+    pub author: String,
+    pub date: String,
+    pub refs: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct DockerContainerRow {
     pub id: String,
     pub name: String,
@@ -347,6 +356,53 @@ impl State {
         });
     }
 
+    /// Loads the last 50 commits for the Git bottom panel.
+    pub fn refresh_git_log(&self) {
+        let state = *self;
+        let root = self.root.get();
+        self.git_log_loading.set(true);
+        spawn(async move {
+            let rows = blocking(move || {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Vec::new();
+                };
+                let query = ide_vcs::LogQuery {
+                    branch: None,
+                    path: None,
+                    author: None,
+                    text: None,
+                    skip: 0,
+                    limit: 50,
+                    range: None,
+                    text_regex: false,
+                    text_match_case: false,
+                    branches: Vec::new(),
+                    authors: Vec::new(),
+                    order: Default::default(),
+                    first_parent: false,
+                    no_merges: false,
+                    since_ms: None,
+                    until_ms: None,
+                };
+                repo.log(&query)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|commit| GitLogRow {
+                        short_id: commit.short_id,
+                        summary: commit.summary,
+                        author: commit.author,
+                        date: format_date(commit.time_ms),
+                        refs: commit.refs.join(", "),
+                    })
+                    .collect()
+            })
+            .await
+            .unwrap_or_default();
+            state.git_log.set(rows);
+            state.git_log_loading.set(false);
+        });
+    }
+
     /// Reads git status and the current branch in the background.
     pub fn refresh_vcs(&self) {
         let state = *self;
@@ -622,4 +678,28 @@ impl State {
             state.refresh_cmake();
         });
     }
+}
+
+fn format_date(ms: f64) -> String {
+    if ms <= 0.0 {
+        return String::new();
+    }
+    let seconds = (ms / 1000.0) as i64;
+    let days = seconds.div_euclid(86_400);
+    let (year, month, day) = civil_from_days(days);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// Howard Hinnant's days-to-civil algorithm, no chrono dependency.
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
 }

@@ -96,6 +96,14 @@ fn install_shortcuts(state: State) {
         crate::debug::toggle_breakpoint(state, state.cursor.get().0.saturating_sub(1));
     });
     on_key("mod+alt+s", move |_| state.settings.set(true));
+    on_key("alt+8", move |_| {
+        state.bottom_tool.set(Some(crate::model::BottomTool::Cmake));
+        state.show_bottom.set(true);
+    });
+    on_key("alt+9", move |_| {
+        state.bottom_tool.set(Some(crate::model::BottomTool::Git));
+        state.show_bottom.set(true);
+    });
     on_key("alt+1", move |_| {
         state.left_tool.set(crate::model::LeftTool::Project);
         state.show_left.set(true);
@@ -142,6 +150,7 @@ fn install_shortcuts(state: State) {
         state.find_open.set(false);
         state.dialog.set(None);
         state.tree_menu.set(None);
+        state.app_menu.set(false);
         state.run_chooser.set(false);
         state.toast.set(None);
     });

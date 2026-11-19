@@ -8,7 +8,7 @@ use crate::icons;
 use crate::model::State;
 use crate::theme::{Palette, UI_FONT};
 use crate::ui::{icon, text_ui, tool_button};
-use nsh_core::element::desktop::title_bar;
+use nsh_core::desktop::WindowControl;
 
 pub fn bar(state: State, pal: Palette) -> impl IntoElement {
     view()
@@ -18,9 +18,10 @@ pub fn bar(state: State, pal: Palette) -> impl IntoElement {
         .flex_row()
         .items_center()
         .gap(px(4.0))
-        .pl(px(10.0))
-        .pr(titlebar_right())
+        .pl(px(8.0))
+        .pr(px(0.0))
         .window_drag(true)
+        .child(menu_button(state, pal))
         .child(project_button(state, pal))
         .child(view().flex_1().h_full())
         .child(config_widget(state, pal))
@@ -55,6 +56,50 @@ pub fn bar(state: State, pal: Palette) -> impl IntoElement {
             })
             .window_drag(false),
         )
+        .child(window_button(pal, WindowControl::Minimize))
+        .child(window_button(pal, WindowControl::Maximize))
+        .child(window_button(pal, WindowControl::Close))
+}
+
+fn menu_button(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .size(px(30.0))
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .rounded(px(6.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .window_drag(false)
+        .test_id("app-menu-button")
+        .on_press(move || state.app_menu.update(|open| *open = !*open))
+        .child(
+            view()
+                .flex_col()
+                .gap(px(3.0))
+                .child(view().w(px(13.0)).h(px(1.5)).rounded(px(1.0)).bg(pal.fg_muted))
+                .child(view().w(px(13.0)).h(px(1.5)).rounded(px(1.0)).bg(pal.fg_muted))
+                .child(view().w(px(13.0)).h(px(1.5)).rounded(px(1.0)).bg(pal.fg_muted)),
+        )
+}
+
+fn window_button(pal: Palette, control: WindowControl) -> impl IntoElement {
+    let close = matches!(control, WindowControl::Close);
+    view()
+        .size(px(46.0))
+        .h_full()
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .window_drag(false)
+        .window_control(control)
+        .hover(move |s| if close { s.bg(pal.danger) } else { s.bg(pal.toolbar_hover) })
+        .child(match control {
+            WindowControl::Minimize => view().w(px(10.0)).h(px(1.0)).bg(pal.fg_secondary).into_element(),
+            WindowControl::Maximize => {
+                view().size(px(9.0)).border(px(1.0)).border_color(pal.fg_secondary).into_element()
+            }
+            WindowControl::Close => icon(icons::CLOSE, 11.0, pal.fg_secondary).into_element(),
+        })
 }
 
 fn project_button(state: State, pal: Palette) -> impl IntoElement {
@@ -128,18 +173,4 @@ fn project_initials(name: &str) -> String {
         }
     }
     if out.is_empty() { name.chars().take(2).collect() } else { out }
-}
-
-/// Room the platform's own window buttons take on the right of the bar.
-fn titlebar_right() -> Points {
-    let measured = title_bar().right;
-    #[cfg(target_os = "linux")]
-    {
-        // GTK places the window controls over the app; leave them their room.
-        px(measured.0 + 8.0)
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        px(measured.0 + 8.0)
-    }
 }

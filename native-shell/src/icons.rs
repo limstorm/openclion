@@ -35,6 +35,7 @@ icons! {
     REFRESH = "refresh.svg",
     BUILD_PROJECT = "build-project.svg",
     GIT_PULL = "git-pull.svg",
+    BRANCH = "branch.svg",
     COLLAPSE_ALL = "collapse-all.svg",
     SPLIT = "split.svg",
     FOLDER = "folder.svg",

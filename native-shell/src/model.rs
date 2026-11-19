@@ -43,6 +43,8 @@ pub enum RightTool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTool {
+    Cmake,
+    Git,
     Usages,
     Debug,
     Terminal,
@@ -190,6 +192,10 @@ pub struct State {
     pub docker: Signal<Option<crate::backend::DockerView>>,
     pub docker_busy: Signal<bool>,
     pub commit_message: Signal<String>,
+    pub app_menu: Signal<bool>,
+    pub git_tab: Signal<u8>,
+    pub git_log: Signal<Vec<crate::backend::GitLogRow>>,
+    pub git_log_loading: Signal<bool>,
     pub debug_watch: Signal<Vec<String>>,
     pub debug_watch_input: Signal<String>,
     pub debug_watch_values: Signal<Vec<crate::debug::WatchValue>>,
@@ -303,6 +309,10 @@ impl State {
             docker: signal(None),
             docker_busy: signal(false),
             commit_message: signal(String::new()),
+            app_menu: signal(false),
+            git_tab: signal(0),
+            git_log: signal(Vec::new()),
+            git_log_loading: signal(false),
             debug_watch: signal(Vec::new()),
             debug_watch_input: signal(String::new()),
             debug_watch_values: signal(Vec::new()),
