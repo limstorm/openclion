@@ -484,6 +484,91 @@ impl State {
         });
     }
 
+    /// Builds the selected executable target without running it — the CMake
+    /// header's Build button.
+    pub fn build_active_configuration(&self) {
+        let state = *self;
+        let root = self.root.get();
+        let Some(model) = self.cmake.get() else {
+            self.status.set("No CMake model — reload the CMake project".to_owned());
+            return;
+        };
+        let Some((build, target)) = select_executable(&model, self.run_target.get().as_deref()) else {
+            self.status.set("No executable target in the CMake model".to_owned());
+            return;
+        };
+        let build_dir = root.join(&build.dir);
+        let target_name = target.name.clone();
+        let display = format!("{target_name} ({})", build.configuration());
+        self.status.set(format!("Building {display}…"));
+        crate::terminal::ensure_started(*self);
+        crate::terminal::write_output(
+            *self,
+            &format!("\r\n$ cmake --build {} --target {target_name} -j\r\n", build_dir.display()),
+        );
+        self.show_bottom.set(true);
+        self.bottom_tool.set(Some(crate::model::BottomTool::Terminal));
+        spawn(async move {
+            let result = blocking(move || {
+                let mut lines = Vec::new();
+                match Command::new("cmake")
+                    .arg("--build")
+                    .arg(&build_dir)
+                    .arg("--target")
+                    .arg(&target_name)
+                    .arg("-j")
+                    .current_dir(&root)
+                    .output()
+                {
+                    Ok(output) => {
+                        lines.extend(String::from_utf8_lossy(&output.stdout).lines().map(str::to_owned));
+                        lines.extend(String::from_utf8_lossy(&output.stderr).lines().map(str::to_owned));
+                        if !output.status.success() {
+                            lines.push(format!("[build failed: exit {}]", output.status.code().unwrap_or(-1)));
+                            return (lines, false);
+                        }
+                        (lines, true)
+                    }
+                    Err(error) => {
+                        lines.push(format!("error: {error}"));
+                        (lines, false)
+                    }
+                }
+            })
+            .await
+            .ok()
+            .unwrap_or_default();
+            let (lines, ok) = result;
+            crate::terminal::write_output(state, &(lines.join("\r\n") + "\r\n"));
+            state.status.set(if ok { "Build succeeded".to_owned() } else { "Build failed".to_owned() });
+            state.refresh_cmake();
+        });
+    }
+
+    /// Pulls the current branch into the working tree.
+    pub fn pull_repo(&self) {
+        let state = *self;
+        let root = self.root.get();
+        self.status.set("Pulling…".to_owned());
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.pull(false, &CancellationToken::new(), &|_| {}).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Pull finished".to_owned());
+                    state.refresh_vcs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Pull failed: {error}")),
+                Err(error) => state.status.set(format!("Pull failed: {error}")),
+            }
+        });
+    }
+
     /// Configures the first build directory with CMake and exports the compile
     /// database clangd reads.
     pub fn configure_cmake(&self) {

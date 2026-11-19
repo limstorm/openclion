@@ -78,21 +78,13 @@ fn project_panel(state: State, pal: Palette) -> impl IntoElement {
                     state.status.set("Project view options".to_owned());
                 })),
         ))
-        .child(
-            scroll().flex_1().w_full().min_h(px(0.0)).child(
-                view()
-                    .flex_col()
-                    .w_full()
-                    .pt(px(0.0))
-                    .pb(px(8.0))
-                    .child(dynamic(move || {
-                        state.tree_rev.get();
-                        let rows = state.rows();
-                        view().flex_col().w_full().children(rows.into_iter().map(|row| tree_row(state, pal, row)))
-                    }))
-                    .child(root_row(state, pal)),
-            ),
-        )
+        .child(scroll().flex_1().w_full().min_h(px(0.0)).child(
+            view().flex_col().w_full().pt(px(0.0)).pb(px(8.0)).child(root_row(state, pal)).child(dynamic(move || {
+                state.tree_rev.get();
+                let rows = state.rows();
+                view().flex_col().w_full().children(rows.into_iter().map(|row| tree_row(state, pal, row)))
+            })),
+        ))
 }
 
 fn root_row(state: State, pal: Palette) -> impl IntoElement {
@@ -112,7 +104,7 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
         .flex_row()
         .items_center()
         .gap(px(4.0))
-        .pl(px(6.0))
+        .pl(px(8.0))
         .pr(px(6.0))
         .rounded(px(5.0))
         .hover(move |s| s.bg(pal.tree_hover))
@@ -136,7 +128,10 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
                 y: event.page_position.y.0,
             }));
         })
-        .child(icon(icons::CHEVRON_DOWN, 12.0, pal.fg_muted))
+        .child(dynamic(move || {
+            let expanded = !state.expanded.get().is_empty();
+            icon(if expanded { icons::CHEVRON_DOWN } else { icons::CHEVRON_RIGHT }, 12.0, pal.fg_muted).into_element()
+        }))
         .child(icon(icons::PROJECT, 16.0, pal.fg_muted))
         .child(text_strong(name, 13.0, pal))
         .child(text_ui(detail, 12.0, pal.fg_subtle).flex_1().truncate())
@@ -170,7 +165,7 @@ fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElem
         .flex_row()
         .items_center()
         .gap(px(4.0))
-        .pl(px(4.0 + 12.0 * (depth.saturating_sub(1)) as f32))
+        .pl(px(8.0 + 12.0 * depth as f32))
         .pr(px(6.0))
         .rounded(px(5.0))
         .bg(move || {
@@ -241,6 +236,12 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                     let branch = state.vcs_branch.get();
                     let label = branch.map(|b| format!("on {b}")).unwrap_or_else(|| "no repository".to_owned());
                     text_muted(label, 11.0, pal).into_element()
+                }))
+                .child(header_action(pal, icons::COMMIT, move || {
+                    state.commit_all();
+                }))
+                .child(header_action(pal, icons::GIT_PULL, move || {
+                    state.pull_repo();
                 }))
                 .child(header_action(pal, icons::REFRESH, move || {
                     state.refresh_vcs();

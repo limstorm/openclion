@@ -33,6 +33,9 @@ fn native(registry: &mut Registry) {
 pub fn App() -> impl IntoElement {
     let state = State::new();
     settings::load(state);
+    // The project tree is the workbench's anchor: always start with it open.
+    state.show_left.set(true);
+    state.left_tool.set(crate::model::LeftTool::Project);
     let initial = state.root.get().to_string_lossy().to_string();
     state.recent.update(|recent| {
         recent.retain(|item| item != &initial);

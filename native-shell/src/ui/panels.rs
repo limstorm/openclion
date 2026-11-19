@@ -46,11 +46,24 @@ fn right_header(state: State, pal: Palette) -> impl IntoElement {
         .pr(px(6.0))
         .child(text_strong(title, 13.0, pal))
         .child(view().flex_1())
-        .child(header_action(pal, icons::REFRESH, move || {
-            state.refresh_cmake();
-        }))
-        .child(header_action(pal, icons::MORE_HORIZONTAL, move || {
-            state.status.set("CMake tool window actions".to_owned());
+        .child(dynamic(move || {
+            if state.right_tool.get() != RightTool::Cmake {
+                return view().into_element();
+            }
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .child(header_action(pal, icons::REFRESH, move || {
+                    state.configure_cmake();
+                }))
+                .child(header_action(pal, icons::BUILD_PROJECT, move || {
+                    state.build_active_configuration();
+                }))
+                .child(header_action(pal, icons::MORE_HORIZONTAL, move || {
+                    state.status.set("CMake tool window actions".to_owned());
+                }))
+                .into_element()
         }))
         .child(header_action(pal, icons::CLOSE, move || {
             state.show_right.set(false);
@@ -70,28 +83,7 @@ fn header_action(pal: Palette, markup: &'static str, on_press: impl Fn() + 'stat
 }
 
 fn cmake_body(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_col()
-        .w_full()
-        .h_full()
-        .child(
-            view()
-                .h(px(28.0))
-                .flex_none()
-                .w_full()
-                .flex_row()
-                .items_center()
-                .gap(px(4.0))
-                .px(px(6.0))
-                .border_b_1()
-                .border_color(pal.border)
-                .child(text_muted("CMake", 10.0, pal))
-                .child(view().flex_1())
-                .child(debug_text_button(pal, "Configure", move || state.configure_cmake()))
-                .child(debug_text_button(pal, "Build & Run", move || state.run_active_configuration()))
-                .child(debug_text_button(pal, "Refresh", move || state.refresh_cmake())),
-        )
-        .child(cmake_tree(state, pal))
+    cmake_tree(state, pal)
 }
 
 fn cmake_tree(state: State, pal: Palette) -> impl IntoElement {
@@ -763,45 +755,22 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             });
         }
     });
-    view()
-        .flex_col()
-        .flex_1()
-        .w_full()
-        .min_h(px(0.0))
-        .child(
-            view()
-                .h(px(24.0))
-                .flex_none()
-                .w_full()
-                .flex_row()
-                .items_center()
-                .gap(px(4.0))
-                .px(px(8.0))
-                .border_b_1()
-                .border_color(pal.border)
-                .child(icon(icons::TERMINAL, 12.0, pal.fg_muted))
-                .child(text_muted("zsh", 10.0, pal))
-                .child(view().flex_1())
-                .child(debug_text_button(pal, "Clear", move || crate::terminal::clear(state)))
-                .child(debug_text_button(pal, "Focus", move || crate::terminal::focus(state))),
-        )
-        .child(
-            view().flex_1().w_full().min_h(px(0.0)).p(px(6.0)).bg(pal.bg_island).child(
-                nsh_base::terminal()
-                    .component_ref(&state.terminal_ref)
-                    .flex_1()
-                    .w_full()
-                    .font_family(MONO_FONT.family)
-                    .font_size(px(12.0))
-                    .line_height(px(18.0))
-                    .on_data(move |data: &SharedString| crate::terminal::send(state, data))
-                    .on_resize(move |event: &nsh_base::TerminalEvent| {
-                        if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
-                            crate::terminal::resize(state, *cols, *rows);
-                        }
-                    }),
-            ),
-        )
+    view().flex_1().w_full().min_h(px(0.0)).p(px(8.0)).bg(pal.bg_island).child(
+        nsh_base::terminal()
+            .component_ref(&state.terminal_ref)
+            .flex_1()
+            .w_full()
+            .font_family(MONO_FONT.family)
+            .font_size(px(13.0))
+            .line_height(px(20.0))
+            .cursor_class("bg-[#1f2329]")
+            .on_data(move |data: &SharedString| crate::terminal::send(state, data))
+            .on_resize(move |event: &nsh_base::TerminalEvent| {
+                if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
+                    crate::terminal::resize(state, *cols, *rows);
+                }
+            }),
+    )
 }
 
 fn problems_body(state: State, pal: Palette) -> impl IntoElement {

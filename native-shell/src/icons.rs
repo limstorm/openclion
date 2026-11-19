@@ -33,6 +33,8 @@ icons! {
     SEARCH = "search.svg",
     SETTINGS = "settings.svg",
     REFRESH = "refresh.svg",
+    BUILD_PROJECT = "build-project.svg",
+    GIT_PULL = "git-pull.svg",
     COLLAPSE_ALL = "collapse-all.svg",
     SPLIT = "split.svg",
     FOLDER = "folder.svg",
