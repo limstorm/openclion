@@ -7,8 +7,6 @@ use crate::model::{BottomTool, LeftTool, RightTool, State};
 use crate::theme::Palette;
 use crate::ui::icon;
 
-const AI_TARGET: &str = r##"<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.4"/><circle cx="10" cy="10" r="1" fill="currentColor"/></svg>"##;
-
 pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
     view()
         .w(px(48.0))
@@ -27,6 +25,7 @@ pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
         .child(view().flex_1())
         .child(bottom_button(state, pal, icons::CMAKE, BottomTool::Cmake, "CMake"))
         .child(bottom_button(state, pal, icons::BRANCH, BottomTool::Git, "Git  Alt+9"))
+        .child(bottom_button(state, pal, icons::DEBUG_COLORED, BottomTool::Debug, "Debug"))
         .child(bottom_button(state, pal, icons::RUN, BottomTool::Run, "Run  Alt+4"))
         .child(bottom_button(state, pal, icons::TERMINAL, BottomTool::Terminal, "Terminal  Alt+F12"))
         .child(bottom_button(state, pal, icons::PROBLEMS, BottomTool::Problems, "Problems  Alt+6"))
@@ -43,9 +42,6 @@ pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
         .pb(px(6.0))
         .gap(px(2.0))
         .child(right_button(state, pal, icons::NOTIFICATIONS, RightTool::Notifications, "Notifications"))
-        .child(right_button(state, pal, icons::SERVER, RightTool::Ssh, "SSH"))
-        .child(right_button(state, pal, icons::FILE_TEXT, RightTool::Notebook, "Notebooks"))
-        .child(right_action(state, pal, AI_TARGET, RightTool::Agents))
 }
 
 fn rail_button_base(pal: Palette) -> View {
@@ -129,9 +125,6 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
         .label(title)
         .test_id(match tool {
             RightTool::Notifications => "rail-notifications",
-            RightTool::Agents => "rail-agents",
-            RightTool::Ssh => "rail-ssh",
-            RightTool::Notebook => "rail-notebook",
         })
         .bg(move || {
             if state.right_tool.get() == tool && state.show_right.get() {
@@ -148,24 +141,6 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
                 state.show_right.set(true);
             }
             crate::settings::save(state);
-        })
-        .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
-            if state.right_tool.get() == tool && state.show_right.get() { pal.fg_strong } else { pal.fg_muted }
-        }))
-}
-
-fn right_action(state: State, pal: Palette, markup: &'static str, tool: RightTool) -> View {
-    rail_button_base(pal)
-        .bg(move || {
-            if state.right_tool.get() == tool && state.show_right.get() {
-                pal.stripe_selected
-            } else {
-                transparent_black().into()
-            }
-        })
-        .on_press(move || {
-            state.right_tool.set(tool);
-            state.show_right.set(true);
         })
         .child(icon(markup, 20.0, pal.fg_muted).text_color(move || {
             if state.right_tool.get() == tool && state.show_right.get() { pal.fg_strong } else { pal.fg_muted }

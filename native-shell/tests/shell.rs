@@ -123,16 +123,6 @@ fn the_git_rail_button_opens_the_git_panel() {
 }
 
 #[test]
-fn the_right_rail_opens_ssh_and_notebooks() {
-    let mut app = start();
-    app.wait_for("Project").unwrap();
-    app.press("id:rail-ssh").unwrap();
-    app.wait_for("SSH").unwrap();
-    app.press("id:rail-notebook").unwrap();
-    app.wait_for("Notebooks").unwrap();
-}
-
-#[test]
 fn selecting_a_cmake_target_updates_the_selection() {
     let mut app = start();
     app.wait_for("Project").unwrap();

@@ -32,7 +32,6 @@ icons! {
     SETTINGS = "settings.svg",
     REFRESH = "refresh.svg",
     GIT_PULL = "git-pull.svg",
-    SERVER = "server.svg",
     BRANCH = "branch.svg",
     COLLAPSE_ALL = "collapse-all.svg",
     SPLIT = "split.svg",

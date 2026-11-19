@@ -157,7 +157,6 @@ fn install_shortcuts(state: State) {
         state.tree_menu.set(None);
         state.app_menu.set(false);
         state.code_action_popup.set(false);
-        state.notebook.set(None);
         state.run_chooser.set(false);
         state.toast.set(None);
     });

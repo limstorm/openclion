@@ -1,7 +1,6 @@
-//! The right tool window (CMake, Notifications, AI, SSH, Notebooks) and the
+//! The right tool window (Notifications) and the
 //! bottom tool window (Terminal, Problems, Run, Git, CMake).
 
-use nsh_core::element::FontWeight;
 use nsh_core::element::input;
 use nsh_core::prelude::*;
 
@@ -22,18 +21,12 @@ pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
         .child(right_header(state, pal))
         .child(view().flex_1().min_h(px(0.0)).child(dynamic(move || match state.right_tool.get() {
             RightTool::Notifications => notifications_body(state, pal).into_element(),
-            RightTool::Agents => agents_body(state, pal).into_element(),
-            RightTool::Ssh => ssh_body(state, pal).into_element(),
-            RightTool::Notebook => notebook_body(state, pal).into_element(),
         })))
 }
 
 fn right_header(state: State, pal: Palette) -> impl IntoElement {
     let title = match state.right_tool.get() {
         RightTool::Notifications => "Notifications",
-        RightTool::Agents => "AI Assistant",
-        RightTool::Ssh => "SSH",
-        RightTool::Notebook => "Notebooks",
     };
     view()
         .h(px(40.0))
@@ -266,178 +259,6 @@ fn notifications_body(state: State, pal: Palette) -> impl IntoElement {
         )
 }
 
-fn agents_body(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_col()
-        .flex_1()
-        .w_full()
-        .min_h(px(0.0))
-        .p(px(10.0))
-        .gap(px(6.0))
-        .child(text_ui("AI Assistant", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-        .child(text_muted(
-            "A local assistant surface: it can drive Build, explain the open file and open Find in Files. No model backend is embedded in this native build.",
-            11.0,
-            pal,
-        ))
-        .child(scroll().flex_1().child(dynamic(move || {
-            let messages = state.ai_messages.get();
-            if messages.is_empty() {
-                return view()
-                    .p(px(6.0))
-                    .child(text_muted("Ask about the open file or say “build”.", 11.0, pal))
-                    .into_element();
-            }
-            view()
-                .flex_col()
-                .gap(px(6.0))
-                .children(messages.into_iter().map(move |(role, text)| {
-                    view()
-                        .flex_col()
-                        .gap(px(2.0))
-                        .p(px(6.0))
-                        .rounded(px(5.0))
-                        .bg(if role == "You" { pal.bg_elev } else { pal.bg_island })
-                        .child(text_muted(role, 9.0, pal))
-                        .child(text_ui(text, 11.0, pal.fg))
-                }))
-                .into_element()
-        })))
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap(px(4.0))
-                .child(
-                    input()
-                        .flex_1()
-                        .h(px(26.0))
-                        .bg(pal.bg_island)
-                        .text_color(pal.fg)
-                        .text_size(px(11.0))
-                        .placeholder("Ask the assistant")
-                        .value(move || state.ai_input.get())
-                        .on_change(move |value: &str| state.ai_input.set(value.to_owned()))
-                        .on_submit(move |_: &str| ai_send(state)),
-                )
-                .child(debug_text_button(pal, "Send", move || ai_send(state))),
-        )
-}
-
-fn ai_send(state: State) {
-    let question = state.ai_input.get().trim().to_owned();
-    if question.is_empty() {
-        return;
-    }
-    state.ai_input.set(String::new());
-    state.ai_messages.update(|messages| messages.push(("You".to_owned(), question.clone())));
-    let lower = question.to_lowercase();
-    let reply = if lower.contains("build") {
-        state.build_active_configuration();
-        "Started a build of the selected CMake target; output streams into the Terminal dock.".to_owned()
-    } else if lower.contains("find") {
-        state.left_tool.set(crate::model::LeftTool::Search);
-        state.show_left.set(true);
-        "Opened Find in Files. Type a pattern to search the project.".to_owned()
-    } else if lower.contains("explain") {
-        match state.active_tab() {
-            Some(tab) => format!(
-                "{} has {} lines. The editor, diagnostics and completion are driven by native NSH views; no JavaScript runtime is involved.",
-                tab.title,
-                tab.text.lines().count()
-            ),
-            None => "Open a file first, then ask me to explain it.".to_owned(),
-        }
-    } else {
-        "This native build has no model backend connected. I can build the selected target, explain the open file, or open Find in Files.".to_owned()
-    };
-    state.ai_messages.update(|messages| messages.push(("Assistant".to_owned(), reply)));
-}
-
-fn ssh_body(state: State, pal: Palette) -> impl IntoElement {
-    let hosts = state.ssh_hosts.get();
-    view()
-        .flex_col()
-        .w_full()
-        .p(px(10.0))
-        .gap(px(4.0))
-        .child(
-            view()
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .child(text_ui("SSH", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-                .child(view().flex_1())
-                .child(debug_text_button(pal, "Refresh", move || state.refresh_ssh())),
-        )
-        .child(text_muted("Hosts from ~/.ssh/config", 11.0, pal))
-        .child(scroll().flex_1().children(if hosts.is_empty() {
-            vec![view().p(px(6.0)).child(text_muted("No hosts configured", 11.0, pal)).into_element()]
-        } else {
-            hosts
-                .into_iter()
-                .map(move |host| {
-                    let target = host.clone();
-                    view()
-                        .h(px(26.0))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(6.0))
-                        .px(px(6.0))
-                        .rounded(px(4.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
-                        .on_press(move || {
-                            state.bottom_tool.set(Some(BottomTool::Terminal));
-                            state.show_bottom.set(true);
-                            crate::terminal::ensure_started(state);
-                            let host = target.clone();
-                            set_timeout(std::time::Duration::from_millis(250), move || {
-                                crate::terminal::send(state, &format!("ssh {host}\\n"));
-                            });
-                        })
-                        .child(icon(icons::TERMINAL, 13.0, pal.fg_muted))
-                        .child(text_ui(host, 12.0, pal.fg))
-                        .into_element()
-                })
-                .collect()
-        }))
-}
-
-fn notebook_body(state: State, pal: Palette) -> impl IntoElement {
-    let mut notebooks: Vec<std::path::PathBuf> =
-        state.files().into_iter().filter(|path| path.extension().is_some_and(|ext| ext == "ipynb")).collect();
-    notebooks.sort();
-    view()
-        .flex_col()
-        .w_full()
-        .p(px(10.0))
-        .gap(px(4.0))
-        .child(text_ui("Notebooks", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-        .child(scroll().flex_1().children(if notebooks.is_empty() {
-            vec![view().p(px(6.0)).child(text_muted("No .ipynb files in this project", 11.0, pal)).into_element()]
-        } else {
-            notebooks
-                .into_iter()
-                .map(move |path| {
-                    let open = path.clone();
-                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                    view()
-                        .h(px(26.0))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(6.0))
-                        .px(px(6.0))
-                        .rounded(px(4.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
-                        .on_press(move || state.open_notebook(open.clone()))
-                        .child(icon(icons::BOOKMARKS, 13.0, pal.fg_muted))
-                        .child(text_ui(name, 12.0, pal.fg))
-                        .into_element()
-                })
-                .collect()
-        }))
-}
-
 // ---------------------------------------------------------------------------
 // Bottom tool window
 
@@ -517,7 +338,8 @@ fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
         .child(text_strong("CMake", 12.0, pal))
         .child(view().flex_1())
         .child(debug_text_button(pal, "Reload", move || state.configure_cmake()))
-        .child(debug_text_button(pal, "Build & Run", move || state.run_active_configuration()))
+        .child(debug_text_button(pal, "Build", move || state.build_active_configuration()))
+        .child(debug_text_button(pal, "Run", move || state.run_active_configuration()))
         .child(header_action(pal, icons::CLOSE, move || {
             state.show_bottom.set(false);
         }))
@@ -1066,10 +888,7 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             .component_ref(&state.terminal_ref)
             .flex_1()
             .w_full()
-            .font_family(MONO_FONT.family)
-            .font_size(px(13.0))
-            .line_height(px(20.0))
-            .cursor_class("bg-[#1f2329]")
+            .cursor_class("bg-[#1f2329] -ml-[3px]")
             .on_data(move |data: &SharedString| crate::terminal::send(state, data))
             .on_resize(move |event: &nsh_base::TerminalEvent| {
                 if let nsh_base::TerminalEvent::Resize(cols, rows) = event {

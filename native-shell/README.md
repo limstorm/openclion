@@ -26,7 +26,7 @@ native-shell/
 │       ├── rail.rs          left and right tool-window stripes
 │       ├── tree_panel.rs    Project / Commit / Structure / Bookmarks / Search
 │       ├── editor_panel.rs  editor tabs + nsh Editor
-│       ├── panels.rs        CMake, Notifications, AI, SSH, Notebooks, Terminal…
+│       ├── panels.rs        Notifications, Terminal, Problems, Git, CMake…
 │       ├── status.rs        breadcrumbs and editor details
 │       └── overlay.rs       Quick Open, project menu, Settings, toast
 ├── assets/                  Inter, JetBrains Mono, expui icons, nsh themes
@@ -56,11 +56,8 @@ backend uses.
 | Rename symbol      | `ide-lsp` `textDocument/rename`                | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                                                                 |
 | Code actions       | `ide-lsp` `textDocument/codeAction`            | Alt+Enter lists quick fixes/refactors; the chosen action applies its WorkspaceEdit or runs its command                                                                                           |
 | Type hierarchy     | `ide-lsp` `prepareTypeHierarchy`               | Ctrl+Alt+H lists supertypes/subtypes in a Hierarchy dock; clicking opens the declaration                                                                                                         |
-| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, 13pt JetBrains Mono, no padding; a clean single-line path prompt (right-side Node/time RPROMPT removed) and a block cursor at the prompt                                       |
+| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, native monospace, no padding; clean path prompt (right-side Node/time RPROMPT removed), block cursor in the input cell after `$`                                               |
 | Debugging          | `ide-dap` + lldb-dap                           | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
-| SSH                | `~/.ssh/config`                                | right-rail SSH window lists concrete hosts with Refresh; clicking opens the Terminal and runs `ssh <host>`                                                                                       |
-| Notebooks          | `std::fs` + `serde_json`                       | right-rail window lists `.ipynb` files; clicking opens a native cell viewer (Markdown/Code) instead of raw JSON                                                                                  |
-| AI Assistant       | native views                                   | local chat surface that can start a build, explain the open file or open Find in Files (no model backend embedded)                                                                               |
 | File operations    | `std::fs` + native dialogs                     | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                                             |
 | Project tree       | `std::fs` walk + nsh views                     | root on top, 12pt indentation per level, clicking the root collapses/expands the whole project                                                                                                   |
 | Title bar          | nsh window controls + native views             | ☰ application menu at the left, custom minimize/maximize/close at the right, project/run widgets in between                                                                                     |
@@ -123,7 +120,7 @@ cargo run
 | Save                | Ctrl+S                                               |
 | Close tab           | Ctrl+W or the tab's ×                                |
 | Find in Files       | Ctrl+Shift+F (or the rail magnifier)                 |
-| Terminal            | Ctrl+` or the rail terminal icon                     |
+| Terminal            | `ide-terminal` (portable-pty) + nsh `Terminal`       | real login shell, native monospace, no padding; clean path prompt (right-side Node/time RPROMPT removed), block cursor in the input cell after `$` |
 | Commit              | Ctrl+K                                               |
 | Git dock            | Alt+9, or the bottom-left Git rail button            |
 | CMake dock          | Alt+8, or the bottom-left CMake rail button          |
@@ -152,7 +149,7 @@ diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
 Debug watch/condition/logpoints and the bottom Git/CMake docks are done;
-SSH, Notebook and AI tool windows are the next slices, while
+Remaining main-branch surfaces are the next slices, while
 the shell keeps the Islands layout.
 
 Islands Light is the target and the default. `theme.rs` also carries the

@@ -36,9 +36,6 @@ pub enum LeftTool {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RightTool {
     Notifications,
-    Agents,
-    Ssh,
-    Notebook,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -82,18 +79,6 @@ pub struct Row {
     pub name: String,
     pub dir: bool,
     pub depth: usize,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct NotebookCell {
-    pub kind: String,
-    pub source: String,
-}
-
-#[derive(Clone, PartialEq)]
-pub struct NotebookView {
-    pub title: String,
-    pub cells: Vec<NotebookCell>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -225,10 +210,6 @@ pub struct State {
     pub git_tab: Signal<u8>,
     pub git_log: Signal<Vec<crate::backend::GitLogRow>>,
     pub git_log_loading: Signal<bool>,
-    pub ssh_hosts: Signal<Vec<String>>,
-    pub ai_messages: Signal<Vec<(String, String)>>,
-    pub ai_input: Signal<String>,
-    pub notebook: Signal<Option<NotebookView>>,
     pub debug_watch: Signal<Vec<String>>,
     pub debug_watch_input: Signal<String>,
     pub debug_watch_values: Signal<Vec<crate::debug::WatchValue>>,
@@ -353,10 +334,6 @@ impl State {
             git_tab: signal(0),
             git_log: signal(Vec::new()),
             git_log_loading: signal(false),
-            ssh_hosts: signal(crate::backend::ssh_hosts()),
-            ai_messages: signal(Vec::new()),
-            ai_input: signal(String::new()),
-            notebook: signal(None),
             debug_watch: signal(Vec::new()),
             debug_watch_input: signal(String::new()),
             debug_watch_values: signal(Vec::new()),
@@ -421,18 +398,6 @@ impl State {
         };
         let path = PathBuf::from(selected);
         if path.is_dir() { path } else { path.parent().map(Path::to_path_buf).unwrap_or(root) }
-    }
-
-    pub fn open_notebook(&self, path: PathBuf) {
-        let Some(view) = crate::backend::read_notebook(&path) else {
-            self.status.set("Cannot read notebook".to_owned());
-            return;
-        };
-        self.notebook.set(Some(view));
-    }
-
-    pub fn refresh_ssh(&self) {
-        self.ssh_hosts.set(crate::backend::ssh_hosts());
     }
 
     pub fn open_rename(&self, path: PathBuf) {
