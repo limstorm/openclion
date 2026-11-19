@@ -126,7 +126,7 @@ pub fn start(state: State) {
         state.status.set("No CMake model to debug".to_owned());
         return;
     };
-    let Some((build, target)) = model.executables().next() else {
+    let Some((build, target)) = crate::backend::select_executable(&model, state.run_target.get().as_deref()) else {
         state.status.set("No executable target to debug".to_owned());
         return;
     };

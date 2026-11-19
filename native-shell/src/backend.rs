@@ -73,6 +73,19 @@ fn letter_of(kind: Option<ChangeKind>) -> &'static str {
     }
 }
 
+/// The executable the Run/Debug buttons use: the selected target, else the
+/// first one of the CMake model.
+pub fn select_executable<'a>(
+    model: &'a ide_cmake::CmakeModel,
+    wanted: Option<&str>,
+) -> Option<(&'a ide_cmake::CmakeBuild, &'a ide_cmake::CmakeTarget)> {
+    let fallback = model.executables().next();
+    match wanted {
+        Some(name) => model.executables().find(|(_, target)| target.name == name).or(fallback),
+        None => fallback,
+    }
+}
+
 /// The CMake model of `root`, read from the File API reply of the last
 /// configure and from `CMakePresets.json`.
 pub fn cmake_model(root: &Path) -> Option<ide_cmake::CmakeModel> {
@@ -255,7 +268,7 @@ impl State {
             self.status.set("No CMake model — reload the CMake project".to_owned());
             return;
         };
-        let Some((build, target)) = model.executables().next() else {
+        let Some((build, target)) = select_executable(&model, self.run_target.get().as_deref()) else {
             self.status.set("No executable target in the CMake model".to_owned());
             return;
         };

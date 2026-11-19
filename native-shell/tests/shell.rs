@@ -85,3 +85,21 @@ fn the_project_header_opens_the_new_file_dialog() {
     app.press("id:project-new-file").unwrap();
     app.wait_for("New File").unwrap();
 }
+
+#[test]
+fn the_run_widget_opens_the_configuration_chooser() {
+    let mut app = start();
+    app.wait_for("Select Configuration").unwrap();
+    app.press("id:run-config-widget").unwrap();
+    app.wait_for("Run Configurations").unwrap();
+}
+
+#[test]
+fn choosing_a_run_target_updates_the_title_bar_widget() {
+    let mut app = start();
+    app.wait_for("Select Configuration").unwrap();
+    app.press("id:run-config-widget").unwrap();
+    app.wait_for("Run Configurations").unwrap();
+    app.press("acme_tests").unwrap();
+    app.wait_for("acme_tests (Debug)").unwrap();
+}

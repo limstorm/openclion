@@ -101,8 +101,19 @@ fn config_widget(state: State, pal: Palette) -> impl IntoElement {
         .hover(move |s| s.bg(pal.toolbar_hover))
         .active(move |s| s.bg(pal.toolbar_pressed))
         .window_drag(false)
-        .on_press(move || state.configure_cmake())
-        .child(text_ui("Select Configuration", 13.0, pal.fg_secondary))
+        .test_id("run-config-widget")
+        .on_press(move || state.run_chooser.set(true))
+        .child(text_ui(
+            move || {
+                state
+                    .run_target
+                    .get()
+                    .map(|target| format!("{target} (Debug)"))
+                    .unwrap_or_else(|| "Select Configuration".to_owned())
+            },
+            13.0,
+            pal.fg_secondary,
+        ))
         .child(icon(icons::CHEVRON_DOWN, 12.0, pal.fg_muted))
 }
 

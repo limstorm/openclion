@@ -21,6 +21,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
         .child(dynamic(move || tree_menu(state, pal).into_element()))
+        .child(dynamic(move || run_chooser(state, pal).into_element()))
         .child(dynamic(move || file_dialog(state, pal).into_element()))
         .child(dynamic(move || toast(state, pal).into_element()))
 }
@@ -694,6 +695,112 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(text_muted(detail, 12.0, pal))
         .child(view().h(px(4.0)))
         .child(control)
+}
+
+fn run_chooser(state: State, pal: Palette) -> impl IntoElement {
+    if !state.run_chooser.get() {
+        return view().into_element();
+    }
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .child(view().absolute().inset(px(0.0)).on_press(move || state.run_chooser.set(false)))
+        .child(
+            view().absolute().left(px(0.0)).right(px(0.0)).top(px(92.0)).items_center().child(
+                view()
+                    .w(px(560.0))
+                    .max_h(px(340.0))
+                    .flex_col()
+                    .overflow_hidden()
+                    .rounded(px(10.0))
+                    .border(px(1.0))
+                    .border_color(pal.border_strong)
+                    .bg(pal.bg_island)
+                    .child(
+                        view()
+                            .h(px(40.0))
+                            .flex_none()
+                            .flex_row()
+                            .items_center()
+                            .gap(px(6.0))
+                            .px(px(12.0))
+                            .border_b_1()
+                            .border_color(pal.border)
+                            .child(icon(icons::RUN, 16.0, pal.success))
+                            .child(text_strong("Run Configurations", 13.0, pal))
+                            .child(view().flex_1())
+                            .child(
+                                view()
+                                    .size(px(22.0))
+                                    .items_center()
+                                    .justify_center()
+                                    .rounded(px(4.0))
+                                    .hover(move |s| s.bg(pal.toolbar_hover))
+                                    .on_press(move || state.run_chooser.set(false))
+                                    .child(icon(icons::CLOSE, 12.0, pal.fg_muted)),
+                            ),
+                    )
+                    .child(scroll().flex_1().child(dynamic(move || {
+                        let model = state.cmake.get();
+                        let selected = state.run_target.get();
+                        let mut rows: Vec<View> = Vec::new();
+                        if let Some(model) = &model {
+                            for (build, target) in model.executables() {
+                                let name = target.name.clone();
+                                let name_for_press = name.clone();
+                                let active = selected.as_deref() == Some(target.name.as_str());
+                                let detail = format!("{}  ·  {}", build.configuration(), build.dir);
+                                let artifact = target
+                                    .artifact
+                                    .as_ref()
+                                    .map(|artifact| {
+                                        std::path::Path::new(artifact)
+                                            .file_name()
+                                            .map(|n| n.to_string_lossy().to_string())
+                                            .unwrap_or_else(|| artifact.clone())
+                                    })
+                                    .unwrap_or_else(|| "not built".to_owned());
+                                rows.push(
+                                    view()
+                                        .h(px(40.0))
+                                        .flex_none()
+                                        .mx(px(4.0))
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(8.0))
+                                        .px(px(8.0))
+                                        .rounded(px(5.0))
+                                        .bg(if active { pal.tree_selected } else { transparent_black().into() })
+                                        .hover(move |s| s.bg(pal.tree_hover))
+                                        .on_press(move || {
+                                            state.run_target.set(Some(name_for_press.clone()));
+                                            crate::settings::save(state);
+                                            state.run_chooser.set(false);
+                                        })
+                                        .child(icon(icons::RUN, 14.0, pal.success))
+                                        .child(
+                                            view()
+                                                .flex_col()
+                                                .gap(px(1.0))
+                                                .child(text_ui(name, 13.0, pal.fg_strong))
+                                                .child(text_muted(detail, 10.0, pal)),
+                                        )
+                                        .child(view().flex_1())
+                                        .child(text_muted(artifact, 10.0, pal)),
+                                );
+                            }
+                        }
+                        if rows.is_empty() {
+                            return view()
+                                .p(px(14.0))
+                                .child(text_muted("No executable targets yet — configure CMake first", 12.0, pal))
+                                .into_element();
+                        }
+                        view().flex_col().w_full().py(px(4.0)).children(rows).into_element()
+                    }))),
+            ),
+        )
+        .into_element()
 }
 
 fn tree_menu(state: State, pal: Palette) -> impl IntoElement {

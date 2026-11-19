@@ -130,6 +130,7 @@ fn install_shortcuts(state: State) {
         state.find_open.set(false);
         state.dialog.set(None);
         state.tree_menu.set(None);
+        state.run_chooser.set(false);
         state.toast.set(None);
     });
 }

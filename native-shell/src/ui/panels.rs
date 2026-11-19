@@ -808,28 +808,43 @@ fn problems_body(state: State, pal: Palette) -> impl IntoElement {
 }
 
 fn run_body(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_col()
-        .p(px(10.0))
-        .gap(px(4.0))
-        .child(text_muted("Run configurations", 11.0, pal))
-        .child(run_row(state, pal, "acme (Debug)", "CMake application"))
-        .child(run_row(state, pal, "acme_tests (Debug)", "CMake test"))
-}
-
-fn run_row(state: State, pal: Palette, name: &'static str, detail: &'static str) -> View {
-    view()
-        .h(px(30.0))
-        .flex_row()
-        .items_center()
-        .gap(px(8.0))
-        .px(px(8.0))
-        .rounded(px(5.0))
-        .hover(move |s| s.bg(pal.tree_hover))
-        .on_press(move || state.status.set(format!("Run {name}")))
-        .child(icon(icons::RUN, 16.0, pal.success))
-        .child(text_ui(name, 13.0, pal.fg))
-        .child(text_muted(detail, 12.0, pal))
+    view().flex_col().w_full().p(px(10.0)).gap(px(4.0)).child(text_muted("Run configurations", 11.0, pal)).child(
+        dynamic(move || {
+            let model = state.cmake.get();
+            let selected = state.run_target.get();
+            let mut rows: Vec<View> = Vec::new();
+            if let Some(model) = &model {
+                for (build, target) in model.executables() {
+                    let name = target.name.clone();
+                    let name_for_press = name.clone();
+                    let active = selected.as_deref() == Some(target.name.as_str());
+                    let detail = format!("{}  ·  {}", build.configuration(), build.dir);
+                    rows.push(
+                        view()
+                            .h(px(30.0))
+                            .flex_row()
+                            .items_center()
+                            .gap(px(8.0))
+                            .px(px(8.0))
+                            .rounded(px(5.0))
+                            .bg(if active { pal.tree_selected } else { transparent_black().into() })
+                            .hover(move |s| s.bg(pal.tree_hover))
+                            .on_press(move || {
+                                state.run_target.set(Some(name_for_press.clone()));
+                                crate::settings::save(state);
+                            })
+                            .child(icon(icons::RUN, 16.0, pal.success))
+                            .child(text_ui(name, 13.0, pal.fg))
+                            .child(text_muted(detail, 12.0, pal)),
+                    );
+                }
+            }
+            if rows.is_empty() {
+                return view().child(text_muted("No executable targets — configure CMake", 12.0, pal)).into_element();
+            }
+            view().flex_col().w_full().gap(px(2.0)).children(rows).into_element()
+        }),
+    )
 }
 
 fn services_body(state: State, pal: Palette) -> impl IntoElement {

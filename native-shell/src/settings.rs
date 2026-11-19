@@ -19,6 +19,7 @@ struct Persisted {
     show_left: bool,
     show_right: bool,
     show_bottom: bool,
+    run_target: Option<String>,
 }
 
 impl Default for Persisted {
@@ -32,6 +33,7 @@ impl Default for Persisted {
             show_left: true,
             show_right: true,
             show_bottom: false,
+            run_target: None,
         }
     }
 }
@@ -52,6 +54,7 @@ pub fn load(state: State) {
     state.show_left.set(settings.show_left);
     state.show_right.set(settings.show_right);
     state.show_bottom.set(settings.show_bottom);
+    state.run_target.set(settings.run_target);
 }
 
 /// Writes the workbench settings back to nsh storage.
@@ -65,6 +68,7 @@ pub fn save(state: State) {
         show_left: state.show_left.get(),
         show_right: state.show_right.get(),
         show_bottom: state.show_bottom.get(),
+        run_target: state.run_target.get(),
     };
     let Ok(json) = serde_json::to_string(&settings) else {
         return;
