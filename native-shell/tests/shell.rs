@@ -100,7 +100,7 @@ fn choosing_a_run_target_updates_the_title_bar_widget() {
     app.wait_for("Select Configuration").unwrap();
     app.press("id:run-config-widget").unwrap();
     app.wait_for("Run Configurations").unwrap();
-    app.press("acme_tests").unwrap();
+    app.press("id:run-target-acme_tests").unwrap();
     app.wait_for("acme_tests (Debug)").unwrap();
 }
 
@@ -127,4 +127,25 @@ fn the_git_rail_button_opens_the_git_panel() {
     app.wait_for("Project").unwrap();
     app.press("id:rail-git").unwrap();
     app.wait_for("Worktrees").unwrap();
+}
+
+#[test]
+fn the_right_rail_opens_github_ssh_and_notebooks() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:rail-github").unwrap();
+    app.wait_for("GitHub").unwrap();
+    app.press("id:rail-ssh").unwrap();
+    app.wait_for("SSH").unwrap();
+    app.press("id:rail-notebook").unwrap();
+    app.wait_for("Notebooks").unwrap();
+}
+
+#[test]
+fn selecting_a_cmake_target_updates_the_selection() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.wait_for("acme_tests").unwrap();
+    app.press("id:cmake-target-acme_tests").unwrap();
+    app.wait_for("Selected CMake target acme_tests").unwrap();
 }

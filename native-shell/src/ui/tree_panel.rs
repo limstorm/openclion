@@ -286,10 +286,33 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                             }
                         })
                         .on_press(move || state.commit_all())
-                        .child(text_ui("Commit", 12.0, white().into())),
+                        .child(text_ui(
+                            move || if state.commit_amend.get() { "Amend" } else { "Commit" },
+                            12.0,
+                            white().into(),
+                        )),
                 ),
         )
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(12.0))
+                .px(px(8.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(check_view(pal, state.commit_amend, move || state.commit_amend.update(|amend| *amend = !*amend)))
+                .child(text_ui("Amend", 11.0, pal.fg_secondary))
+                .child(check_view(pal, state.commit_checks, move || {
+                    state.commit_checks.update(|checks| *checks = !*checks)
+                }))
+                .child(text_ui("Checks", 11.0, pal.fg_secondary)),
+        )
         .child(scroll().flex_1().child(dynamic(move || {
+            state.commit_rev.get();
             let rows = state.vcs.get();
             let loading = state.vcs_loading.get();
             if loading && rows.is_empty() {
@@ -322,6 +345,22 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
         })))
 }
 
+fn check_view(pal: Palette, checked: Signal<bool>, on_press: impl Fn() + 'static) -> View {
+    view()
+        .size(px(14.0))
+        .flex_none()
+        .items_center()
+        .justify_center()
+        .rounded(px(3.0))
+        .border(px(1.0))
+        .border_color(pal.border_strong)
+        .bg(move || if checked.get() { pal.accent } else { pal.bg_island })
+        .on_press(on_press)
+        .child(dynamic(move || {
+            if checked.get() { text_ui("✓", 9.0, white().into()).into_element() } else { view().into_element() }
+        }))
+}
+
 fn vcs_row(state: State, pal: Palette, row: crate::backend::VcsRow) -> View {
     let path = row.path.clone();
     let letter_color = if row.conflicted {
@@ -342,6 +381,36 @@ fn vcs_row(state: State, pal: Palette, row: crate::backend::VcsRow) -> View {
         .rounded(px(5.0))
         .hover(move |s| s.bg(pal.tree_hover))
         .on_press(move || state.open_path(path.clone()))
+        .child({
+            let path_for_bg = row.path.clone();
+            let path_for_press = row.path.clone();
+            let path_for_check = row.path.clone();
+            view()
+                .size(px(14.0))
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .rounded(px(3.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(move || {
+                    state.commit_rev.get();
+                    if state.commit_checked.with(|checked| checked.contains(&path_for_bg)) {
+                        pal.accent
+                    } else {
+                        pal.bg_island
+                    }
+                })
+                .on_press(move || state.toggle_commit_file(path_for_press.clone()))
+                .child(dynamic(move || {
+                    state.commit_rev.get();
+                    if state.commit_checked.with(|checked| checked.contains(&path_for_check)) {
+                        text_ui("✓", 9.0, white().into()).into_element()
+                    } else {
+                        view().into_element()
+                    }
+                }))
+        })
         .child(icon(crate::icons::file_icon(&row.rel), 16.0, pal.fg_muted))
         .child(text_ui(row.rel, 13.0, pal.fg).truncate())
         .child(view().flex_1())

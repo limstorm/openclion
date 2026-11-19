@@ -26,7 +26,7 @@ pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
         .child(left_button(state, pal, icons::SEARCH, LeftTool::Search, "Find in Files  Ctrl+Shift+F"))
         .child(view().flex_1())
         .child(bottom_button(state, pal, icons::CMAKE, BottomTool::Cmake, "CMake"))
-        .child(bottom_button(state, pal, icons::COMMIT, BottomTool::Git, "Git  Alt+9"))
+        .child(bottom_button(state, pal, icons::BRANCH, BottomTool::Git, "Git  Alt+9"))
         .child(bottom_button(state, pal, icons::SERVICES, BottomTool::Services, "Services"))
         .child(bottom_button(state, pal, icons::RUN, BottomTool::Run, "Run  Alt+4"))
         .child(bottom_button(state, pal, icons::TERMINAL, BottomTool::Terminal, "Terminal  Alt+F12"))
@@ -47,9 +47,11 @@ pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
         .pb(px(6.0))
         .gap(px(2.0))
         .child(right_button(state, pal, icons::NOTIFICATIONS, RightTool::Notifications, "Notifications"))
-        .child(right_button(state, pal, icons::AGENTS, RightTool::Agents, "AI Assistant"))
-        .child(right_action(state, pal, AI_TARGET, RightTool::Agents))
+        .child(right_button(state, pal, icons::GIT_PULL, RightTool::Github, "GitHub"))
+        .child(right_button(state, pal, icons::TERMINAL, RightTool::Ssh, "SSH"))
         .child(right_button(state, pal, icons::DATABASE, RightTool::Database, "Database"))
+        .child(right_button(state, pal, icons::BOOKMARKS, RightTool::Notebook, "Notebooks"))
+        .child(right_action(state, pal, AI_TARGET, RightTool::Agents))
 }
 
 fn rail_button_base(pal: Palette) -> View {
@@ -104,6 +106,7 @@ fn bottom_button(state: State, pal: Palette, markup: &'static str, tool: BottomT
         .test_id(match tool {
             BottomTool::Cmake => "rail-cmake",
             BottomTool::Git => "rail-git",
+            BottomTool::Hierarchy => "rail-hierarchy",
             BottomTool::Usages => "rail-usages",
             BottomTool::Debug => "rail-debug",
             BottomTool::Terminal => "rail-terminal",
@@ -140,6 +143,9 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
             RightTool::Notifications => "rail-notifications",
             RightTool::Agents => "rail-agents",
             RightTool::Database => "rail-database",
+            RightTool::Github => "rail-github",
+            RightTool::Ssh => "rail-ssh",
+            RightTool::Notebook => "rail-notebook",
         })
         .bg(move || {
             if state.right_tool.get() == tool && state.show_right.get() {

@@ -118,6 +118,8 @@ fn install_shortcuts(state: State) {
     });
     on_key("ctrl+alt+l", move |_| crate::lsp::format(state));
     on_key("alt+F7", move |_| crate::lsp::find_usages(state));
+    on_key("alt+enter", move |_| crate::lsp::code_actions_at_caret(state));
+    on_key("ctrl+alt+h", move |_| crate::lsp::type_hierarchy_at_caret(state));
     on_key("ctrl+h", move |_| {
         state.find_open.set(true);
         state.replace_open.set(true);
@@ -151,6 +153,7 @@ fn install_shortcuts(state: State) {
         state.dialog.set(None);
         state.tree_menu.set(None);
         state.app_menu.set(false);
+        state.code_action_popup.set(false);
         state.run_chooser.set(false);
         state.toast.set(None);
     });

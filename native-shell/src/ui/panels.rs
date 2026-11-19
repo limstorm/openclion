@@ -25,6 +25,9 @@ pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
             RightTool::Notifications => notifications_body(state, pal).into_element(),
             RightTool::Agents => agents_body(state, pal).into_element(),
             RightTool::Database => database_body(state, pal).into_element(),
+            RightTool::Github => github_body(state, pal).into_element(),
+            RightTool::Ssh => ssh_body(state, pal).into_element(),
+            RightTool::Notebook => notebook_body(state, pal).into_element(),
         })))
 }
 
@@ -34,6 +37,9 @@ fn right_header(state: State, pal: Palette) -> impl IntoElement {
         RightTool::Notifications => "Notifications",
         RightTool::Agents => "AI Assistant",
         RightTool::Database => "Database",
+        RightTool::Github => "GitHub",
+        RightTool::Ssh => "SSH",
+        RightTool::Notebook => "Notebooks",
     };
     view()
         .h(px(40.0))
@@ -143,15 +149,29 @@ fn cmake_tree(state: State, pal: Palette) -> impl IntoElement {
                             ide_cmake::CmakeTargetKind::Utility => "utility",
                             ide_cmake::CmakeTargetKind::Unknown => "target",
                         };
-                        rows.push(panel_row(
-                            pal,
-                            3,
-                            false,
-                            icons::CMAKE,
-                            target.name.clone(),
-                            Some(kind.to_owned()),
-                            false,
-                        ));
+                        let target_name = target.name.clone();
+                        let target_for_bg = target_name.clone();
+                        let build_for_bg = build.dir.clone();
+                        let target_for_press = target_name.clone();
+                        let build_for_press = build.dir.clone();
+                        let executable = matches!(target.kind, ide_cmake::CmakeTargetKind::Executable);
+                        let row =
+                            panel_row(pal, 3, false, icons::CMAKE, target_name.clone(), Some(kind.to_owned()), false)
+                                .test_id(&format!("cmake-target-{target_name}"))
+                                .bg(move || {
+                                    let selected = state.cmake_selection.get().is_some_and(|selection| {
+                                        selection.target == target_for_bg && selection.build_dir == build_for_bg
+                                    });
+                                    if selected { pal.tree_selected } else { transparent_black().into() }
+                                })
+                                .on_press(move || {
+                                    state.select_cmake_target(
+                                        build_for_press.clone(),
+                                        target_for_press.clone(),
+                                        executable,
+                                    )
+                                });
+                        rows.push(row);
                     }
                     if let Some(db) = &build.compile_commands {
                         rows.push(panel_row(
@@ -278,51 +298,249 @@ fn notifications_body(state: State, pal: Palette) -> impl IntoElement {
 fn agents_body(state: State, pal: Palette) -> impl IntoElement {
     view()
         .flex_col()
+        .flex_1()
         .w_full()
+        .min_h(px(0.0))
         .p(px(10.0))
-        .gap(px(8.0))
+        .gap(px(6.0))
         .child(text_ui("AI Assistant", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
         .child(text_muted(
-            "Ask about the workspace, generate a patch, or explain the selection. This native build keeps the action surface local: no script runtime is embedded.",
-            12.0,
+            "A local assistant surface: it can drive Build, explain the open file and open Find in Files. No model backend is embedded in this native build.",
+            11.0,
             pal,
         ))
+        .child(scroll().flex_1().child(dynamic(move || {
+            let messages = state.ai_messages.get();
+            if messages.is_empty() {
+                return view()
+                    .p(px(6.0))
+                    .child(text_muted("Ask about the open file or say “build”.", 11.0, pal))
+                    .into_element();
+            }
+            view()
+                .flex_col()
+                .gap(px(6.0))
+                .children(messages.into_iter().map(move |(role, text)| {
+                    view()
+                        .flex_col()
+                        .gap(px(2.0))
+                        .p(px(6.0))
+                        .rounded(px(5.0))
+                        .bg(if role == "You" { pal.bg_elev } else { pal.bg_island })
+                        .child(text_muted(role, 9.0, pal))
+                        .child(text_ui(text, 11.0, pal.fg))
+                }))
+                .into_element()
+        })))
         .child(
             view()
-                .rounded(px(8.0))
-                .border(px(1.0))
-                .border_color(pal.border_strong)
-                .bg(pal.bg_elev)
-                .p(px(8.0))
-                .gap(px(6.0))
-                .child(text_muted("Try:", 11.0, pal))
-                .child(chip(state, pal, "Explain main.cpp"))
-                .child(chip(state, pal, "Build acme (Debug)"))
-                .child(chip(state, pal, "Find TODOs in the project")),
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .child(
+                    input()
+                        .flex_1()
+                        .h(px(26.0))
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(11.0))
+                        .placeholder("Ask the assistant")
+                        .value(move || state.ai_input.get())
+                        .on_change(move |value: &str| state.ai_input.set(value.to_owned()))
+                        .on_submit(move |_: &str| ai_send(state)),
+                )
+                .child(debug_text_button(pal, "Send", move || ai_send(state))),
         )
 }
 
-fn chip(state: State, pal: Palette, label: &'static str) -> View {
+fn ai_send(state: State) {
+    let question = state.ai_input.get().trim().to_owned();
+    if question.is_empty() {
+        return;
+    }
+    state.ai_input.set(String::new());
+    state.ai_messages.update(|messages| messages.push(("You".to_owned(), question.clone())));
+    let lower = question.to_lowercase();
+    let reply = if lower.contains("build") {
+        state.build_active_configuration();
+        "Started a build of the selected CMake target; output streams into the Terminal dock.".to_owned()
+    } else if lower.contains("find") {
+        state.left_tool.set(crate::model::LeftTool::Search);
+        state.show_left.set(true);
+        "Opened Find in Files. Type a pattern to search the project.".to_owned()
+    } else if lower.contains("explain") {
+        match state.active_tab() {
+            Some(tab) => format!(
+                "{} has {} lines. The editor, diagnostics and completion are driven by native NSH views; no JavaScript runtime is involved.",
+                tab.title,
+                tab.text.lines().count()
+            ),
+            None => "Open a file first, then ask me to explain it.".to_owned(),
+        }
+    } else {
+        "This native build has no model backend connected. I can build the selected target, explain the open file, or open Find in Files.".to_owned()
+    };
+    state.ai_messages.update(|messages| messages.push(("Assistant".to_owned(), reply)));
+}
+
+fn github_body(state: State, pal: Palette) -> impl IntoElement {
+    effect(move || state.refresh_github());
     view()
-        .px(px(8.0))
-        .py(px(5.0))
-        .rounded(px(5.0))
-        .bg(pal.bg_island)
-        .border(px(1.0))
-        .border_color(pal.border)
-        .hover(move |s| s.bg(pal.toolbar_hover))
-        .on_press(move || state.status.set(format!("AI: {label}")))
-        .child(text_ui(label, 12.0, pal.fg_secondary))
+        .flex_col()
+        .w_full()
+        .p(px(10.0))
+        .gap(px(4.0))
+        .child(text_ui("GitHub", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
+        .child(dynamic(move || {
+            let status = state.github_status.get();
+            if status.is_empty() {
+                return view().into_element();
+            }
+            text_muted(status, 11.0, pal).into_element()
+        }))
+        .child(scroll().flex_1().child(dynamic(move || {
+            let prs = state.github_prs.get();
+            if prs.is_empty() {
+                return view()
+                    .p(px(6.0))
+                    .child(text_muted("No open pull requests (or not signed in to gh)", 11.0, pal))
+                    .into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .gap(px(2.0))
+                .children(prs.into_iter().map(move |pr| {
+                    let url = pr.url.clone();
+                    view()
+                        .w_full()
+                        .flex_col()
+                        .gap(px(1.0))
+                        .p(px(6.0))
+                        .rounded(px(5.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .on_press(move || {
+                            let url = url.clone();
+                            spawn(async move {
+                                let _ = open_url(url).await;
+                            });
+                        })
+                        .child(text_ui(format!("#{} {}", pr.number, pr.title), 11.0, pal.fg).truncate())
+                        .child(text_muted(format!("{} · {}", pr.author, pr.branch), 10.0, pal))
+                }))
+                .into_element()
+        })))
+}
+
+fn ssh_body(state: State, pal: Palette) -> impl IntoElement {
+    let hosts = state.ssh_hosts.get();
+    view()
+        .flex_col()
+        .w_full()
+        .p(px(10.0))
+        .gap(px(4.0))
+        .child(text_ui("SSH", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
+        .child(text_muted("Hosts from ~/.ssh/config", 11.0, pal))
+        .child(scroll().flex_1().children(if hosts.is_empty() {
+            vec![view().p(px(6.0)).child(text_muted("No hosts configured", 11.0, pal)).into_element()]
+        } else {
+            hosts
+                .into_iter()
+                .map(move |host| {
+                    let target = host.clone();
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .on_press(move || {
+                            state.bottom_tool.set(Some(BottomTool::Terminal));
+                            state.show_bottom.set(true);
+                            crate::terminal::ensure_started(state);
+                            let host = target.clone();
+                            set_timeout(std::time::Duration::from_millis(250), move || {
+                                crate::terminal::send(state, &format!("ssh {host}\\n"));
+                            });
+                        })
+                        .child(icon(icons::TERMINAL, 13.0, pal.fg_muted))
+                        .child(text_ui(host, 12.0, pal.fg))
+                        .into_element()
+                })
+                .collect()
+        }))
+}
+
+fn notebook_body(state: State, pal: Palette) -> impl IntoElement {
+    let mut notebooks: Vec<std::path::PathBuf> =
+        state.files().into_iter().filter(|path| path.extension().is_some_and(|ext| ext == "ipynb")).collect();
+    notebooks.sort();
+    view()
+        .flex_col()
+        .w_full()
+        .p(px(10.0))
+        .gap(px(4.0))
+        .child(text_ui("Notebooks", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
+        .child(scroll().flex_1().children(if notebooks.is_empty() {
+            vec![view().p(px(6.0)).child(text_muted("No .ipynb files in this project", 11.0, pal)).into_element()]
+        } else {
+            notebooks
+                .into_iter()
+                .map(move |path| {
+                    let open = path.clone();
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .on_press(move || state.open_path(open.clone()))
+                        .child(icon(icons::BOOKMARKS, 13.0, pal.fg_muted))
+                        .child(text_ui(name, 12.0, pal.fg))
+                        .into_element()
+                })
+                .collect()
+        }))
 }
 
 fn database_body(state: State, pal: Palette) -> impl IntoElement {
+    let databases: Vec<std::path::PathBuf> = state
+        .files()
+        .into_iter()
+        .filter(|path| path.extension().is_some_and(|ext| ext == "db" || ext == "sqlite" || ext == "sqlite3"))
+        .collect();
     view()
         .flex_col()
         .w_full()
         .p(px(10.0))
         .gap(px(8.0))
         .child(text_ui("Database", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-        .child(text_muted("No data sources are attached to this workspace.", 12.0, pal))
+        .child(text_muted(
+            if databases.is_empty() {
+                "No SQLite databases in this workspace."
+            } else {
+                "SQLite databases in this workspace:"
+            },
+            12.0,
+            pal,
+        ))
+        .child(scroll().flex_1().children(databases.into_iter().map(move |path| {
+            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+            view()
+                .h(px(24.0))
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(6.0))
+                .hover(move |s| s.bg(pal.tree_hover))
+                .child(icon(icons::DATABASE, 13.0, pal.fg_muted))
+                .child(text_ui(name, 12.0, pal.fg))
+        })))
         .child(
             view()
                 .h(px(28.0))
@@ -357,6 +575,7 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
             _ => bottom_tabs(state, pal).into_element(),
         }))
         .child(view().flex_1().min_h(px(0.0)).w_full().child(dynamic(move || match state.bottom_tool.get() {
+            Some(BottomTool::Hierarchy) => hierarchy_body(state, pal).into_element(),
             Some(BottomTool::Usages) => usages_body(state, pal).into_element(),
             Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
             Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
@@ -580,6 +799,43 @@ fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool,
             state.show_bottom.set(true);
         })
         .child(text_ui(label, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
+}
+
+fn hierarchy_body(state: State, pal: Palette) -> impl IntoElement {
+    scroll().flex_1().w_full().min_h(px(0.0)).child(dynamic(move || {
+        let rows = state.hierarchy.get();
+        if rows.is_empty() {
+            return view()
+                .p(px(10.0))
+                .child(text_muted("No type hierarchy at this position", 12.0, pal))
+                .into_element();
+        }
+        view()
+            .flex_col()
+            .w_full()
+            .py(px(4.0))
+            .children(rows.into_iter().enumerate().map(move |(index, row)| {
+                let name = row.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                view()
+                    .h(px(24.0))
+                    .flex_none()
+                    .mx(px(4.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .px(px(6.0))
+                    .rounded(px(4.0))
+                    .hover(move |s| s.bg(pal.tree_hover))
+                    .on_press(move || crate::lsp::open_hierarchy(state, index))
+                    .child(text_ui(row.relation, 9.0, pal.fg_faint).w(px(58.0)))
+                    .child(icon(icons::STRUCTURE, 13.0, pal.fg_muted))
+                    .child(text_ui(row.name, 12.0, pal.fg))
+                    .child(text_muted(row.detail, 10.0, pal).truncate())
+                    .child(view().flex_1())
+                    .child(text_muted(format!("{name}:{}", row.line + 1), 10.0, pal))
+            }))
+            .into_element()
+    }))
 }
 
 fn usages_body(state: State, pal: Palette) -> impl IntoElement {

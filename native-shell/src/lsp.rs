@@ -14,6 +14,7 @@ use ide_core::{
 };
 use ide_language::LanguageRegistry;
 use ide_lsp::LspManager;
+use ide_lsp::types::HierarchyDirection;
 use ide_text::AppliedChange;
 use nsh_base::editor::{
     Editor, EditorApi, EditorCompletionItem, EditorCompletionKind, EditorCompletionRequest, EditorDiagnostic,
@@ -395,6 +396,99 @@ fn apply_workspace_edit(state: State, edit: &WorkspaceEdit) -> usize {
     count
 }
 
+/// Code actions at the caret (Alt+Enter): quick fixes and refactors.
+pub fn code_actions_at_caret(state: State) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let (line, col) = state.cursor.get();
+    let pos = Pos::new(line.saturating_sub(1), col.saturating_sub(1));
+    let manager = session.manager;
+    spawn(async move {
+        match manager.code_actions(DOC, Range::point(pos), Vec::new()).await {
+            Ok(actions) if actions.is_empty() => {
+                state.status.set("No code actions here".to_owned());
+            }
+            Ok(actions) => {
+                state.code_action_titles.set(actions.iter().map(|action| action.title.clone()).collect());
+                state.code_action_store.replace(actions);
+                state.code_action_popup.set(true);
+            }
+            Err(error) => state.status.set(format!("Code actions failed: {error}")),
+        }
+    });
+}
+
+pub fn apply_code_action(state: State, index: usize) {
+    state.code_action_popup.set(false);
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let Some(action) = state.code_action_store.with(|actions| actions.get(index).cloned()) else {
+        return;
+    };
+    let manager = session.manager;
+    spawn(async move {
+        let action = match manager.resolve_code_action(DOC, action).await {
+            Ok(action) => action,
+            Err(error) => {
+                state.status.set(format!("Code action failed: {error}"));
+                return;
+            }
+        };
+        if let Some(edit) = &action.edit {
+            let count = apply_workspace_edit(state, edit);
+            state.reload_tree();
+            if let Some(tab) = state.active_tab() {
+                if let Some(api) = state.editor.api::<EditorApi>() {
+                    api.set_value(tab.text.clone());
+                }
+                change(state, &tab.text);
+            }
+            state.status.set(format!("Applied {} ({count} edit(s))", action.title));
+        }
+        if let Some(command) = action.command {
+            if let Err(error) = manager.execute_command(DOC, command).await {
+                state.status.set(format!("Code action command failed: {error}"));
+            }
+        }
+    });
+}
+
+/// Type hierarchy (supertypes and subtypes) of the symbol at the caret.
+pub fn type_hierarchy_at_caret(state: State) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let (line, col) = state.cursor.get();
+    let pos = Pos::new(line.saturating_sub(1), col.saturating_sub(1));
+    let manager = session.manager;
+    state.status.set("Loading type hierarchy…".to_owned());
+    spawn(async move {
+        let mut rows = Vec::new();
+        for (direction, relation) in
+            [(HierarchyDirection::Incoming, "Supertype"), (HierarchyDirection::Outgoing, "Subtype")]
+        {
+            let items = manager.type_hierarchy(DOC, pos, direction).await.unwrap_or_default();
+            for item in items {
+                rows.push(crate::model::HierarchyRow {
+                    name: item.name,
+                    detail: item.detail.unwrap_or_default(),
+                    path: item.path.into_path_buf(),
+                    line: item.selection_range.start.line,
+                    col: item.selection_range.start.col,
+                    relation,
+                });
+            }
+        }
+        let count = rows.len();
+        state.hierarchy.set(rows);
+        state.show_bottom.set(true);
+        state.bottom_tool.set(Some(crate::model::BottomTool::Hierarchy));
+        state.status.set(format!("{count} related types"));
+    });
+}
+
 /// Find Usages (Alt+F7): clangd's references for the symbol at the caret.
 pub fn find_usages(state: State) {
     let Some(session) = state.lsp.get() else {
@@ -426,6 +520,24 @@ pub fn find_usages(state: State) {
             Err(error) => {
                 state.status.set(format!("Find Usages failed: {error}"));
             }
+        }
+    });
+}
+
+/// Opens hierarchy row `index` at its declaration.
+pub fn open_hierarchy(state: State, index: usize) {
+    let rows = state.hierarchy.get();
+    let Some(row) = rows.get(index) else {
+        return;
+    };
+    let path = row.path.clone();
+    let line = row.line;
+    let col = row.col;
+    state.open_path(path);
+    set_timeout(Duration::from_millis(120), move || {
+        if let Some(api) = state.editor.api::<EditorApi>() {
+            api.set_selections(vec![EditorSelection::caret(EditorPosition::new(line, col))]);
+            api.scroll_to_line(line);
         }
     });
 }

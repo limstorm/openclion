@@ -43,9 +43,9 @@ backend uses.
 | ------------------ | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | CMake model        | `ide-cmake` (`load`, File API reply, presets)  | CMake header Reload/Build icons, bottom CMake dock with the target tree, and builds/`compile_commands.json`                                                                                      |
 | Configure          | `cmake -S . -B build` + `ide_cmake::request`   | click the configuration widget; output streams into the Terminal panel                                                                                                                           |
-| Build / Run        | `cmake --build … --target …` + the artifact    | title-bar green Run; output and the program's stdout land in the Terminal                                                                                                                        |
+| Build / Run        | `cmake --build … --target …` + the artifact    | header/bottom Build builds the selected CMake target without running; Run builds then runs it; the target tree is clickable                                                                      |
 | Run configurations | `ide-cmake` executables                        | the title-bar widget opens a chooser of CMake executable targets; the selected target drives Run, Debug and the Run tool window                                                                  |
-| Git / Commit       | `ide-vcs` (`status`, `stage`, `commit`, `log`) | full-width bottom Git dock (Log/Console/Worktrees, Ctrl+K or Alt+9) and a left Commit tool window with message/Commit; header commit/pull/refresh icons                                          |
+| Git / Commit       | `ide-vcs` (`status`, `stage`, `commit`, `log`) | full-width Git dock (Log/Console/Worktrees), left Commit window with per-file checkboxes, Amend, pre-commit `git diff --check`, message and Commit                                               |
 | Find in Files      | `ide-search` (ripgrep engine)                  | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                                                                                    |
 | clangd diagnostics | `ide-lsp` + `ide-language`                     | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                                                                                 |
 | clangd completion  | `ide-lsp` completion                           | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                                                                            |
@@ -54,9 +54,16 @@ backend uses.
 | Format document    | `ide-lsp` `textDocument/formatting`            | Ctrl+Alt+L formats the active document in memory through clangd, keeping the buffer dirty until saved                                                                                            |
 | Find Usages        | `ide-lsp` `textDocument/references`            | Alt+F7 lists project references in a Usages tool window; a click opens the file and places the caret                                                                                             |
 | Rename symbol      | `ide-lsp` `textDocument/rename`                | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                                                                 |
+| Code actions       | `ide-lsp` `textDocument/codeAction`            | Alt+Enter lists quick fixes/refactors; the chosen action applies its WorkspaceEdit or runs its command                                                                                           |
+| Type hierarchy     | `ide-lsp` `prepareTypeHierarchy`               | Ctrl+Alt+H lists supertypes/subtypes in a Hierarchy dock; clicking opens the declaration                                                                                                         |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell with ANSI colours and resize; padded 13pt JetBrains Mono surface, visible block cursor and automatic focus; build/run output streams in                                         |
 | Debugging          | `ide-dap` + lldb-dap                           | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
 | Services (Docker)  | `ide-docker`                                   | Services tool window shows daemon status, containers and image count; Start/Stop acts on a container and refreshes the snapshot                                                                  |
+| GitHub             | `gh` CLI                                       | right-rail GitHub window lists open PRs (number/title/author/branch); clicking opens the PR in the browser                                                                                       |
+| SSH                | `~/.ssh/config`                                | right-rail SSH window lists concrete hosts; clicking opens the Terminal and runs `ssh <host>`                                                                                                    |
+| Notebooks          | `std::fs`                                      | right-rail window lists `.ipynb` files in the project and opens one in the editor                                                                                                                |
+| Database           | `std::fs`                                      | right-rail window lists SQLite databases in the workspace                                                                                                                                        |
+| AI Assistant       | native views                                   | local chat surface that can start a build, explain the open file or open Find in Files (no model backend embedded)                                                                               |
 | File operations    | `std::fs` + native dialogs                     | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                                             |
 | Project tree       | `std::fs` walk + nsh views                     | root on top, 12pt indentation per level, clicking the root collapses/expands the whole project                                                                                                   |
 | Title bar          | nsh window controls + native views             | ☰ application menu at the left, custom minimize/maximize/close at the right, project/run widgets in between                                                                                     |
@@ -160,11 +167,12 @@ half-coloured editor.
 
 ## Screenshots
 
-|                                                   |                                                 |
-| ------------------------------------------------- | ----------------------------------------------- |
-| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
-| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
-| ![Settings](docs/native-shell-settings.png)       | ![Keymap](docs/native-shell-keymap.png)         |
-| ![Plugins](docs/native-shell-plugins.png)         | ![Terminal](docs/native-shell-pty.png)          |
-| ![Debugging](docs/native-shell-debug.png)         | ![Find bar](docs/native-shell-find.png)         |
-| ![Git dock](docs/native-shell-git.png)            | ![App menu](docs/native-shell-menu.png)         |
+|                                                       |                                                 |
+| ----------------------------------------------------- | ----------------------------------------------- |
+| ![Workbench](docs/native-shell-light.png)             | ![Completion](docs/native-shell-completion.png) |
+| ![Build and run](docs/native-shell-build-run.png)     | ![Commit](docs/native-shell-commit.png)         |
+| ![Settings](docs/native-shell-settings.png)           | ![Keymap](docs/native-shell-keymap.png)         |
+| ![Plugins](docs/native-shell-plugins.png)             | ![Terminal](docs/native-shell-pty.png)          |
+| ![Debugging](docs/native-shell-debug.png)             | ![Find bar](docs/native-shell-find.png)         |
+| ![Commit checks](docs/native-shell-commit-checks.png) | ![Plugins](docs/native-shell-plugins.png)       |
+| ![Git dock](docs/native-shell-git.png)                | ![App menu](docs/native-shell-menu.png)         |

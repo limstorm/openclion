@@ -21,7 +21,6 @@ icons! {
     PROBLEMS = "problems.svg",
     NOTIFICATIONS = "notifications.svg",
     DATABASE = "database.svg",
-    AGENTS = "agents.svg",
     CMAKE = "cmake.svg",
     CHEVRON_DOWN = "chevron-down.svg",
     CHEVRON_RIGHT = "chevron-right.svg",

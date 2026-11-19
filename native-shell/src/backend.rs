@@ -17,6 +17,21 @@ use nsh_core::prelude::*;
 use crate::model::{SearchHit, State};
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GithubPr {
+    pub number: u64,
+    pub title: String,
+    pub author: String,
+    pub branch: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CmakeSelection {
+    pub build_dir: String,
+    pub target: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GitLogRow {
     pub short_id: String,
     pub summary: String,
@@ -314,29 +329,62 @@ impl State {
     /// Stages every working-tree change and commits it with the typed message.
     pub fn commit_all(&self) {
         let message = self.commit_message.get().trim().to_owned();
-        if message.is_empty() {
+        let amend = self.commit_amend.get();
+        if message.is_empty() && !amend {
             self.status.set("Commit message is empty".to_owned());
             return;
         }
         let root = self.root.get();
         let state = *self;
+        let included: Vec<PathBuf> = self
+            .vcs
+            .get()
+            .into_iter()
+            .filter(|row| self.commit_checked.with(|checked| checked.contains(&row.path)))
+            .map(|row| row.path)
+            .collect();
+        if included.is_empty() {
+            self.status.set("Select at least one file to commit".to_owned());
+            return;
+        }
+        let run_checks = self.commit_checks.get();
         self.vcs_loading.set(true);
         spawn(async move {
             let result = blocking(move || -> Result<String, String> {
+                if run_checks {
+                    let check = Command::new("git")
+                        .args(["diff", "--check", "HEAD"])
+                        .current_dir(&root)
+                        .output()
+                        .map_err(|error| error.to_string())?;
+                    if !check.status.success() {
+                        let message = String::from_utf8_lossy(&check.stdout);
+                        let message = message.trim();
+                        return Err(if message.is_empty() {
+                            "pre-commit checks failed".to_owned()
+                        } else {
+                            format!("pre-commit checks: {message}")
+                        });
+                    }
+                }
                 let Ok(Some(repo)) = Repo::discover(&root) else {
                     return Err("No git repository".to_owned());
                 };
-                let paths: Vec<PathBuf> = repo
+                let live: Vec<PathBuf> = repo
                     .status()
                     .map_err(|error| error.message)?
                     .into_iter()
-                    .filter(|status| status.unstaged.is_some())
                     .map(|status| status.path.into_path_buf())
                     .collect();
-                if !paths.is_empty() {
-                    repo.stage(&paths).map_err(|error| error.message)?;
+                let selected: Vec<PathBuf> = live.iter().filter(|path| included.contains(path)).cloned().collect();
+                let excluded: Vec<PathBuf> = live.iter().filter(|path| !included.contains(path)).cloned().collect();
+                if !excluded.is_empty() {
+                    let _ = repo.unstage(&excluded);
                 }
-                let id = repo.commit(&message, false, false).map_err(|error| error.message)?;
+                if !selected.is_empty() {
+                    repo.stage(&selected).map_err(|error| error.to_string())?;
+                }
+                let id = repo.commit(&message, amend, false).map_err(|error| error.to_string())?;
                 Ok(id.chars().take(8).collect())
             })
             .await;
@@ -352,6 +400,52 @@ impl State {
                     state.refresh_vcs();
                 }
                 Err(error) => state.status.set(format!("Commit failed: {error}")),
+            }
+        });
+    }
+
+    /// Lists open pull requests with the GitHub CLI.
+    pub fn refresh_github(&self) {
+        let state = *self;
+        let root = self.root.get();
+        self.github_status.set("Loading pull requests…".to_owned());
+        spawn(async move {
+            let result = blocking(move || {
+                let output = Command::new("gh")
+                    .args(["pr", "list", "--limit", "20", "--json", "number,title,author,headRefName,url"])
+                    .current_dir(&root)
+                    .output()
+                    .map_err(|error| format!("gh not available: {error}"))?;
+                if !output.status.success() {
+                    return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
+                }
+                let value: serde_json::Value =
+                    serde_json::from_slice(&output.stdout).map_err(|error| format!("gh output: {error}"))?;
+                let prs: Vec<GithubPr> = value
+                    .as_array()
+                    .map(|items| {
+                        items
+                            .iter()
+                            .map(|item| GithubPr {
+                                number: item["number"].as_u64().unwrap_or(0),
+                                title: item["title"].as_str().unwrap_or_default().to_owned(),
+                                author: item["author"]["login"].as_str().unwrap_or_default().to_owned(),
+                                branch: item["headRefName"].as_str().unwrap_or_default().to_owned(),
+                                url: item["url"].as_str().unwrap_or_default().to_owned(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(prs)
+            })
+            .await;
+            match result {
+                Ok(Ok(prs)) => {
+                    state.github_status.set(format!("{} open pull requests", prs.len()));
+                    state.github_prs.set(prs);
+                }
+                Ok(Err(error)) => state.github_status.set(error),
+                Err(error) => state.github_status.set(format!("GitHub task failed: {error}")),
             }
         });
     }
@@ -414,6 +508,15 @@ impl State {
                 branch: None,
                 operation: None,
             });
+            state.commit_checked.with(|checked| {
+                let live: std::collections::HashSet<PathBuf> =
+                    snapshot.rows.iter().map(|row| row.path.clone()).collect();
+                checked.retain(|path| live.contains(path));
+                for row in &snapshot.rows {
+                    checked.insert(row.path.clone());
+                }
+            });
+            state.commit_rev.update(|rev| *rev += 1);
             state.vcs_branch.set(snapshot.branch);
             state.vcs_loading.set(false);
             state.vcs.set(snapshot.rows);
@@ -549,13 +652,18 @@ impl State {
             self.status.set("No CMake model — reload the CMake project".to_owned());
             return;
         };
-        let Some((build, target)) = select_executable(&model, self.run_target.get().as_deref()) else {
-            self.status.set("No executable target in the CMake model".to_owned());
-            return;
+        let selection = self.cmake_selection.get();
+        let (build_dir, target_name, display) = if let Some(selection) = &selection {
+            let dir = root.join(&selection.build_dir);
+            let display = format!("{} ({})", selection.target, selection.build_dir);
+            (dir, selection.target.clone(), display)
+        } else {
+            let Some((build, target)) = select_executable(&model, self.run_target.get().as_deref()) else {
+                self.status.set("No executable target in the CMake model".to_owned());
+                return;
+            };
+            (root.join(&build.dir), target.name.clone(), format!("{} ({})", target.name, build.configuration()))
         };
-        let build_dir = root.join(&build.dir);
-        let target_name = target.name.clone();
-        let display = format!("{target_name} ({})", build.configuration());
         self.status.set(format!("Building {display}…"));
         crate::terminal::ensure_started(*self);
         crate::terminal::write_output(
@@ -599,6 +707,24 @@ impl State {
             state.status.set(if ok { "Build succeeded".to_owned() } else { "Build failed".to_owned() });
             state.refresh_cmake();
         });
+    }
+
+    /// Selects a CMake target; executables also become the Run/Debug target.
+    pub fn select_cmake_target(&self, build_dir: String, target: String, executable: bool) {
+        self.cmake_selection.set(Some(CmakeSelection { build_dir, target: target.clone() }));
+        if executable {
+            self.run_target.set(Some(target.clone()));
+        }
+        self.status.set(format!("Selected CMake target {target}"));
+    }
+
+    pub fn toggle_commit_file(&self, path: PathBuf) {
+        self.commit_checked.with(|checked| {
+            if !checked.remove(&path) {
+                checked.insert(path);
+            }
+        });
+        self.commit_rev.update(|rev| *rev += 1);
     }
 
     /// Pulls the current branch into the working tree.
@@ -702,4 +828,27 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
+}
+
+/// Hosts from `~/.ssh/config` (concrete names only).
+pub fn ssh_hosts() -> Vec<String> {
+    let Some(home) = std::env::var_os("HOME") else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(PathBuf::from(home).join(".ssh/config")) else {
+        return Vec::new();
+    };
+    let mut hosts = Vec::new();
+    for line in text.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("Host ") else {
+            continue;
+        };
+        for host in rest.split_whitespace() {
+            if !host.contains('*') && !host.contains('?') && !hosts.iter().any(|h| h == host) {
+                hosts.push(host.to_owned());
+            }
+        }
+    }
+    hosts
 }

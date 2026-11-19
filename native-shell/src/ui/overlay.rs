@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || code_action_popup(state, pal).into_element()))
         .child(dynamic(move || app_menu(state, pal).into_element()))
         .child(dynamic(move || tree_menu(state, pal).into_element()))
         .child(dynamic(move || run_chooser(state, pal).into_element()))
@@ -401,6 +402,8 @@ fn keymap_page(state: State, pal: Palette) -> impl IntoElement {
         ("Ctrl+Shift+F", "Find in Files"),
         ("Ctrl+Alt+L", "Format Document"),
         ("Alt+F7", "Find Usages"),
+        ("Alt+Enter", "Code Actions"),
+        ("Ctrl+Alt+H", "Type Hierarchy"),
         ("F12", "Go to Definition"),
         ("Shift+F6", "Rename Symbol"),
         ("F9", "Toggle Breakpoint"),
@@ -698,6 +701,64 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(control)
 }
 
+fn code_action_popup(state: State, pal: Palette) -> impl IntoElement {
+    if !state.code_action_popup.get() {
+        return view().into_element();
+    }
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .child(view().absolute().inset(px(0.0)).on_press(move || state.code_action_popup.set(false)))
+        .child(
+            view().absolute().top(px(96.0)).left(px(0.0)).right(px(0.0)).items_center().child(
+                view()
+                    .w(px(480.0))
+                    .max_h(px(320.0))
+                    .flex_col()
+                    .overflow_hidden()
+                    .rounded(px(9.0))
+                    .border(px(1.0))
+                    .border_color(pal.border_strong)
+                    .bg(pal.bg_island)
+                    .child(
+                        view()
+                            .h(px(34.0))
+                            .flex_none()
+                            .flex_row()
+                            .items_center()
+                            .px(px(10.0))
+                            .border_b_1()
+                            .border_color(pal.border)
+                            .child(text_strong("Code Actions", 12.0, pal)),
+                    )
+                    .child(scroll().flex_1().child(dynamic(move || {
+                        let titles = state.code_action_titles.get();
+                        view()
+                            .flex_col()
+                            .w_full()
+                            .py(px(4.0))
+                            .children(titles.into_iter().enumerate().map(move |(index, title)| {
+                                view()
+                                    .h(px(26.0))
+                                    .flex_none()
+                                    .mx(px(4.0))
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(6.0))
+                                    .px(px(8.0))
+                                    .rounded(px(5.0))
+                                    .hover(move |s| s.bg(pal.toolbar_hover))
+                                    .on_press(move || crate::lsp::apply_code_action(state, index))
+                                    .child(icon(icons::SETTINGS, 13.0, pal.fg_muted))
+                                    .child(text_ui(title, 12.0, pal.fg))
+                            }))
+                            .into_element()
+                    }))),
+            ),
+        )
+        .into_element()
+}
+
 fn app_menu(state: State, pal: Palette) -> impl IntoElement {
     if !state.app_menu.get() {
         return view().into_element();
@@ -867,6 +928,7 @@ fn run_chooser(state: State, pal: Palette) -> impl IntoElement {
                                     .unwrap_or_else(|| "not built".to_owned());
                                 rows.push(
                                     view()
+                                        .test_id(&format!("run-target-{name}"))
                                         .h(px(40.0))
                                         .flex_none()
                                         .mx(px(4.0))
