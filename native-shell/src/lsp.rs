@@ -289,6 +289,59 @@ pub fn definition(state: State, position: EditorPosition, editor: ComponentRef<E
     });
 }
 
+/// Find Usages (Alt+F7): clangd's references for the symbol at the caret.
+pub fn find_usages(state: State) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let (line, col) = state.cursor.get();
+    let pos = Pos::new(line.saturating_sub(1), col.saturating_sub(1));
+    let manager = session.manager;
+    state.status.set("Finding usages…".to_owned());
+    spawn(async move {
+        match manager.references(DOC, pos, false, true, CancellationToken::new()).await {
+            Ok(references) => {
+                let mut rows = Vec::new();
+                for location in references.locations {
+                    let path = location.path.into_path_buf();
+                    let line = location.range.start.line;
+                    let preview = std::fs::read_to_string(&path)
+                        .ok()
+                        .and_then(|text| text.lines().nth(line as usize).map(|text| text.trim().to_owned()))
+                        .unwrap_or_default();
+                    rows.push(crate::model::UsageRow { path, line, col: location.range.start.col, preview });
+                }
+                let count = rows.len();
+                state.usages.set(rows);
+                state.show_bottom.set(true);
+                state.bottom_tool.set(Some(crate::model::BottomTool::Usages));
+                state.status.set(format!("{count} usages"));
+            }
+            Err(error) => {
+                state.status.set(format!("Find Usages failed: {error}"));
+            }
+        }
+    });
+}
+
+/// Opens usage `index`: the file, at its line and column.
+pub fn open_usage(state: State, index: usize) {
+    let rows = state.usages.get();
+    let Some(row) = rows.get(index) else {
+        return;
+    };
+    let path = row.path.clone();
+    let line = row.line;
+    let col = row.col;
+    state.open_path(path);
+    set_timeout(Duration::from_millis(120), move || {
+        if let Some(api) = state.editor.api::<EditorApi>() {
+            api.set_selections(vec![EditorSelection::caret(EditorPosition::new(line, col))]);
+            api.scroll_to_line(line);
+        }
+    });
+}
+
 /// clangd's formatting of the active document, applied in memory.
 pub fn format(state: State) {
     let Some(session) = state.lsp.get() else {

@@ -335,6 +335,7 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
         .bg(pal.bg_island)
         .child(bottom_tabs(state, pal))
         .child(view().flex_1().min_h(px(0.0)).w_full().child(dynamic(move || match state.bottom_tool.get() {
+            Some(BottomTool::Usages) => usages_body(state, pal).into_element(),
             Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
             Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
             Some(BottomTool::Problems) => problems_body(state, pal).into_element(),
@@ -358,6 +359,10 @@ fn bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
             .child(dynamic(move || {
                 (state.debug_active.get() || !state.debug_frames.get().is_empty())
                     .then(|| bottom_tab(state, pal, "Debug", BottomTool::Debug, current).into_element())
+            }))
+            .child(dynamic(move || {
+                (!state.usages.get().is_empty())
+                    .then(|| bottom_tab(state, pal, "Usages", BottomTool::Usages, current).into_element())
             }))
             .child(bottom_tab(state, pal, "Terminal", BottomTool::Terminal, current))
             .child(bottom_tab(state, pal, "Problems", BottomTool::Problems, current))
@@ -386,6 +391,45 @@ fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool,
             state.show_bottom.set(true);
         })
         .child(text_ui(label, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
+}
+
+fn usages_body(state: State, pal: Palette) -> impl IntoElement {
+    scroll().flex_1().w_full().min_h(px(0.0)).child(dynamic(move || {
+        let rows = state.usages.get();
+        if rows.is_empty() {
+            return view()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .child(text_muted("No usages", 12.0, pal))
+                .into_element();
+        }
+        let count = rows.len();
+        view()
+            .flex_col()
+            .w_full()
+            .py(px(4.0))
+            .child(view().px(px(10.0)).pb(px(4.0)).child(text_muted(format!("{count} usages"), 11.0, pal)))
+            .children(rows.into_iter().enumerate().map(move |(index, row)| {
+                let name = row.path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                view()
+                    .h(px(24.0))
+                    .flex_none()
+                    .mx(px(4.0))
+                    .flex_row()
+                    .items_center()
+                    .gap(px(6.0))
+                    .px(px(6.0))
+                    .rounded(px(4.0))
+                    .hover(move |s| s.bg(pal.tree_hover))
+                    .on_press(move || crate::lsp::open_usage(state, index))
+                    .child(icon(icons::SEARCH, 13.0, pal.fg_muted))
+                    .child(text_ui(row.preview, 12.0, pal.fg).truncate())
+                    .child(view().flex_1())
+                    .child(text_muted(format!("{name}:{}", row.line + 1), 11.0, pal))
+            }))
+            .into_element()
+    }))
 }
 
 fn debug_body(state: State, pal: Palette) -> impl IntoElement {

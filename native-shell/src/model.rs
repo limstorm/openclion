@@ -43,6 +43,7 @@ pub enum RightTool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BottomTool {
+    Usages,
     Debug,
     Terminal,
     Problems,
@@ -79,6 +80,14 @@ pub struct Row {
     pub name: String,
     pub dir: bool,
     pub depth: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct UsageRow {
+    pub path: PathBuf,
+    pub line: u32,
+    pub col: u32,
+    pub preview: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -135,6 +144,7 @@ pub struct State {
     pub replace_query: Signal<String>,
     pub find_count: Signal<u32>,
     pub find_current: Signal<Option<u32>>,
+    pub usages: Signal<Vec<UsageRow>>,
     pub dialog: Signal<Option<FileDialog>>,
     pub dialog_input: Signal<String>,
     pub tree_menu: Signal<Option<TreeMenu>>,
@@ -238,6 +248,7 @@ impl State {
             replace_query: signal(String::new()),
             find_count: signal(0),
             find_current: signal(None),
+            usages: signal(Vec::new()),
             dialog: signal(None),
             dialog_input: signal(String::new()),
             tree_menu: signal(None),
