@@ -113,6 +113,15 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
             state.selected.set(Some(root.clone()));
             state.toggle_dir(&root);
         })
+        .on_context_menu(move |event: &ContextMenuEvent| {
+            let root = state.root.get();
+            state.tree_menu.set(Some(crate::model::TreeMenu {
+                path: root,
+                dir: true,
+                x: event.page_position.x.0,
+                y: event.page_position.y.0,
+            }));
+        })
         .child(icon(icons::CHEVRON_DOWN, 12.0, pal.fg_muted))
         .child(icon(icons::PROJECT, 16.0, pal.fg_muted))
         .child(text_strong(name, 13.0, pal))
@@ -121,6 +130,7 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
 
 fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElement {
     let path = row.path.clone();
+    let path_for_menu = row.path.clone();
     let path_for_bg = row.path.clone();
     let row_path_for_chevron = row.path.clone();
     let path_for_vcs = row.path.clone();
@@ -165,6 +175,14 @@ fn tree_row(state: State, pal: Palette, row: crate::model::Row) -> impl IntoElem
                 state.selected.set(Some(path.clone()));
             }
             state.open_path(std::path::PathBuf::from(&path));
+        })
+        .on_context_menu(move |event: &ContextMenuEvent| {
+            state.tree_menu.set(Some(crate::model::TreeMenu {
+                path: std::path::PathBuf::from(&path_for_menu),
+                dir: is_dir,
+                x: event.page_position.x.0,
+                y: event.page_position.y.0,
+            }));
         })
         .child(view().w(px(12.0)).flex_none().items_center().justify_center().child(dynamic(move || {
             if !is_dir {

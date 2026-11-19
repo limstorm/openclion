@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || tree_menu(state, pal).into_element()))
         .child(dynamic(move || file_dialog(state, pal).into_element()))
         .child(dynamic(move || toast(state, pal).into_element()))
 }
@@ -506,15 +507,109 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(control)
 }
 
+fn tree_menu(state: State, pal: Palette) -> impl IntoElement {
+    let Some(menu) = state.tree_menu.get() else {
+        return view().into_element();
+    };
+    let base = if menu.dir {
+        menu.path.clone()
+    } else {
+        menu.path.parent().map(PathBuf::from).unwrap_or_else(|| state.root.get())
+    };
+    let path = menu.path.clone();
+    let path_for_delete = menu.path.clone();
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .child(view().absolute().inset(px(0.0)).on_press(move || state.tree_menu.set(None)))
+        .child(
+            view()
+                .absolute()
+                .left(px(menu.x))
+                .top(px(menu.y))
+                .w(px(220.0))
+                .flex_col()
+                .py(px(4.0))
+                .rounded(px(8.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .child(menu_item_owned(pal, "New File…".to_owned(), {
+                    let base = base.clone();
+                    move || {
+                        state.tree_menu.set(None);
+                        state.selected.set(Some(base.to_string_lossy().to_string()));
+                        state.open_new_file();
+                    }
+                }))
+                .child(menu_item_owned(pal, "New Folder…".to_owned(), {
+                    let base = base.clone();
+                    move || {
+                        state.tree_menu.set(None);
+                        state.selected.set(Some(base.to_string_lossy().to_string()));
+                        state.open_new_folder();
+                    }
+                }))
+                .child(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border))
+                .child(menu_item_owned(pal, "Rename…".to_owned(), {
+                    let path = path.clone();
+                    move || {
+                        state.tree_menu.set(None);
+                        state.open_rename(path.clone());
+                    }
+                }))
+                .child(menu_item_owned(pal, "Delete…".to_owned(), {
+                    let path = path_for_delete;
+                    move || {
+                        state.tree_menu.set(None);
+                        state.open_delete(path.clone());
+                    }
+                }))
+                .child(view().h(px(1.0)).my(px(4.0)).mx(px(8.0)).bg(pal.border))
+                .child(menu_item_owned(pal, "Copy Path".to_owned(), {
+                    let path = path.clone();
+                    move || {
+                        state.tree_menu.set(None);
+                        let text = path.to_string_lossy().to_string();
+                        set_clipboard(text.clone());
+                        state.toast.set(Some(format!("Copied {text}")));
+                    }
+                }))
+                .child(menu_item_owned(pal, "Reveal in File Manager".to_owned(), {
+                    move || {
+                        state.tree_menu.set(None);
+                        let path = path.clone();
+                        spawn(async move {
+                            let _ = reveal_path(path).await;
+                        });
+                    }
+                })),
+        )
+        .into_element()
+}
+
 fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
     let Some(dialog) = state.dialog.get() else {
         return view().into_element();
     };
-    let (title, base, action) = match &dialog {
-        crate::model::FileDialog::NewFile { base } => ("New File", base.clone(), "Create File"),
-        crate::model::FileDialog::NewFolder { base } => ("New Folder", base.clone(), "Create Folder"),
+    let (title, hint, show_input, action, danger) = match &dialog {
+        crate::model::FileDialog::NewFile { base } => {
+            ("New File", base.to_string_lossy().to_string(), true, "Create File", false)
+        }
+        crate::model::FileDialog::NewFolder { base } => {
+            ("New Folder", base.to_string_lossy().to_string(), true, "Create Folder", false)
+        }
+        crate::model::FileDialog::Rename { path } => {
+            ("Rename", path.to_string_lossy().to_string(), true, "Rename", false)
+        }
+        crate::model::FileDialog::Delete { path, dir } => (
+            if *dir { "Delete Folder" } else { "Delete File" },
+            path.to_string_lossy().to_string(),
+            false,
+            "Delete",
+            true,
+        ),
     };
-    let base = base.to_string_lossy().to_string();
     view()
         .absolute()
         .inset(px(0.0))
@@ -532,8 +627,11 @@ fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
                 .border_color(pal.border_strong)
                 .bg(pal.bg_island)
                 .child(text_strong(title, 13.0, pal))
-                .child(text_muted(base, 11.0, pal).truncate())
-                .child(
+                .child(text_muted(hint, 11.0, pal).truncate())
+                .child(dynamic(move || {
+                    if !show_input {
+                        return view().child(text_muted("This cannot be undone.", 12.0, pal)).into_element();
+                    }
                     input()
                         .h(px(30.0))
                         .px(px(8.0))
@@ -547,8 +645,9 @@ fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
                         .auto_focus(true)
                         .value(move || state.dialog_input.get())
                         .on_change(move |value: &str| state.dialog_input.set(value.to_owned()))
-                        .on_submit(move |_: &str| state.confirm_dialog()),
-                )
+                        .on_submit(move |_: &str| state.confirm_dialog())
+                        .into_element()
+                }))
                 .child(
                     view()
                         .flex_row()
@@ -572,7 +671,7 @@ fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
                                 .px(px(14.0))
                                 .items_center()
                                 .rounded(px(5.0))
-                                .bg(pal.accent)
+                                .bg(if danger { pal.danger } else { pal.accent })
                                 .on_press(move || state.confirm_dialog())
                                 .child(text_ui(action, 12.0, white().into())),
                         ),

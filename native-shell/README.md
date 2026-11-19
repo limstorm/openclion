@@ -145,9 +145,9 @@ half-coloured editor.
 
 ## Screenshots
 
-|                                                   |                                                 |
-| ------------------------------------------------- | ----------------------------------------------- |
-| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
-| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
-| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)          |
-| ![Debugging](docs/native-shell-debug.png)         |                                                 |
+|                                                   |                                                     |
+| ------------------------------------------------- | --------------------------------------------------- |
+| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png)     |
+| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)             |
+| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)              |
+| ![Debugging](docs/native-shell-debug.png)         | ![Context menu](docs/native-shell-context-menu.png) |

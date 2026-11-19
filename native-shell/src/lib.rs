@@ -92,6 +92,11 @@ fn install_shortcuts(state: State) {
         crate::debug::toggle_breakpoint(state, state.cursor.get().0.saturating_sub(1));
     });
     on_key("mod+alt+s", move |_| state.settings.set(true));
+    on_key("shift+F6", move |_| {
+        if let Some(selected) = state.selected.get() {
+            state.open_rename(std::path::PathBuf::from(selected));
+        }
+    });
     on_key("mod+s", move |_| state.save_active());
     on_key("mod+w", move |_| {
         let index = state.active.get();

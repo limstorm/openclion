@@ -85,6 +85,16 @@ pub struct Row {
 pub enum FileDialog {
     NewFile { base: PathBuf },
     NewFolder { base: PathBuf },
+    Rename { path: PathBuf },
+    Delete { path: PathBuf, dir: bool },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct TreeMenu {
+    pub path: PathBuf,
+    pub dir: bool,
+    pub x: f32,
+    pub y: f32,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,6 +131,7 @@ pub struct State {
     pub recent: Signal<Vec<String>>,
     pub dialog: Signal<Option<FileDialog>>,
     pub dialog_input: Signal<String>,
+    pub tree_menu: Signal<Option<TreeMenu>>,
     pub searching: Signal<bool>,
     pub cmake: Signal<Option<ide_cmake::CmakeModel>>,
     pub vcs: Signal<Vec<crate::backend::VcsRow>>,
@@ -216,6 +227,7 @@ impl State {
             recent: signal(Vec::new()),
             dialog: signal(None),
             dialog_input: signal(String::new()),
+            tree_menu: signal(None),
             searching: signal(false),
             cmake: signal(None),
             vcs: signal(Vec::new()),
@@ -297,9 +309,31 @@ impl State {
         if path.is_dir() { path } else { path.parent().map(Path::to_path_buf).unwrap_or(root) }
     }
 
-    /// Creates what the open dialog names, then refreshes the tree and opens
-    /// the new file.
+    pub fn open_rename(&self, path: PathBuf) {
+        self.dialog_input.set(file_name(&path));
+        self.dialog.set(Some(FileDialog::Rename { path }));
+    }
+
+    pub fn open_delete(&self, path: PathBuf) {
+        self.dialog.set(Some(FileDialog::Delete { dir: path.is_dir(), path }));
+    }
+
+    /// Creates, renames or deletes what the open dialog asks for, then
+    /// refreshes the tree. A new file is opened.
     pub fn confirm_dialog(&self) {
+        let Some(dialog) = self.dialog.get() else {
+            return;
+        };
+        match dialog {
+            FileDialog::NewFile { .. } | FileDialog::NewFolder { .. } => {
+                self.create_from_dialog();
+            }
+            FileDialog::Rename { path } => self.rename_from_dialog(path),
+            FileDialog::Delete { path, dir } => self.delete_path(path, dir),
+        }
+    }
+
+    fn create_from_dialog(&self) {
         let Some(dialog) = self.dialog.get() else {
             return;
         };
@@ -315,6 +349,7 @@ impl State {
         let (base, folder) = match &dialog {
             FileDialog::NewFile { base } => (base.clone(), false),
             FileDialog::NewFolder { base } => (base.clone(), true),
+            _ => return,
         };
         let path = base.join(&name);
         let result = if folder {
@@ -345,6 +380,64 @@ impl State {
             Err(error) => {
                 self.status.set(format!("Cannot create {name}: {error}"));
             }
+        }
+    }
+
+    fn rename_from_dialog(&self, path: PathBuf) {
+        let name = self.dialog_input.get().trim().to_owned();
+        if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+            self.status.set("Enter a valid name".to_owned());
+            return;
+        }
+        let Some(parent) = path.parent() else {
+            return;
+        };
+        let target = parent.join(&name);
+        if target == path {
+            self.dialog.set(None);
+            return;
+        }
+        match fs::rename(&path, &target) {
+            Ok(()) => {
+                self.dialog.set(None);
+                let mut tabs = self.tabs.get();
+                for tab in &mut tabs {
+                    if tab.path == path {
+                        tab.path = target.clone();
+                        tab.title = name.clone();
+                    } else if let Ok(rest) = tab.path.strip_prefix(&path) {
+                        tab.path = target.join(rest);
+                    }
+                }
+                self.tabs.set(tabs);
+                if self.active_path.get() == path {
+                    self.active_path.set(target.clone());
+                }
+                self.selected.set(Some(target.to_string_lossy().to_string()));
+                self.reload_tree();
+                self.status.set(format!("Renamed to {name}"));
+            }
+            Err(error) => self.status.set(format!("Cannot rename: {error}")),
+        }
+    }
+
+    fn delete_path(&self, path: PathBuf, dir: bool) {
+        self.dialog.set(None);
+        let result = if dir { fs::remove_dir_all(&path) } else { fs::remove_file(&path) };
+        match result {
+            Ok(()) => {
+                let tabs: Vec<Tab> = self.tabs.get().into_iter().filter(|tab| !tab.path.starts_with(&path)).collect();
+                let active_path = self.active_path.get();
+                if active_path.starts_with(&path) {
+                    self.active_path.set(PathBuf::new());
+                    self.editor_seed.set(String::new());
+                }
+                self.tabs.set(tabs);
+                self.selected.set(None);
+                self.reload_tree();
+                self.status.set("Deleted".to_owned());
+            }
+            Err(error) => self.status.set(format!("Cannot delete: {error}")),
         }
     }
 
