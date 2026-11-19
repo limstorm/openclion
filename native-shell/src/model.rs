@@ -98,6 +98,7 @@ pub enum FileDialog {
     RenameSymbol { line: u32, col: u32 },
     Delete { path: PathBuf, dir: bool },
     BreakpointCondition { path: PathBuf, line: u32 },
+    BreakpointLog { path: PathBuf, line: u32 },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -387,6 +388,19 @@ impl State {
         self.dialog.set(Some(FileDialog::BreakpointCondition { path, line }));
     }
 
+    pub fn open_breakpoint_log(&self, path: PathBuf, line: u32) {
+        let existing = self
+            .breakpoints
+            .with(|map| {
+                map.get(&path)
+                    .and_then(|list| list.iter().find(|bp| bp.line == line))
+                    .and_then(|bp| bp.log_message.clone())
+            })
+            .unwrap_or_default();
+        self.dialog_input.set(existing);
+        self.dialog.set(Some(FileDialog::BreakpointLog { path, line }));
+    }
+
     pub fn open_delete(&self, path: PathBuf) {
         self.dialog.set(Some(FileDialog::Delete { dir: path.is_dir(), path }));
     }
@@ -417,6 +431,11 @@ impl State {
                 let condition = self.dialog_input.get().trim().to_owned();
                 self.dialog.set(None);
                 crate::debug::set_breakpoint_condition(*self, path, line, condition);
+            }
+            FileDialog::BreakpointLog { path, line } => {
+                let message = self.dialog_input.get().trim().to_owned();
+                self.dialog.set(None);
+                crate::debug::set_breakpoint_log(*self, path, line, message);
             }
         }
     }

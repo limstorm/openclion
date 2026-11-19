@@ -331,6 +331,15 @@ pub fn toggle_breakpoint(state: State, line: u32) {
 
 /// Sets or clears the condition of the breakpoint at `line`.
 /// Opens the condition dialog for the breakpoint on the caret's line.
+pub fn edit_log_at_caret(state: State) {
+    let path = state.active_path.get();
+    if path.as_os_str().is_empty() {
+        return;
+    }
+    let line = state.cursor.get().0.saturating_sub(1);
+    state.open_breakpoint_log(path, line);
+}
+
 pub fn edit_condition_at_caret(state: State) {
     let path = state.active_path.get();
     if path.as_os_str().is_empty() {
@@ -344,6 +353,28 @@ pub fn edit_condition_at_caret(state: State) {
     } else {
         state.status.set("No breakpoint on this line".to_owned());
     }
+}
+
+pub fn set_breakpoint_log(state: State, path: std::path::PathBuf, line: u32, message: String) {
+    let mut specs = state.breakpoints.with(|map| map.get(&path).cloned().unwrap_or_default());
+    let message = (!message.trim().is_empty()).then(|| message.trim().to_owned());
+    if let Some(spec) = specs.iter_mut().find(|spec| spec.line == line) {
+        spec.log_message = message;
+    } else {
+        let mut spec = BreakpointSpec::at(line);
+        spec.log_message = message;
+        specs.push(spec);
+        specs.sort_by_key(|spec| spec.line);
+    }
+    store_breakpoints(state, &path, specs);
+}
+
+pub fn toggle_breakpoint_enabled(state: State, path: std::path::PathBuf, line: u32) {
+    let mut specs = state.breakpoints.with(|map| map.get(&path).cloned().unwrap_or_default());
+    if let Some(spec) = specs.iter_mut().find(|spec| spec.line == line) {
+        spec.enabled = !spec.enabled;
+    }
+    store_breakpoints(state, &path, specs);
 }
 
 pub fn set_breakpoint_condition(state: State, path: std::path::PathBuf, line: u32, condition: String) {

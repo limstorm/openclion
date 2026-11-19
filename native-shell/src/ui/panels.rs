@@ -461,6 +461,7 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                 }))
                 .child(tool_button(pal, icons::CLOSE, "Stop", move || crate::debug::stop(state)))
                 .child(debug_text_button(pal, "Condition", move || crate::debug::edit_condition_at_caret(state)))
+                .child(debug_text_button(pal, "Logpoint", move || crate::debug::edit_log_at_caret(state)))
                 .child(text_ui(move || state.debug_status.get(), 11.0, pal.fg_muted).ml(px(8.0))),
         )
         .child(watch_panel(state, pal))
@@ -579,10 +580,16 @@ fn breakpoints_panel(state: State, pal: Palette) -> impl IntoElement {
         .child(scroll().flex_1().child(dynamic(move || {
             state.breakpoints_rev.get();
             let entries = state.breakpoints.with(|map| {
-                let mut rows: Vec<(std::path::PathBuf, u32, Option<String>)> = Vec::new();
+                let mut rows: Vec<(std::path::PathBuf, u32, Option<String>, Option<String>, bool)> = Vec::new();
                 for (path, specs) in map {
                     for spec in specs {
-                        rows.push((path.clone(), spec.line, spec.condition.clone()));
+                        rows.push((
+                            path.clone(),
+                            spec.line,
+                            spec.condition.clone(),
+                            spec.log_message.clone(),
+                            spec.enabled,
+                        ));
                     }
                 }
                 rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
@@ -594,15 +601,17 @@ fn breakpoints_panel(state: State, pal: Palette) -> impl IntoElement {
             view()
                 .flex_col()
                 .w_full()
-                .children(entries.into_iter().take(8).map(move |(path, line, condition)| {
+                .children(entries.into_iter().take(8).map(move |(path, line, condition, log, enabled)| {
                     let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-                    let label = match condition {
-                        Some(condition) if !condition.is_empty() => {
-                            format!("{name}:{}  {condition}", line + 1)
-                        }
-                        _ => format!("{name}:{}", line + 1),
+                    let label = if let Some(log) = log.filter(|log| !log.is_empty()) {
+                        format!("{name}:{}  LOG {log}", line + 1)
+                    } else if let Some(condition) = condition.filter(|condition| !condition.is_empty()) {
+                        format!("{name}:{}  {condition}", line + 1)
+                    } else {
+                        format!("{name}:{}", line + 1)
                     };
                     let target = path.clone();
+                    let path_for_toggle = path.clone();
                     view()
                         .h(px(18.0))
                         .flex_row()
@@ -612,7 +621,16 @@ fn breakpoints_panel(state: State, pal: Palette) -> impl IntoElement {
                         .rounded(px(3.0))
                         .hover(move |s| s.bg(pal.tree_hover))
                         .on_press(move || state.open_breakpoint_condition(target.clone(), line))
-                        .child(icon(icons::PROBLEMS, 10.0, pal.danger))
+                        .child(
+                            view()
+                                .size(px(12.0))
+                                .items_center()
+                                .justify_center()
+                                .on_press(move || {
+                                    crate::debug::toggle_breakpoint_enabled(state, path_for_toggle.clone(), line)
+                                })
+                                .child(icon(icons::PROBLEMS, 10.0, if enabled { pal.danger } else { pal.fg_faint })),
+                        )
                         .child(text_ui(label, 10.0, pal.fg).truncate().pointer_events(PointerEvents::None))
                 }))
                 .into_element()

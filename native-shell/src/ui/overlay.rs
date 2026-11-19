@@ -797,6 +797,9 @@ fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
         crate::model::FileDialog::BreakpointCondition { path, line } => {
             ("Breakpoint Condition", format!("{}:{}", path.display(), line + 1), true, "Set", false)
         }
+        crate::model::FileDialog::BreakpointLog { path, line } => {
+            ("Logpoint Message", format!("{}:{}", path.display(), line + 1), true, "Set", false)
+        }
         crate::model::FileDialog::Delete { path, dir } => (
             if *dir { "Delete Folder" } else { "Delete File" },
             path.to_string_lossy().to_string(),
