@@ -63,28 +63,40 @@ pub fn chrome(state: State, pal: Palette) -> impl IntoElement {
         .font_family(UI_FONT.family)
         .child(titlebar::bar(state, pal))
         .child(
-            view()
-                .flex_1()
-                .flex_row()
-                .min_h(px(0.0))
-                .w_full()
-                .gap(px(6.0))
-                .child(rail::left_rail(state, pal))
-                .child(dynamic(move || state.show_left.get().then(|| left_panel(state, pal).into_element())))
-                .child(
-                    view()
-                        .flex_1()
-                        .flex_col()
-                        .min_w(px(200.0))
-                        .min_h(px(0.0))
-                        .gap(px(6.0))
-                        .child(editor_panel::editor_area(state, pal))
-                        .child(dynamic(move || {
-                            state.show_bottom.get().then(|| panels::bottom_panel(state, pal).into_element())
-                        })),
-                )
-                .child(dynamic(move || state.show_right.get().then(|| panels::right_panel(state, pal).into_element())))
-                .child(rail::right_rail(state, pal)),
+            view().flex_1().flex_row().min_h(px(0.0)).w_full().gap(px(6.0)).child(rail::left_rail(state, pal)).child(
+                view()
+                    .flex_1()
+                    .flex_col()
+                    .min_w(px(0.0))
+                    .min_h(px(0.0))
+                    .gap(px(6.0))
+                    .child(
+                        view()
+                            .flex_1()
+                            .flex_row()
+                            .min_h(px(0.0))
+                            .w_full()
+                            .gap(px(6.0))
+                            .child(dynamic(move || {
+                                state.show_left.get().then(|| left_panel(state, pal).into_element())
+                            }))
+                            .child(
+                                view()
+                                    .flex_1()
+                                    .flex_col()
+                                    .min_w(px(200.0))
+                                    .min_h(px(0.0))
+                                    .child(editor_panel::editor_area(state, pal)),
+                            )
+                            .child(dynamic(move || {
+                                state.show_right.get().then(|| panels::right_panel(state, pal).into_element())
+                            }))
+                            .child(rail::right_rail(state, pal)),
+                    )
+                    .child(dynamic(move || {
+                        state.show_bottom.get().then(|| panels::bottom_panel(state, pal).into_element())
+                    })),
+            ),
         )
         .child(status::status_bar(state, pal))
         .child(overlay::overlays(state, pal))
