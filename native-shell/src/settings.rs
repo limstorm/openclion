@@ -27,7 +27,7 @@ impl Default for Persisted {
         Self {
             left_width: 234.0,
             right_width: 294.0,
-            bottom_height: 220.0,
+            bottom_height: 260.0,
             editor_font: 13.0,
             recent: Vec::new(),
             show_left: true,

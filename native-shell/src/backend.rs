@@ -302,6 +302,51 @@ impl State {
         });
     }
 
+    /// Stages every working-tree change and commits it with the typed message.
+    pub fn commit_all(&self) {
+        let message = self.commit_message.get().trim().to_owned();
+        if message.is_empty() {
+            self.status.set("Commit message is empty".to_owned());
+            return;
+        }
+        let root = self.root.get();
+        let state = *self;
+        self.vcs_loading.set(true);
+        spawn(async move {
+            let result = blocking(move || -> Result<String, String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                let paths: Vec<PathBuf> = repo
+                    .status()
+                    .map_err(|error| error.message)?
+                    .into_iter()
+                    .filter(|status| status.unstaged.is_some())
+                    .map(|status| status.path.into_path_buf())
+                    .collect();
+                if !paths.is_empty() {
+                    repo.stage(&paths).map_err(|error| error.message)?;
+                }
+                let id = repo.commit(&message, false, false).map_err(|error| error.message)?;
+                Ok(id.chars().take(8).collect())
+            })
+            .await;
+            let result = match result {
+                Ok(inner) => inner,
+                Err(error) => Err(format!("commit task failed: {error}")),
+            };
+            state.vcs_loading.set(false);
+            match result {
+                Ok(id) => {
+                    state.commit_message.set(String::new());
+                    state.status.set(format!("Committed {id}"));
+                    state.refresh_vcs();
+                }
+                Err(error) => state.status.set(format!("Commit failed: {error}")),
+            }
+        });
+    }
+
     /// Reads git status and the current branch in the background.
     pub fn refresh_vcs(&self) {
         let state = *self;

@@ -70,6 +70,31 @@ fn header_action(pal: Palette, markup: &'static str, on_press: impl Fn() + 'stat
 }
 
 fn cmake_body(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .w_full()
+        .h_full()
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(6.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(text_muted("CMake", 10.0, pal))
+                .child(view().flex_1())
+                .child(debug_text_button(pal, "Configure", move || state.configure_cmake()))
+                .child(debug_text_button(pal, "Build & Run", move || state.run_active_configuration()))
+                .child(debug_text_button(pal, "Refresh", move || state.refresh_cmake())),
+        )
+        .child(cmake_tree(state, pal))
+}
+
+fn cmake_tree(state: State, pal: Palette) -> impl IntoElement {
     scroll().flex_1().w_full().min_h(px(0.0)).child(dynamic(move || {
         let model = state.cmake.get();
         let mut rows: Vec<View> = Vec::new();
@@ -731,21 +756,52 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             crate::terminal::flush(state);
         });
     });
-    view().flex_1().w_full().min_h(px(0.0)).p(px(4.0)).bg(pal.bg_island).child(
-        nsh_base::terminal()
-            .component_ref(&state.terminal_ref)
-            .flex_1()
-            .w_full()
-            .font_family(MONO_FONT.family)
-            .font_size(px(12.0))
-            .line_height(px(18.0))
-            .on_data(move |data: &SharedString| crate::terminal::send(state, data))
-            .on_resize(move |event: &nsh_base::TerminalEvent| {
-                if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
-                    crate::terminal::resize(state, *cols, *rows);
-                }
-            }),
-    )
+    effect(move || {
+        if state.show_bottom.get() && state.bottom_tool.get() == Some(BottomTool::Terminal) {
+            set_timeout(std::time::Duration::from_millis(80), move || {
+                crate::terminal::focus(state);
+            });
+        }
+    });
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(
+            view()
+                .h(px(24.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .px(px(8.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(icon(icons::TERMINAL, 12.0, pal.fg_muted))
+                .child(text_muted("zsh", 10.0, pal))
+                .child(view().flex_1())
+                .child(debug_text_button(pal, "Clear", move || crate::terminal::clear(state)))
+                .child(debug_text_button(pal, "Focus", move || crate::terminal::focus(state))),
+        )
+        .child(
+            view().flex_1().w_full().min_h(px(0.0)).p(px(6.0)).bg(pal.bg_island).child(
+                nsh_base::terminal()
+                    .component_ref(&state.terminal_ref)
+                    .flex_1()
+                    .w_full()
+                    .font_family(MONO_FONT.family)
+                    .font_size(px(12.0))
+                    .line_height(px(18.0))
+                    .on_data(move |data: &SharedString| crate::terminal::send(state, data))
+                    .on_resize(move |event: &nsh_base::TerminalEvent| {
+                        if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
+                            crate::terminal::resize(state, *cols, *rows);
+                        }
+                    }),
+            ),
+        )
 }
 
 fn problems_body(state: State, pal: Palette) -> impl IntoElement {

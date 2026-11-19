@@ -78,13 +78,21 @@ fn project_panel(state: State, pal: Palette) -> impl IntoElement {
                     state.status.set("Project view options".to_owned());
                 })),
         ))
-        .child(scroll().flex_1().w_full().min_h(px(0.0)).child(
-            view().flex_col().w_full().pt(px(0.0)).pb(px(8.0)).child(root_row(state, pal)).child(dynamic(move || {
-                state.tree_rev.get();
-                let rows = state.rows();
-                view().flex_col().w_full().children(rows.into_iter().map(|row| tree_row(state, pal, row)))
-            })),
-        ))
+        .child(
+            scroll().flex_1().w_full().min_h(px(0.0)).child(
+                view()
+                    .flex_col()
+                    .w_full()
+                    .pt(px(0.0))
+                    .pb(px(8.0))
+                    .child(dynamic(move || {
+                        state.tree_rev.get();
+                        let rows = state.rows();
+                        view().flex_col().w_full().children(rows.into_iter().map(|row| tree_row(state, pal, row)))
+                    }))
+                    .child(root_row(state, pal)),
+            ),
+        )
 }
 
 fn root_row(state: State, pal: Palette) -> impl IntoElement {
@@ -111,7 +119,13 @@ fn root_row(state: State, pal: Palette) -> impl IntoElement {
         .on_press(move || {
             let root = state.root.get().to_string_lossy().to_string();
             state.selected.set(Some(root.clone()));
-            state.toggle_dir(&root);
+            let expanded = state.expanded.get();
+            if expanded.is_empty() {
+                state.expanded.set(vec![root]);
+            } else {
+                // The root row doubles as collapse-all for the whole project.
+                state.expanded.set(Vec::new());
+            }
         })
         .on_context_menu(move |event: &ContextMenuEvent| {
             let root = state.root.get();
@@ -233,6 +247,47 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                 }))
                 .child(header_action(pal, icons::MORE_HORIZONTAL, move || {})),
         ))
+        .child(
+            view()
+                .h(px(36.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(
+                    input()
+                        .flex_1()
+                        .h(px(24.0))
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(12.0))
+                        .placeholder("Commit message")
+                        .value(move || state.commit_message.get())
+                        .on_change(move |value: &str| state.commit_message.set(value.to_owned()))
+                        .on_submit(move |_: &str| state.commit_all()),
+                )
+                .child(
+                    view()
+                        .h(px(24.0))
+                        .px(px(10.0))
+                        .items_center()
+                        .justify_center()
+                        .rounded(px(5.0))
+                        .bg(move || {
+                            if state.commit_message.get().trim().is_empty() {
+                                pal.accent.opacity(0.55)
+                            } else {
+                                pal.accent
+                            }
+                        })
+                        .on_press(move || state.commit_all())
+                        .child(text_ui("Commit", 12.0, white().into())),
+                ),
+        )
         .child(scroll().flex_1().child(dynamic(move || {
             let rows = state.vcs.get();
             let loading = state.vcs_loading.get();

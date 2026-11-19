@@ -82,6 +82,19 @@ pub fn flush(state: State) {
     }
 }
 
+/// Gives the Terminal component keyboard focus.
+pub fn focus(state: State) {
+    if let Some(api) = state.terminal_ref.api::<TerminalApi>() {
+        api.focus();
+    }
+}
+
+/// Clears the screen and redraws the prompt in the shell.
+pub fn clear(state: State) {
+    send(state, "clear\n");
+    focus(state);
+}
+
 pub fn send(state: State, data: &str) {
     if let Some(session) = state.terminal_session.get() {
         let _ = session.manager.write(session.id, data);

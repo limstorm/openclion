@@ -93,6 +93,14 @@ fn install_shortcuts(state: State) {
         crate::debug::toggle_breakpoint(state, state.cursor.get().0.saturating_sub(1));
     });
     on_key("mod+alt+s", move |_| state.settings.set(true));
+    on_key("alt+1", move |_| {
+        state.left_tool.set(crate::model::LeftTool::Project);
+        state.show_left.set(true);
+    });
+    on_key("ctrl+k", move |_| {
+        state.left_tool.set(crate::model::LeftTool::Commit);
+        state.show_left.set(true);
+    });
     on_key("mod+f", move |_| {
         state.find_open.set(true);
         state.replace_open.set(false);
