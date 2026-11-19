@@ -894,47 +894,68 @@ fn terminal_header(state: State, pal: Palette) -> impl IntoElement {
         .border_b_1()
         .border_color(pal.border)
         .child(text_muted("Terminal", 11.0, pal))
-        .child(
+        .child(dynamic(move || {
+            let tabs = state.terminal_tabs.get();
+            let active = state.terminal_active.get();
             view()
-                .h(px(24.0))
                 .flex_row()
                 .items_center()
                 .gap(px(4.0))
-                .px(px(8.0))
-                .rounded(px(4.0))
-                .bg(pal.tab_selected)
-                .child(text_ui("Local", 11.0, pal.fg))
-                .child(
+                .children(tabs.into_iter().map(move |tab| {
+                    let is_active = tab.key == active;
+                    let key_for_select = tab.key;
+                    let key_for_close = tab.key;
                     view()
-                        .size(px(16.0))
+                        .h(px(24.0))
+                        .flex_row()
                         .items_center()
-                        .justify_center()
-                        .rounded(px(3.0))
+                        .gap(px(4.0))
+                        .px(px(8.0))
+                        .rounded(px(4.0))
+                        .bg(if is_active { pal.tab_selected } else { transparent_black().into() })
                         .hover(move |s| s.bg(pal.tab_hover))
-                        .on_press(move || state.show_bottom.set(false))
-                        .child(icon(icons::CLOSE, 9.0, pal.fg_muted)),
-                ),
-        )
+                        .on_press(move || crate::terminal::select(state, key_for_select))
+                        .child(
+                            text_ui(tab.title, 11.0, if is_active { pal.fg } else { pal.fg_secondary })
+                                .pointer_events(PointerEvents::None),
+                        )
+                        .child(
+                            view()
+                                .size(px(16.0))
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(3.0))
+                                .hover(move |s| s.bg(pal.tab_hover))
+                                .on_press(move || crate::terminal::close(state, key_for_close))
+                                .child(icon(icons::CLOSE, 9.0, pal.fg_muted)),
+                        )
+                }))
+                .into_element()
+        }))
         .child(header_action(pal, icons::ADD, move || {
-            crate::terminal::ensure_started(state);
-            state.status.set("The native terminal runs a single local shell".to_owned());
+            crate::terminal::new_terminal(state);
+            crate::terminal::focus(state);
         }))
         .child(header_action(pal, icons::CHEVRON_DOWN, move || {
-            state.bottom_tool.set(Some(BottomTool::Terminal));
+            state.status.set("Terminal tabs: click + to open another local shell".to_owned());
         }))
         .child(view().flex_1())
 }
 
 fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
     effect(move || {
+        crate::terminal::invalidate(state);
         crate::terminal::ensure_started(state);
     });
     effect(move || {
         state.terminal_rev.get();
-        crate::terminal::flush(state);
+        state.terminal_active.get();
+        set_timeout(std::time::Duration::from_millis(60), move || {
+            crate::terminal::sync(state);
+        });
         // The component's ref is registered after its first commit.
-        set_timeout(std::time::Duration::from_millis(150), move || {
-            crate::terminal::flush(state);
+        set_timeout(std::time::Duration::from_millis(160), move || {
+            crate::terminal::sync(state);
         });
     });
     effect(move || {
@@ -944,19 +965,30 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             });
         }
     });
-    view().flex_1().w_full().min_h(px(0.0)).overflow_hidden().pl(px(6.0)).bg(pal.bg_island).child(
-        nsh_base::terminal()
-            .component_ref(&state.terminal_ref)
-            .flex_1()
-            .w_full()
-            .cursor_class("bg-[#1f2329] w-[2px]")
-            .on_data(move |data: &SharedString| crate::terminal::send(state, data))
-            .on_resize(move |event: &nsh_base::TerminalEvent| {
-                if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
-                    crate::terminal::resize(state, *cols, *rows);
-                }
-            }),
-    )
+    view()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .overflow_hidden()
+        .pl(px(6.0))
+        .bg(pal.bg_island)
+        .test_id("terminal-body")
+        .child(dynamic(move || {
+            let key = state.terminal_active.get();
+            nsh_base::terminal()
+                .key(format!("terminal-{key}"))
+                .component_ref(&state.terminal_ref)
+                .flex_1()
+                .w_full()
+                .cursor_class("bg-[#1f2329] w-[2px]")
+                .on_data(move |data: &SharedString| crate::terminal::send(state, data))
+                .on_resize(move |event: &nsh_base::TerminalEvent| {
+                    if let nsh_base::TerminalEvent::Resize(cols, rows) = event {
+                        crate::terminal::resize(state, *cols, *rows);
+                    }
+                })
+                .into_element()
+        }))
 }
 
 fn problems_body(state: State, pal: Palette) -> impl IntoElement {

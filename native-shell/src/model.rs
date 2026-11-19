@@ -81,6 +81,12 @@ pub struct Row {
     pub depth: usize,
 }
 
+#[derive(Clone, PartialEq)]
+pub struct TerminalTab {
+    pub key: u64,
+    pub title: String,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct HierarchyRow {
     pub name: String,
@@ -217,9 +223,13 @@ pub struct State {
     pub breakpoints_rev: Signal<u32>,
     pub debug_line: Signal<Option<(PathBuf, u32)>>,
     pub terminal_ref: nsh_core::element::ComponentRef<nsh_base::Terminal>,
-    pub terminal_session: Stored<Option<crate::terminal::Session>>,
-    pub terminal_started: Signal<bool>,
-    pub terminal_buffer: Stored<String>,
+    pub terminal_sessions: Stored<Vec<crate::terminal::Session>>,
+    pub terminal_logs: Stored<std::collections::HashMap<u64, String>>,
+    pub terminal_shown: Stored<u64>,
+    pub terminal_tabs: Signal<Vec<TerminalTab>>,
+    pub terminal_active: Signal<u64>,
+    pub terminal_next: Signal<u64>,
+    pub terminal_last_new: Stored<Option<std::time::Instant>>,
     pub terminal_rev: Signal<u32>,
     pub settings: Signal<bool>,
     pub settings_page: Signal<u32>,
@@ -341,9 +351,13 @@ impl State {
             breakpoints_rev: signal(0),
             debug_line: signal(None),
             terminal_ref: component_ref::<nsh_base::Terminal>(),
-            terminal_session: stored(None),
-            terminal_started: signal(false),
-            terminal_buffer: stored(String::new()),
+            terminal_sessions: stored(Vec::new()),
+            terminal_logs: stored(std::collections::HashMap::new()),
+            terminal_shown: stored(0),
+            terminal_tabs: signal(Vec::new()),
+            terminal_active: signal(0),
+            terminal_next: signal(0),
+            terminal_last_new: stored(None),
             terminal_rev: signal(0),
             settings: signal(false),
             settings_page: signal(0),
