@@ -97,6 +97,21 @@ pub enum FileDialog {
     Rename { path: PathBuf },
     RenameSymbol { line: u32, col: u32 },
     Delete { path: PathBuf, dir: bool },
+    BreakpointCondition { path: PathBuf, line: u32 },
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct BreakpointSpec {
+    pub line: u32,
+    pub condition: Option<String>,
+    pub log_message: Option<String>,
+    pub enabled: bool,
+}
+
+impl BreakpointSpec {
+    pub fn at(line: u32) -> Self {
+        Self { line, condition: None, log_message: None, enabled: true }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -172,7 +187,7 @@ pub struct State {
     pub debug_watch: Signal<Vec<String>>,
     pub debug_watch_input: Signal<String>,
     pub debug_watch_values: Signal<Vec<crate::debug::WatchValue>>,
-    pub breakpoints: Stored<std::collections::BTreeMap<PathBuf, Vec<u32>>>,
+    pub breakpoints: Stored<std::collections::BTreeMap<PathBuf, Vec<BreakpointSpec>>>,
     pub breakpoints_rev: Signal<u32>,
     pub debug_line: Signal<Option<(PathBuf, u32)>>,
     pub terminal_ref: nsh_core::element::ComponentRef<nsh_base::Terminal>,
@@ -359,6 +374,19 @@ impl State {
         self.dialog.set(Some(FileDialog::RenameSymbol { line: line.saturating_sub(1), col: col.saturating_sub(1) }));
     }
 
+    pub fn open_breakpoint_condition(&self, path: PathBuf, line: u32) {
+        let existing = self
+            .breakpoints
+            .with(|map| {
+                map.get(&path)
+                    .and_then(|list| list.iter().find(|bp| bp.line == line))
+                    .and_then(|bp| bp.condition.clone())
+            })
+            .unwrap_or_default();
+        self.dialog_input.set(existing);
+        self.dialog.set(Some(FileDialog::BreakpointCondition { path, line }));
+    }
+
     pub fn open_delete(&self, path: PathBuf) {
         self.dialog.set(Some(FileDialog::Delete { dir: path.is_dir(), path }));
     }
@@ -385,6 +413,11 @@ impl State {
                 }
             }
             FileDialog::Delete { path, dir } => self.delete_path(path, dir),
+            FileDialog::BreakpointCondition { path, line } => {
+                let condition = self.dialog_input.get().trim().to_owned();
+                self.dialog.set(None);
+                crate::debug::set_breakpoint_condition(*self, path, line, condition);
+            }
         }
     }
 

@@ -9,7 +9,7 @@ use ide_language::LanguageRegistry;
 use nsh_base::editor::{EditorApi, EditorDecoration, EditorGutterMark, EditorPosition, EditorRange, EditorSelection};
 use nsh_core::prelude::*;
 
-use crate::model::State;
+use crate::model::{BreakpointSpec, State};
 
 #[derive(Clone, PartialEq)]
 pub struct DebugFrame {
@@ -157,18 +157,9 @@ pub fn start(state: State) {
     let manager = bridge.manager;
     let breakpoints = state.breakpoints.with(|map| map.clone());
     spawn(async move {
-        for (path, lines) in breakpoints {
-            let list: Vec<ide_dap::Breakpoint> = lines
-                .into_iter()
-                .map(|line| ide_dap::Breakpoint {
-                    line,
-                    condition: None,
-                    hit_condition: None,
-                    log_message: None,
-                    enabled: true,
-                })
-                .collect();
-            let _ = manager.set_breakpoints(path.clone(), list).await;
+        for (path, specs) in breakpoints {
+            let list = dap_breakpoints(&specs);
+            let _ = manager.set_breakpoints(path, list).await;
         }
         match manager.start(config, SessionOwner::new("openclion-native", bridge.sink)).await {
             Ok(session) => {
@@ -327,37 +318,78 @@ pub fn toggle_breakpoint(state: State, line: u32) {
     if path.as_os_str().is_empty() {
         return;
     }
-    let mut lines = state.breakpoints.with(|map| map.get(&path).cloned().unwrap_or_default());
-    if let Some(index) = lines.iter().position(|value| *value == line) {
-        lines.remove(index);
+    let mut specs = state.breakpoints.with(|map| map.get(&path).cloned().unwrap_or_default());
+    if let Some(index) = specs.iter().position(|spec| spec.line == line) {
+        specs.remove(index);
     } else {
-        lines.push(line);
+        specs.push(BreakpointSpec::at(line));
     }
-    lines.sort_unstable();
-    lines.dedup();
+    specs.sort_by_key(|spec| spec.line);
+    specs.dedup_by_key(|spec| spec.line);
+    store_breakpoints(state, &path, specs);
+}
+
+/// Sets or clears the condition of the breakpoint at `line`.
+/// Opens the condition dialog for the breakpoint on the caret's line.
+pub fn edit_condition_at_caret(state: State) {
+    let path = state.active_path.get();
+    if path.as_os_str().is_empty() {
+        return;
+    }
+    let line = state.cursor.get().0.saturating_sub(1);
+    let exists =
+        state.breakpoints.with(|map| map.get(&path).is_some_and(|specs| specs.iter().any(|spec| spec.line == line)));
+    if exists {
+        state.open_breakpoint_condition(path, line);
+    } else {
+        state.status.set("No breakpoint on this line".to_owned());
+    }
+}
+
+pub fn set_breakpoint_condition(state: State, path: std::path::PathBuf, line: u32, condition: String) {
+    let mut specs = state.breakpoints.with(|map| map.get(&path).cloned().unwrap_or_default());
+    let condition = (!condition.trim().is_empty()).then(|| condition.trim().to_owned());
+    if let Some(spec) = specs.iter_mut().find(|spec| spec.line == line) {
+        spec.condition = condition;
+    } else {
+        let mut spec = BreakpointSpec::at(line);
+        spec.condition = condition;
+        specs.push(spec);
+        specs.sort_by_key(|spec| spec.line);
+    }
+    store_breakpoints(state, &path, specs);
+}
+
+fn store_breakpoints(state: State, path: &std::path::Path, specs: Vec<BreakpointSpec>) {
     state.breakpoints.with(|map| {
-        if lines.is_empty() {
-            map.remove(&path);
+        if specs.is_empty() {
+            map.remove(path);
         } else {
-            map.insert(path.clone(), lines.clone());
+            map.insert(path.to_path_buf(), specs.clone());
         }
     });
     state.breakpoints_rev.update(|rev| *rev += 1);
     if let Some(bridge) = state.debug_bridge.get() {
-        let list: Vec<ide_dap::Breakpoint> = lines
-            .iter()
-            .map(|line| ide_dap::Breakpoint {
-                line: *line,
-                condition: None,
-                hit_condition: None,
-                log_message: None,
-                enabled: true,
-            })
-            .collect();
-        spawn(async move {
-            let _ = bridge.manager.set_breakpoints(path, list).await;
+        let manager = bridge.manager;
+        let list = dap_breakpoints(&specs);
+        let path = path.to_path_buf();
+        background(async move {
+            let _ = manager.set_breakpoints(path, list).await;
         });
     }
+}
+
+fn dap_breakpoints(specs: &[BreakpointSpec]) -> Vec<ide_dap::Breakpoint> {
+    specs
+        .iter()
+        .map(|spec| ide_dap::Breakpoint {
+            line: spec.line,
+            condition: spec.condition.clone(),
+            hit_condition: None,
+            log_message: spec.log_message.clone(),
+            enabled: spec.enabled,
+        })
+        .collect()
 }
 
 /// Breakpoints and the debugger's current line for the active editor.
@@ -365,12 +397,16 @@ pub fn decorations(state: State) -> Vec<EditorDecoration> {
     state.breakpoints_rev.get();
     let path = state.active_path.get();
     let mut out = Vec::new();
-    if let Some(lines) = state.breakpoints.with(|map| map.get(&path).cloned()) {
-        for line in lines {
+    if let Some(specs) = state.breakpoints.with(|map| map.get(&path).cloned()) {
+        for spec in specs {
+            let line = spec.line;
             let mut decoration = EditorDecoration::default();
             decoration.range = EditorRange::new(EditorPosition::new(line, 0), EditorPosition::new(line, 0));
             let mut gutter = EditorGutterMark::default();
-            gutter.class = Some("bg-[#e5534b]".into());
+            gutter.class = Some(
+                if spec.condition.is_some() || spec.log_message.is_some() { "bg-[#e5b34b]" } else { "bg-[#e5534b]" }
+                    .into(),
+            );
             decoration.gutter = Some(gutter);
             out.push(decoration);
         }

@@ -460,6 +460,7 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                     crate::debug::step(state, ide_dap::StepKind::Out)
                 }))
                 .child(tool_button(pal, icons::CLOSE, "Stop", move || crate::debug::stop(state)))
+                .child(debug_text_button(pal, "Condition", move || crate::debug::edit_condition_at_caret(state)))
                 .child(text_ui(move || state.debug_status.get(), 11.0, pal.fg_muted).ml(px(8.0))),
         )
         .child(watch_panel(state, pal))
@@ -469,50 +470,58 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                 .flex_row()
                 .min_h(px(0.0))
                 .w_full()
-                .child(scroll().w(px(420.0)).flex_none().child(dynamic(move || {
-                    let frames = state.debug_frames.get();
-                    if frames.is_empty() {
-                        return view().p(px(10.0)).child(text_muted("Not debugging", 12.0, pal)).into_element();
-                    }
+                .child(
                     view()
+                        .w(px(420.0))
+                        .flex_none()
                         .flex_col()
-                        .w_full()
-                        .py(px(4.0))
-                        .children(frames.into_iter().enumerate().map(move |(index, frame)| {
-                            let label = format!(
-                                "{}  {}:{}",
-                                frame.name,
-                                frame
-                                    .path
-                                    .as_ref()
-                                    .and_then(|p| p.file_name())
-                                    .map(|n| n.to_string_lossy().to_string())
-                                    .unwrap_or_default(),
-                                frame.line + 1
-                            );
+                        .min_h(px(0.0))
+                        .child(breakpoints_panel(state, pal))
+                        .child(scroll().flex_1().child(dynamic(move || {
+                            let frames = state.debug_frames.get();
+                            if frames.is_empty() {
+                                return view().p(px(10.0)).child(text_muted("Not debugging", 12.0, pal)).into_element();
+                            }
                             view()
-                                .h(px(22.0))
-                                .flex_none()
-                                .mx(px(4.0))
-                                .flex_row()
-                                .items_center()
-                                .gap(px(4.0))
-                                .px(px(6.0))
-                                .rounded(px(4.0))
-                                .bg(move || {
-                                    if state.debug_selected.get() == index {
-                                        pal.tree_selected
-                                    } else {
-                                        transparent_black().into()
-                                    }
-                                })
-                                .hover(move |s| s.bg(pal.tree_hover))
-                                .on_press(move || crate::debug::select_frame(state, index))
-                                .child(icon(icons::RUN, 12.0, pal.fg_muted))
-                                .child(text_ui(label, 11.0, pal.fg).truncate())
-                        }))
-                        .into_element()
-                })))
+                                .flex_col()
+                                .w_full()
+                                .py(px(4.0))
+                                .children(frames.into_iter().enumerate().map(move |(index, frame)| {
+                                    let label = format!(
+                                        "{}  {}:{}",
+                                        frame.name,
+                                        frame
+                                            .path
+                                            .as_ref()
+                                            .and_then(|p| p.file_name())
+                                            .map(|n| n.to_string_lossy().to_string())
+                                            .unwrap_or_default(),
+                                        frame.line + 1
+                                    );
+                                    view()
+                                        .h(px(22.0))
+                                        .flex_none()
+                                        .mx(px(4.0))
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(4.0))
+                                        .px(px(6.0))
+                                        .rounded(px(4.0))
+                                        .bg(move || {
+                                            if state.debug_selected.get() == index {
+                                                pal.tree_selected
+                                            } else {
+                                                transparent_black().into()
+                                            }
+                                        })
+                                        .hover(move |s| s.bg(pal.tree_hover))
+                                        .on_press(move || crate::debug::select_frame(state, index))
+                                        .child(icon(icons::RUN, 12.0, pal.fg_muted))
+                                        .child(text_ui(label, 11.0, pal.fg).truncate())
+                                }))
+                                .into_element()
+                        }))),
+                )
                 .child(view().w(px(1.0)).flex_none().h_full().bg(pal.border))
                 .child(scroll().flex_1().child(dynamic(move || {
                     let vars = state.debug_vars.get();
@@ -556,6 +565,58 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                         .into_element()
                 }))),
         )
+}
+
+fn breakpoints_panel(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .h(px(96.0))
+        .flex_none()
+        .w_full()
+        .flex_col()
+        .border_b_1()
+        .border_color(pal.border)
+        .child(view().h(px(20.0)).flex_row().items_center().px(px(8.0)).child(text_muted("Breakpoints", 10.0, pal)))
+        .child(scroll().flex_1().child(dynamic(move || {
+            state.breakpoints_rev.get();
+            let entries = state.breakpoints.with(|map| {
+                let mut rows: Vec<(std::path::PathBuf, u32, Option<String>)> = Vec::new();
+                for (path, specs) in map {
+                    for spec in specs {
+                        rows.push((path.clone(), spec.line, spec.condition.clone()));
+                    }
+                }
+                rows.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+                rows
+            });
+            if entries.is_empty() {
+                return view().px(px(10.0)).child(text_muted("No breakpoints", 11.0, pal)).into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(entries.into_iter().take(8).map(move |(path, line, condition)| {
+                    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+                    let label = match condition {
+                        Some(condition) if !condition.is_empty() => {
+                            format!("{name}:{}  {condition}", line + 1)
+                        }
+                        _ => format!("{name}:{}", line + 1),
+                    };
+                    let target = path.clone();
+                    view()
+                        .h(px(18.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0))
+                        .px(px(8.0))
+                        .rounded(px(3.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .on_press(move || state.open_breakpoint_condition(target.clone(), line))
+                        .child(icon(icons::PROBLEMS, 10.0, pal.danger))
+                        .child(text_ui(label, 10.0, pal.fg).truncate().pointer_events(PointerEvents::None))
+                }))
+                .into_element()
+        })))
 }
 
 fn watch_panel(state: State, pal: Palette) -> impl IntoElement {
@@ -613,6 +674,17 @@ fn watch_panel(state: State, pal: Palette) -> impl IntoElement {
                 }))
                 .into_element()
         })))
+}
+
+fn debug_text_button(pal: Palette, label: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(22.0))
+        .px(px(6.0))
+        .items_center()
+        .rounded(px(4.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(text_ui(label, 11.0, pal.fg_secondary).pointer_events(PointerEvents::None))
 }
 
 fn tool_button(pal: Palette, markup: &'static str, label: &'static str, on_press: impl Fn() + 'static) -> View {
