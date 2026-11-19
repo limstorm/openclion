@@ -95,6 +95,7 @@ pub enum FileDialog {
     NewFile { base: PathBuf },
     NewFolder { base: PathBuf },
     Rename { path: PathBuf },
+    RenameSymbol { line: u32, col: u32 },
     Delete { path: PathBuf, dir: bool },
 }
 
@@ -339,6 +340,17 @@ impl State {
         self.dialog.set(Some(FileDialog::Rename { path }));
     }
 
+    /// Opens the symbol-rename dialog with the word at the caret prefilled.
+    pub fn open_rename_symbol(&self) {
+        let Some(tab) = self.active_tab() else {
+            return;
+        };
+        let (line, col) = self.cursor.get();
+        let word = word_at(&tab.text, line.saturating_sub(1), col.saturating_sub(1));
+        self.dialog_input.set(word);
+        self.dialog.set(Some(FileDialog::RenameSymbol { line: line.saturating_sub(1), col: col.saturating_sub(1) }));
+    }
+
     pub fn open_delete(&self, path: PathBuf) {
         self.dialog.set(Some(FileDialog::Delete { dir: path.is_dir(), path }));
     }
@@ -354,6 +366,16 @@ impl State {
                 self.create_from_dialog();
             }
             FileDialog::Rename { path } => self.rename_from_dialog(path),
+            FileDialog::RenameSymbol { line, col } => {
+                let name = self.dialog_input.get().trim().to_owned();
+                if name.is_empty() {
+                    self.status.set("Enter a new name".to_owned());
+                } else {
+                    // Keep the dialog (its owner) alive until the rename task
+                    // finishes; the task closes it.
+                    crate::lsp::rename_symbol(*self, line, col, name);
+                }
+            }
             FileDialog::Delete { path, dir } => self.delete_path(path, dir),
         }
     }
@@ -680,6 +702,33 @@ pub fn default_workspace() -> PathBuf {
         }
     }
     cwd
+}
+
+/// The identifier around a 0-based line/UTF-16 column.
+fn word_at(text: &str, line: u32, col: u32) -> String {
+    let Some(line_text) = text.lines().nth(line as usize) else {
+        return String::new();
+    };
+    let chars: Vec<char> = line_text.chars().collect();
+    let mut index = 0;
+    let mut units = 0u32;
+    while index < chars.len() && units < col {
+        units += chars[index].len_utf16() as u32;
+        index += 1;
+    }
+    let is_word = |c: char| c.is_alphanumeric() || c == '_';
+    if index >= chars.len() || !is_word(chars[index]) {
+        return String::new();
+    }
+    let mut start = index;
+    while start > 0 && is_word(chars[start - 1]) {
+        start -= 1;
+    }
+    let mut end = index;
+    while end < chars.len() && is_word(chars[end]) {
+        end += 1;
+    }
+    chars[start..end].iter().collect()
 }
 
 pub fn file_name(path: &Path) -> String {

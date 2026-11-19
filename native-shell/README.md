@@ -52,9 +52,10 @@ backend uses.
 | Find / Replace     | nsh Editor search + commands                          | Ctrl+F opens the find bar with match counts and next/previous; Ctrl+H adds replacement with Replace and Replace All                           |
 | Format document    | `ide-lsp` `textDocument/formatting`                   | Ctrl+Alt+L formats the active document in memory through clangd, keeping the buffer dirty until saved                                         |
 | Find Usages        | `ide-lsp` `textDocument/references`                   | Alt+F7 lists project references in a Usages tool window; a click opens the file and places the caret                                          |
+| Rename symbol      | `ide-lsp` `textDocument/rename`                       | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS              |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                         |
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, selectable stack frames and locals |
-| File operations    | `std::fs` + native dialogs                            | Project header + / folder creates a file or folder beside the selection, opens it, and expands the tree                                       |
+| File operations    | `std::fs` + native dialogs                            | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames          |
 | File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                      |
 | Settings           | nsh `Storage` + `serde_json`                          | editor font size, tool-window sizes/visibility and recent projects persist across runs; Settings shows a font stepper and recent list         |
 

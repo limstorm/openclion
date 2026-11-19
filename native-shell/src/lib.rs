@@ -102,7 +102,8 @@ fn install_shortcuts(state: State) {
         state.find_open.set(true);
         state.replace_open.set(true);
     });
-    on_key("shift+F6", move |_| {
+    on_key("shift+F6", move |_| state.open_rename_symbol());
+    on_key("F2", move |_| {
         if let Some(selected) = state.selected.get() {
             state.open_rename(std::path::PathBuf::from(selected));
         }
@@ -127,6 +128,8 @@ fn install_shortcuts(state: State) {
         state.project_menu.set(false);
         state.settings.set(false);
         state.find_open.set(false);
+        state.dialog.set(None);
+        state.tree_menu.set(None);
         state.toast.set(None);
     });
 }

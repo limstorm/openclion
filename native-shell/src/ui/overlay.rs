@@ -602,6 +602,9 @@ fn file_dialog(state: State, pal: Palette) -> impl IntoElement {
         crate::model::FileDialog::Rename { path } => {
             ("Rename", path.to_string_lossy().to_string(), true, "Rename", false)
         }
+        crate::model::FileDialog::RenameSymbol { .. } => {
+            ("Rename Symbol", "Renames the symbol at the caret across the project".to_owned(), true, "Rename", false)
+        }
         crate::model::FileDialog::Delete { path, dir } => (
             if *dir { "Delete Folder" } else { "Delete File" },
             path.to_string_lossy().to_string(),

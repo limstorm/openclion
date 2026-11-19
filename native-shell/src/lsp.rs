@@ -9,8 +9,8 @@ use std::{
 };
 
 use ide_core::{
-    CancellationToken, Diagnostic, DocId, EventSink, IdeEvent, LanguageId, Pos, Range, Severity, SharedSink,
-    event::ServerStatus,
+    CancellationToken, Diagnostic, DocId, EventSink, FileEdit, IdeEvent, LanguageId, Pos, Range, Severity, SharedSink,
+    WorkspaceEdit, event::ServerStatus,
 };
 use ide_language::LanguageRegistry;
 use ide_lsp::LspManager;
@@ -287,6 +287,112 @@ pub fn definition(state: State, position: EditorPosition, editor: ComponentRef<E
             }
         });
     });
+}
+
+/// Renames the symbol at `line`/`col` (0-based) across the project and applies
+/// clangd's workspace edit to disk and open buffers.
+pub fn rename_symbol(state: State, line: u32, col: u32, new_name: String) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let manager = session.manager;
+    state.status.set(format!("Renaming to {new_name}…"));
+    spawn(async move {
+        let outcome = tokio::time::timeout(
+            Duration::from_secs(10),
+            manager.rename(DOC, Pos::new(line, col), new_name.clone(), CancellationToken::new()),
+        )
+        .await;
+        match outcome {
+            Err(_) => {
+                state.dialog.set(None);
+                state.status.set("Rename timed out".to_owned());
+            }
+            Ok(Err(error)) => {
+                state.dialog.set(None);
+                state.status.set(format!("Rename failed: {error}"));
+            }
+            Ok(Ok(renamed)) => {
+                let count = apply_workspace_edit(state, &renamed.edit);
+                state.reload_tree();
+                state.refresh_vcs();
+                if let Some(tab) = state.active_tab() {
+                    if let Some(api) = state.editor.api::<EditorApi>() {
+                        api.set_value(tab.text.clone());
+                    }
+                    change(state, &tab.text);
+                }
+                state.dialog.set(None);
+                state.status.set(format!("Renamed to {new_name} ({count} edit(s))"));
+            }
+        }
+    });
+}
+
+fn apply_workspace_edit(state: State, edit: &WorkspaceEdit) -> usize {
+    let mut count = 0;
+    let mut updated: Vec<(std::path::PathBuf, String)> = Vec::new();
+    for file in &edit.files {
+        match file {
+            FileEdit::Edit { path, edits } => {
+                let path = path.clone().into_path_buf();
+                let current = state
+                    .tabs
+                    .get()
+                    .into_iter()
+                    .find(|tab| tab.path == path)
+                    .map(|tab| tab.text)
+                    .or_else(|| std::fs::read_to_string(&path).ok());
+                let Some(current) = current else {
+                    continue;
+                };
+                let next = apply_edits(&current, edits);
+                if std::fs::write(&path, &next).is_ok() {
+                    updated.push((path, next));
+                    count += edits.len();
+                }
+            }
+            FileEdit::Rename { from, to } => {
+                let from = from.clone().into_path_buf();
+                let to = to.clone().into_path_buf();
+                let _ = std::fs::rename(&from, &to);
+                let mut tabs = state.tabs.get();
+                for tab in &mut tabs {
+                    if tab.path == from {
+                        tab.path = to.clone();
+                    }
+                }
+                state.tabs.set(tabs);
+                count += 1;
+            }
+            FileEdit::Create { path, .. } => {
+                let path = path.clone().into_path_buf();
+                let _ = std::fs::write(&path, "");
+                count += 1;
+            }
+            FileEdit::Delete { path, recursive } => {
+                let path = path.clone().into_path_buf();
+                let result = if *recursive { std::fs::remove_dir_all(&path) } else { std::fs::remove_file(&path) };
+                if result.is_ok() {
+                    count += 1;
+                }
+            }
+        }
+    }
+    if !updated.is_empty() {
+        let mut tabs = state.tabs.get();
+        for tab in &mut tabs {
+            if let Some((_, text)) = updated.iter().find(|(path, _)| *path == tab.path) {
+                tab.text = text.clone();
+                tab.modified = false;
+            }
+        }
+        state.tabs.set(tabs);
+        if let Some((_, text)) = updated.iter().find(|(path, _)| *path == state.active_path.get()) {
+            state.editor_seed.set(text.clone());
+        }
+    }
+    count
 }
 
 /// Find Usages (Alt+F7): clangd's references for the symbol at the caret.
