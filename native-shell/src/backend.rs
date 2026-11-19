@@ -17,15 +17,6 @@ use nsh_core::prelude::*;
 use crate::model::{SearchHit, State};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct GithubPr {
-    pub number: u64,
-    pub title: String,
-    pub author: String,
-    pub branch: String,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub struct CmakeSelection {
     pub build_dir: String,
     pub target: String,
@@ -400,52 +391,6 @@ impl State {
                     state.refresh_vcs();
                 }
                 Err(error) => state.status.set(format!("Commit failed: {error}")),
-            }
-        });
-    }
-
-    /// Lists open pull requests with the GitHub CLI.
-    pub fn refresh_github(&self) {
-        let state = *self;
-        let root = self.root.get();
-        self.github_status.set("Loading pull requests…".to_owned());
-        spawn(async move {
-            let result = blocking(move || {
-                let output = Command::new("gh")
-                    .args(["pr", "list", "--limit", "20", "--json", "number,title,author,headRefName,url"])
-                    .current_dir(&root)
-                    .output()
-                    .map_err(|error| format!("gh not available: {error}"))?;
-                if !output.status.success() {
-                    return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
-                }
-                let value: serde_json::Value =
-                    serde_json::from_slice(&output.stdout).map_err(|error| format!("gh output: {error}"))?;
-                let prs: Vec<GithubPr> = value
-                    .as_array()
-                    .map(|items| {
-                        items
-                            .iter()
-                            .map(|item| GithubPr {
-                                number: item["number"].as_u64().unwrap_or(0),
-                                title: item["title"].as_str().unwrap_or_default().to_owned(),
-                                author: item["author"]["login"].as_str().unwrap_or_default().to_owned(),
-                                branch: item["headRefName"].as_str().unwrap_or_default().to_owned(),
-                                url: item["url"].as_str().unwrap_or_default().to_owned(),
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                Ok(prs)
-            })
-            .await;
-            match result {
-                Ok(Ok(prs)) => {
-                    state.github_status.set(format!("{} open pull requests", prs.len()));
-                    state.github_prs.set(prs);
-                }
-                Ok(Err(error)) => state.github_status.set(error),
-                Err(error) => state.github_status.set(format!("GitHub task failed: {error}")),
             }
         });
     }
@@ -828,6 +773,31 @@ fn civil_from_days(days: i64) -> (i64, u32, u32) {
     let d = doy - (153 * mp + 2) / 5 + 1;
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     (if m <= 2 { y + 1 } else { y }, m as u32, d as u32)
+}
+
+/// Reads an `.ipynb` into markdown/code cells for the native viewer.
+pub fn read_notebook(path: &Path) -> Option<crate::model::NotebookView> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let cells = json["cells"]
+        .as_array()?
+        .iter()
+        .map(|cell| {
+            let kind = cell["cell_type"].as_str().unwrap_or("code").to_owned();
+            let source = match &cell["source"] {
+                serde_json::Value::String(text) => text.clone(),
+                serde_json::Value::Array(lines) => {
+                    lines.iter().filter_map(|line| line.as_str()).collect::<Vec<_>>().join("")
+                }
+                _ => String::new(),
+            };
+            crate::model::NotebookCell { kind, source }
+        })
+        .collect();
+    Some(crate::model::NotebookView {
+        title: path.file_name().map(|name| name.to_string_lossy().to_string()).unwrap_or_else(|| "Notebook".to_owned()),
+        cells,
+    })
 }
 
 /// Hosts from `~/.ssh/config` (concrete names only).

@@ -26,7 +26,7 @@ native-shell/
 │       ├── rail.rs          left and right tool-window stripes
 │       ├── tree_panel.rs    Project / Commit / Structure / Bookmarks / Search
 │       ├── editor_panel.rs  editor tabs + nsh Editor
-│       ├── panels.rs        CMake, Notifications, AI, Database, Terminal…
+│       ├── panels.rs        CMake, Notifications, AI, SSH, Notebooks, Terminal…
 │       ├── status.rs        breadcrumbs and editor details
 │       └── overlay.rs       Quick Open, project menu, Settings, toast
 ├── assets/                  Inter, JetBrains Mono, expui icons, nsh themes
@@ -56,13 +56,11 @@ backend uses.
 | Rename symbol      | `ide-lsp` `textDocument/rename`                | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                                                                 |
 | Code actions       | `ide-lsp` `textDocument/codeAction`            | Alt+Enter lists quick fixes/refactors; the chosen action applies its WorkspaceEdit or runs its command                                                                                           |
 | Type hierarchy     | `ide-lsp` `prepareTypeHierarchy`               | Ctrl+Alt+H lists supertypes/subtypes in a Hierarchy dock; clicking opens the declaration                                                                                                         |
-| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell with ANSI colours and resize; padded 13pt JetBrains Mono surface, visible block cursor and automatic focus; build/run output streams in                                         |
+| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, 13pt JetBrains Mono, no padding; a clean single-line path prompt (right-side Node/time RPROMPT removed) and a block cursor at the prompt                                       |
 | Debugging          | `ide-dap` + lldb-dap                           | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
 | Services (Docker)  | `ide-docker`                                   | Services tool window shows daemon status, containers and image count; Start/Stop acts on a container and refreshes the snapshot                                                                  |
-| GitHub             | `gh` CLI                                       | right-rail GitHub window lists open PRs (number/title/author/branch); clicking opens the PR in the browser                                                                                       |
-| SSH                | `~/.ssh/config`                                | right-rail SSH window lists concrete hosts; clicking opens the Terminal and runs `ssh <host>`                                                                                                    |
-| Notebooks          | `std::fs`                                      | right-rail window lists `.ipynb` files in the project and opens one in the editor                                                                                                                |
-| Database           | `std::fs`                                      | right-rail window lists SQLite databases in the workspace                                                                                                                                        |
+| SSH                | `~/.ssh/config`                                | right-rail SSH window lists concrete hosts with Refresh; clicking opens the Terminal and runs `ssh <host>`                                                                                       |
+| Notebooks          | `std::fs` + `serde_json`                       | right-rail window lists `.ipynb` files; clicking opens a native cell viewer (Markdown/Code) instead of raw JSON                                                                                  |
 | AI Assistant       | native views                                   | local chat surface that can start a build, explain the open file or open Find in Files (no model backend embedded)                                                                               |
 | File operations    | `std::fs` + native dialogs                     | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                                             |
 | Project tree       | `std::fs` walk + nsh views                     | root on top, 12pt indentation per level, clicking the root collapses/expands the whole project                                                                                                   |
@@ -155,7 +153,7 @@ diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
 Debug watch/condition/logpoints and the Docker Services window are done;
-Database, GitHub, SSH, Notebook and AI tool windows are the next slices, while
+SSH, Notebook and AI tool windows are the next slices, while
 the shell keeps the Islands layout.
 
 Islands Light is the target and the default. `theme.rs` also carries the

@@ -47,9 +47,7 @@ pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
         .pb(px(6.0))
         .gap(px(2.0))
         .child(right_button(state, pal, icons::NOTIFICATIONS, RightTool::Notifications, "Notifications"))
-        .child(right_button(state, pal, icons::GIT_PULL, RightTool::Github, "GitHub"))
         .child(right_button(state, pal, icons::TERMINAL, RightTool::Ssh, "SSH"))
-        .child(right_button(state, pal, icons::DATABASE, RightTool::Database, "Database"))
         .child(right_button(state, pal, icons::BOOKMARKS, RightTool::Notebook, "Notebooks"))
         .child(right_action(state, pal, AI_TARGET, RightTool::Agents))
 }
@@ -142,8 +140,6 @@ fn right_button(state: State, pal: Palette, markup: &'static str, tool: RightToo
             RightTool::Cmake => "rail-cmake",
             RightTool::Notifications => "rail-notifications",
             RightTool::Agents => "rail-agents",
-            RightTool::Database => "rail-database",
-            RightTool::Github => "rail-github",
             RightTool::Ssh => "rail-ssh",
             RightTool::Notebook => "rail-notebook",
         })

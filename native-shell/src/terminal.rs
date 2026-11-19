@@ -43,7 +43,16 @@ pub fn ensure_started(state: State) {
         }),
     ) {
         Ok(info) => {
-            state.terminal_session.replace(Some(Session { manager, id: info.id }));
+            let id = info.id;
+            let manager_for_prompt = manager.clone();
+            state.terminal_session.replace(Some(Session { manager, id }));
+            // The user's theme prints a right-hand Node/time prompt on every
+            // line; it adds no information here and misplaces the cursor.
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(450)).await;
+                let _ = manager_for_prompt
+                    .write(id, " PS1='\\w $ '; PROMPT='%~ $ '; RPROMPT=''; precmd_functions=(); clear\n");
+            });
             spawn(async move {
                 while let Some(data) = rx.recv().await {
                     write_output(state, &data);

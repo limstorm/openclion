@@ -1,4 +1,4 @@
-//! The right tool window (CMake, Notifications, AI, Database) and the
+//! The right tool window (CMake, Notifications, AI, SSH, Notebooks) and the
 //! bottom tool window (Terminal, Problems, Run, Services).
 
 use nsh_core::element::FontWeight;
@@ -24,8 +24,6 @@ pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
             RightTool::Cmake => cmake_body(state, pal).into_element(),
             RightTool::Notifications => notifications_body(state, pal).into_element(),
             RightTool::Agents => agents_body(state, pal).into_element(),
-            RightTool::Database => database_body(state, pal).into_element(),
-            RightTool::Github => github_body(state, pal).into_element(),
             RightTool::Ssh => ssh_body(state, pal).into_element(),
             RightTool::Notebook => notebook_body(state, pal).into_element(),
         })))
@@ -36,8 +34,6 @@ fn right_header(state: State, pal: Palette) -> impl IntoElement {
         RightTool::Cmake => "CMake",
         RightTool::Notifications => "Notifications",
         RightTool::Agents => "AI Assistant",
-        RightTool::Database => "Database",
-        RightTool::Github => "GitHub",
         RightTool::Ssh => "SSH",
         RightTool::Notebook => "Notebooks",
     };
@@ -383,55 +379,6 @@ fn ai_send(state: State) {
     state.ai_messages.update(|messages| messages.push(("Assistant".to_owned(), reply)));
 }
 
-fn github_body(state: State, pal: Palette) -> impl IntoElement {
-    effect(move || state.refresh_github());
-    view()
-        .flex_col()
-        .w_full()
-        .p(px(10.0))
-        .gap(px(4.0))
-        .child(text_ui("GitHub", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-        .child(dynamic(move || {
-            let status = state.github_status.get();
-            if status.is_empty() {
-                return view().into_element();
-            }
-            text_muted(status, 11.0, pal).into_element()
-        }))
-        .child(scroll().flex_1().child(dynamic(move || {
-            let prs = state.github_prs.get();
-            if prs.is_empty() {
-                return view()
-                    .p(px(6.0))
-                    .child(text_muted("No open pull requests (or not signed in to gh)", 11.0, pal))
-                    .into_element();
-            }
-            view()
-                .flex_col()
-                .w_full()
-                .gap(px(2.0))
-                .children(prs.into_iter().map(move |pr| {
-                    let url = pr.url.clone();
-                    view()
-                        .w_full()
-                        .flex_col()
-                        .gap(px(1.0))
-                        .p(px(6.0))
-                        .rounded(px(5.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
-                        .on_press(move || {
-                            let url = url.clone();
-                            spawn(async move {
-                                let _ = open_url(url).await;
-                            });
-                        })
-                        .child(text_ui(format!("#{} {}", pr.number, pr.title), 11.0, pal.fg).truncate())
-                        .child(text_muted(format!("{} · {}", pr.author, pr.branch), 10.0, pal))
-                }))
-                .into_element()
-        })))
-}
-
 fn ssh_body(state: State, pal: Palette) -> impl IntoElement {
     let hosts = state.ssh_hosts.get();
     view()
@@ -439,7 +386,15 @@ fn ssh_body(state: State, pal: Palette) -> impl IntoElement {
         .w_full()
         .p(px(10.0))
         .gap(px(4.0))
-        .child(text_ui("SSH", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
+        .child(
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .child(text_ui("SSH", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
+                .child(view().flex_1())
+                .child(debug_text_button(pal, "Refresh", move || state.refresh_ssh())),
+        )
         .child(text_muted("Hosts from ~/.ssh/config", 11.0, pal))
         .child(scroll().flex_1().children(if hosts.is_empty() {
             vec![view().p(px(6.0)).child(text_muted("No hosts configured", 11.0, pal)).into_element()]
@@ -499,62 +454,13 @@ fn notebook_body(state: State, pal: Palette) -> impl IntoElement {
                         .px(px(6.0))
                         .rounded(px(4.0))
                         .hover(move |s| s.bg(pal.tree_hover))
-                        .on_press(move || state.open_path(open.clone()))
+                        .on_press(move || state.open_notebook(open.clone()))
                         .child(icon(icons::BOOKMARKS, 13.0, pal.fg_muted))
                         .child(text_ui(name, 12.0, pal.fg))
                         .into_element()
                 })
                 .collect()
         }))
-}
-
-fn database_body(state: State, pal: Palette) -> impl IntoElement {
-    let databases: Vec<std::path::PathBuf> = state
-        .files()
-        .into_iter()
-        .filter(|path| path.extension().is_some_and(|ext| ext == "db" || ext == "sqlite" || ext == "sqlite3"))
-        .collect();
-    view()
-        .flex_col()
-        .w_full()
-        .p(px(10.0))
-        .gap(px(8.0))
-        .child(text_ui("Database", 13.0, pal.fg_strong).font_weight(FontWeight::SEMIBOLD))
-        .child(text_muted(
-            if databases.is_empty() {
-                "No SQLite databases in this workspace."
-            } else {
-                "SQLite databases in this workspace:"
-            },
-            12.0,
-            pal,
-        ))
-        .child(scroll().flex_1().children(databases.into_iter().map(move |path| {
-            let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-            view()
-                .h(px(24.0))
-                .flex_row()
-                .items_center()
-                .gap(px(6.0))
-                .px(px(6.0))
-                .hover(move |s| s.bg(pal.tree_hover))
-                .child(icon(icons::DATABASE, 13.0, pal.fg_muted))
-                .child(text_ui(name, 12.0, pal.fg))
-        })))
-        .child(
-            view()
-                .h(px(28.0))
-                .items_center()
-                .justify_center()
-                .rounded(px(6.0))
-                .border(px(1.0))
-                .border_color(pal.border_strong)
-                .hover(move |s| s.bg(pal.toolbar_hover))
-                .on_press(move || {
-                    state.status.set("Add data source".to_owned());
-                })
-                .child(text_ui("Add data source", 12.0, pal.fg_secondary)),
-        )
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,7 +1088,7 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             });
         }
     });
-    view().flex_1().w_full().min_h(px(0.0)).p(px(8.0)).bg(pal.bg_island).child(
+    view().flex_1().w_full().min_h(px(0.0)).overflow_hidden().bg(pal.bg_island).child(
         nsh_base::terminal()
             .component_ref(&state.terminal_ref)
             .flex_1()

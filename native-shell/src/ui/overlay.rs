@@ -9,7 +9,7 @@ use nsh_core::prelude::*;
 
 use crate::icons;
 use crate::model::{State, file_name};
-use crate::theme::{Palette, UI_FONT};
+use crate::theme::{MONO_FONT, Palette, UI_FONT};
 use crate::ui::{icon, text_muted, text_strong, text_ui};
 
 pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || notebook_view(state, pal).into_element()))
         .child(dynamic(move || code_action_popup(state, pal).into_element()))
         .child(dynamic(move || app_menu(state, pal).into_element()))
         .child(dynamic(move || tree_menu(state, pal).into_element()))
@@ -699,6 +700,75 @@ fn setting_row(pal: Palette, title: &'static str, detail: &'static str, control:
         .child(text_muted(detail, 12.0, pal))
         .child(view().h(px(4.0)))
         .child(control)
+}
+
+fn notebook_view(state: State, pal: Palette) -> impl IntoElement {
+    let Some(notebook) = state.notebook.get() else {
+        return view().into_element();
+    };
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .items_center()
+        .justify_center()
+        .bg(c(0x00000040))
+        .child(
+            view()
+                .w(px(880.0))
+                .h(px(660.0))
+                .flex_col()
+                .overflow_hidden()
+                .rounded(px(10.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .child(
+                    view()
+                        .h(px(40.0))
+                        .flex_none()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(12.0))
+                        .border_b_1()
+                        .border_color(pal.border)
+                        .child(icon(icons::BOOKMARKS, 16.0, pal.fg_muted))
+                        .child(text_strong(notebook.title, 13.0, pal))
+                        .child(view().flex_1())
+                        .child(text_muted(format!("{} cells", notebook.cells.len()), 11.0, pal))
+                        .child(
+                            view()
+                                .size(px(24.0))
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(4.0))
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.notebook.set(None))
+                                .child(icon(icons::CLOSE, 12.0, pal.fg_muted)),
+                        ),
+                )
+                .child(scroll().flex_1().child(view().flex_col().w_full().p(px(14.0)).gap(px(8.0)).children(
+                    notebook.cells.into_iter().map(move |cell| {
+                        view()
+                            .flex_col()
+                            .w_full()
+                            .gap(px(4.0))
+                            .p(px(8.0))
+                            .rounded(px(6.0))
+                            .border(px(1.0))
+                            .border_color(pal.border)
+                            .bg(pal.bg_elev)
+                            .child(text_muted(if cell.kind == "markdown" { "Markdown" } else { "Code" }, 9.0, pal))
+                            .children(
+                                cell.source
+                                    .lines()
+                                    .map(|line| text_ui(line.to_owned(), 12.0, pal.fg).font_family(MONO_FONT.family))
+                                    .collect::<Vec<_>>(),
+                            )
+                    }),
+                ))),
+        )
+        .into_element()
 }
 
 fn code_action_popup(state: State, pal: Palette) -> impl IntoElement {
