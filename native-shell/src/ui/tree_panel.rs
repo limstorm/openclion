@@ -514,7 +514,91 @@ fn search_panel(state: State, pal: Palette) -> impl IntoElement {
                                 .child(icon(icons::SEARCH, 16.0, white().into())),
                         ),
                 )
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child(
+                            input()
+                                .flex_1()
+                                .h(px(26.0))
+                                .px(px(7.0))
+                                .rounded(px(5.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .bg(pal.bg_island)
+                                .text_color(pal.fg)
+                                .text_size(px(12.0))
+                                .placeholder("Replace with")
+                                .value(move || state.search_replace.get())
+                                .on_change(move |value: &str| state.search_replace.set(value.to_owned())),
+                        )
+                        .child(
+                            view()
+                                .h(px(26.0))
+                                .px(px(8.0))
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(5.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.replace_in_files())
+                                .child(text_ui("Replace All", 10.0, pal.fg_secondary)),
+                        ),
+                )
+                .child(
+                    view()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child(search_toggle(pal, "Aa", state.search_case, move || {
+                            state.search_case.update(|value| *value = !*value)
+                        }))
+                        .child(search_toggle(pal, ".*", state.search_regex, move || {
+                            state.search_regex.update(|value| *value = !*value)
+                        }))
+                        .child(search_toggle(pal, "W", state.search_word, move || {
+                            state.search_word.update(|value| *value = !*value)
+                        }))
+                        .child(search_toggle(pal, "Preserve", state.search_preserve, move || {
+                            state.search_preserve.update(|value| *value = !*value)
+                        })),
+                )
+                .child(
+                    input()
+                        .h(px(24.0))
+                        .px(px(7.0))
+                        .rounded(px(5.0))
+                        .border(px(1.0))
+                        .border_color(pal.border)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(11.0))
+                        .placeholder("File mask, e.g. *.cpp, src/**")
+                        .value(move || state.search_include.get())
+                        .on_change(move |value: &str| state.search_include.set(value.to_owned()))
+                        .on_submit(move |_: &str| state.search_backend()),
+                )
                 .child(dynamic(move || search_results(state, pal))),
+        )
+}
+
+fn search_toggle(pal: Palette, label: &'static str, active: Signal<bool>, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(22.0))
+        .px(px(6.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .border(px(1.0))
+        .border_color(move || if active.get() { pal.accent } else { pal.border_strong })
+        .bg(move || if active.get() { pal.accent } else { pal.bg_island })
+        .on_press(on_press)
+        .child(
+            text_ui(label, 10.0, pal.fg_secondary)
+                .text_color(move || if active.get() { white().into() } else { pal.fg_secondary }),
         )
 }
 

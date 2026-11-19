@@ -46,7 +46,7 @@ backend uses.
 | Build / Run        | `cmake --build … --target …` + the artifact    | header/bottom Build builds the selected CMake target without running; Run builds then runs it; the target tree is clickable                                                                      |
 | Run configurations | `ide-cmake` executables                        | the title-bar widget opens a chooser of CMake executable targets; the selected target drives Run, Debug and the Run tool window                                                                  |
 | Git / Commit       | `ide-vcs` (`status`, `stage`, `commit`, `log`) | full-width Git dock (Log/Console/Worktrees), left Commit window with per-file checkboxes, Amend, pre-commit `git diff --check`, message and Commit                                               |
-| Find in Files      | `ide-search` (ripgrep engine)                  | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                                                                                    |
+| Find in Files      | `ide-search` (ripgrep engine)                  | Ctrl+Shift+F panel with regex/case/whole-word toggles, file masks, Replace-with field and Replace All (preserve case on by default)                                                              |
 | clangd diagnostics | `ide-lsp` + `ide-language`                     | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                                                                                 |
 | clangd completion  | `ide-lsp` completion                           | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                                                                            |
 | Go to definition   | `ide-lsp` goto                                 | F12 on a symbol opens the target and places the caret at the definition                                                                                                                          |
@@ -126,7 +126,7 @@ cargo run
 | Edit                | type in the NSH editor; the tab shows a modified dot |
 | Save                | Ctrl+S                                               |
 | Close tab           | Ctrl+W or the tab's ×                                |
-| Find in Files       | Ctrl+Shift+F (or the rail magnifier)                 |
+| Find in Files       | `ide-search` (ripgrep engine)                        | Ctrl+Shift+F panel with regex/case/whole-word toggles, file masks, Replace-with field and Replace All (preserve case on by default) |
 | Terminal            | Ctrl+` or the rail terminal icon                     |
 | Commit              | Ctrl+K                                               |
 | Git dock            | Alt+9, or the bottom-left Git rail button            |

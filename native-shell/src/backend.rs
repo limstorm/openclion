@@ -9,7 +9,7 @@ use std::{
 };
 
 use ide_core::CancellationToken;
-use ide_search::{FileMatches, SearchQuery, SearchScope};
+use ide_search::{FileMatches, ReplaceEvent, ReplaceHost, ReplaceTarget, SearchQuery, SearchScope};
 use ide_vcs::{ChangeKind, Repo};
 use nsh_core::prelude::*;
 
@@ -182,21 +182,32 @@ fn cmakelists_targets(path: &Path) -> Vec<(String, ide_cmake::CmakeTargetKind)> 
 }
 
 /// Runs the ripgrep-backed project search and returns flat, UI-ready hits.
-pub fn search_project(root: &Path, pattern: &str) -> Vec<SearchHit> {
-    if pattern.trim().is_empty() {
-        return Vec::new();
-    }
-    let query = SearchQuery {
+fn search_query(pattern: &str, regex: bool, case_sensitive: bool, whole_word: bool, include: &str) -> SearchQuery {
+    SearchQuery {
         pattern: pattern.to_owned(),
-        is_regex: false,
-        case_sensitive: false,
-        whole_word: false,
-        include: Vec::new(),
+        is_regex: regex,
+        case_sensitive,
+        whole_word,
+        include: include.split(',').map(str::trim).filter(|mask| !mask.is_empty()).map(str::to_owned).collect(),
         exclude: Vec::new(),
         scope: SearchScope::Project,
         max_matches: 500,
         context: ide_search::SearchContext::Any,
-    };
+    }
+}
+
+pub fn search_project(
+    root: &Path,
+    pattern: &str,
+    regex: bool,
+    case_sensitive: bool,
+    whole_word: bool,
+    include: &str,
+) -> Vec<SearchHit> {
+    if pattern.trim().is_empty() {
+        return Vec::new();
+    }
+    let query = search_query(pattern, regex, case_sensitive, whole_word, include);
     let collected: Mutex<Vec<SearchHit>> = Mutex::new(Vec::new());
     let on_file = |file: FileMatches| {
         let path = file.path.clone().into_path_buf();
@@ -388,6 +399,110 @@ impl State {
         });
     }
 
+    /// Replaces every match in the files of the last search.
+    pub fn replace_in_files(&self) {
+        let pattern = self.search_query.get();
+        let replacement = self.search_replace.get();
+        if pattern.trim().is_empty() {
+            self.status.set("Nothing to replace".to_owned());
+            return;
+        }
+        let hits = self.search_results.get();
+        if hits.is_empty() {
+            self.status.set("Run a search before replacing".to_owned());
+            return;
+        }
+        let mut seen = std::collections::HashSet::new();
+        let targets: Vec<ReplaceTarget> = hits
+            .iter()
+            .filter(|hit| seen.insert(hit.path.clone()))
+            .map(|hit| ReplaceTarget { path: hit.path.clone().into(), only: None })
+            .collect();
+        let query = search_query(
+            &pattern,
+            self.search_regex.get(),
+            self.search_case.get(),
+            self.search_word.get(),
+            &self.search_include.get(),
+        );
+        let preserve = self.search_preserve.get();
+        let state = *self;
+        self.status.set("Replacing…".to_owned());
+        spawn(async move {
+            let outcome = blocking(move || {
+                struct Host;
+                impl ReplaceHost for Host {
+                    fn edit_file(
+                        &self,
+                        path: &Path,
+                        compute: &mut dyn FnMut(&str) -> ide_core::IdeResult<Vec<ide_core::TextEdit>>,
+                    ) -> ide_core::IdeResult<u32> {
+                        let text = std::fs::read_to_string(path)
+                            .map_err(|error| ide_core::IdeError::internal(error.to_string()))?;
+                        let edits = compute(&text)?;
+                        let count = edits.len() as u32;
+                        let next = ide_search::apply_edits(&text, &edits);
+                        std::fs::write(path, next).map_err(|error| ide_core::IdeError::internal(error.to_string()))?;
+                        Ok(count)
+                    }
+                }
+                let changed = Mutex::new(Vec::new());
+                let summary = ide_search::replace_files(
+                    &Host,
+                    &query,
+                    &replacement,
+                    preserve,
+                    &targets,
+                    &CancellationToken::new(),
+                    &|event| {
+                        if let ReplaceEvent::File { path, replacements, .. } = event
+                            && replacements > 0
+                        {
+                            changed.lock().unwrap_or_else(|poison| poison.into_inner()).push(path.into_path_buf());
+                        }
+                    },
+                );
+                (summary, changed.into_inner().unwrap_or_else(|poison| poison.into_inner()))
+            })
+            .await;
+            let outcome = match outcome {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    state.status.set(format!("Replace failed: {error}"));
+                    return;
+                }
+            };
+            let (summary, changed) = outcome;
+            match summary {
+                Ok(summary) => {
+                    let mut tabs = state.tabs.get();
+                    for tab in &mut tabs {
+                        if changed.iter().any(|path| path == &tab.path)
+                            && let Ok(text) = std::fs::read_to_string(&tab.path)
+                        {
+                            tab.text = text;
+                            tab.modified = false;
+                        }
+                    }
+                    state.tabs.set(tabs);
+                    if let Some(tab) = state.active_tab() {
+                        if changed.iter().any(|path| path == &tab.path) {
+                            if let Some(api) = state.editor.api::<nsh_base::editor::EditorApi>() {
+                                api.set_value(tab.text.clone());
+                            }
+                            crate::lsp::change(state, &tab.text);
+                        }
+                    }
+                    state.reload_tree();
+                    state.refresh_vcs();
+                    state.search_results.set(Vec::new());
+                    state.status.set(format!("Replaced {} in {} file(s)", summary.replacements, summary.files));
+                }
+                Err(error) => state.status.set(format!("Replace failed: {error}")),
+            }
+        });
+    }
+
     /// Finds in files with `ide-search` instead of the fallback line walk.
     pub fn search_backend(&self) {
         let state = *self;
@@ -397,9 +512,15 @@ impl State {
             self.search_results.set(Vec::new());
             return;
         }
+        let regex = self.search_regex.get();
+        let case_sensitive = self.search_case.get();
+        let whole_word = self.search_word.get();
+        let include = self.search_include.get();
         self.searching.set(true);
         spawn(async move {
-            let hits = blocking(move || search_project(&root, &pattern)).await.unwrap_or_default();
+            let hits = blocking(move || search_project(&root, &pattern, regex, case_sensitive, whole_word, &include))
+                .await
+                .unwrap_or_default();
             state.search_results.set(hits);
             state.searching.set(false);
         });
