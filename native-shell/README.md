@@ -93,10 +93,17 @@ Requirements: Rust 1.97+, GTK 4.14 development headers, and the `nsh` CLI
 
 ```sh
 cd native-shell
+./run-openclion.sh      # launch the already built binary with the local GTK sysroot
+
 nsh run                 # builds the nsh runner and opens the app
 # or, directly on this machine's backend:
 cargo run
 ```
+
+`run-openclion.sh` sets `LD_LIBRARY_PATH` to the local `.sysroot`, `GDK_BACKEND=x11`
+and starts `target/debug/openclion-native` from this directory, so the demo
+workspace resolves. There is also a desktop entry named **OpenCLion Native**
+in the application menu.
 
 Open another workspace with `OPENCLION_WORKSPACE=/path/to/project`.
 
