@@ -849,19 +849,81 @@ fn run_body(state: State, pal: Palette) -> impl IntoElement {
 
 fn services_body(state: State, pal: Palette) -> impl IntoElement {
     view()
-        .flex_1()
+        .flex_col()
         .w_full()
-        .items_center()
-        .justify_center()
-        .child(text_muted("No services are running", 13.0, pal))
+        .p(px(8.0))
+        .gap(px(4.0))
         .child(
             view()
-                .h(px(26.0))
-                .px(px(10.0))
+                .h(px(22.0))
+                .flex_row()
                 .items_center()
-                .rounded(px(6.0))
-                .hover(move |s| s.bg(pal.toolbar_hover))
-                .on_press(move || state.status.set("Add a service".to_owned()))
-                .child(text_ui("Add service", 12.0, pal.fg_secondary)),
+                .gap(px(6.0))
+                .child(icon(icons::SERVICES, 14.0, pal.fg_muted))
+                .child(dynamic(move || {
+                    let label = state
+                        .docker
+                        .get()
+                        .map(|docker| docker.status)
+                        .unwrap_or_else(|| "Loading Docker services…".to_owned());
+                    text_ui(label, 11.0, pal.fg_muted).into_element()
+                }))
+                .child(view().flex_1())
+                .child(debug_text_button(pal, "Refresh", move || state.refresh_docker())),
         )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let Some(docker) = state.docker.get() else {
+                return view().p(px(8.0)).child(text_muted("Loading…", 12.0, pal)).into_element();
+            };
+            if !docker.ready {
+                return view().p(px(8.0)).child(text_muted(docker.status, 12.0, pal)).into_element();
+            }
+            let mut rows: Vec<View> = Vec::new();
+            for container in docker.containers {
+                let name = container.name.clone();
+                let image = container.image.clone();
+                let status = container.status.clone();
+                let running = container.running;
+                let id = container.id.clone();
+                rows.push(
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .child(icon(icons::SERVICES, 13.0, if running { pal.success } else { pal.fg_faint }))
+                        .child(text_ui(name, 12.0, pal.fg))
+                        .child(text_muted(image, 10.0, pal).truncate())
+                        .child(view().flex_1())
+                        .child(text_muted(status, 10.0, pal))
+                        .child(
+                            view()
+                                .h(px(18.0))
+                                .px(px(6.0))
+                                .items_center()
+                                .rounded(px(3.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.docker_container_op(id.clone(), !running))
+                                .child(text_ui(if running { "Stop" } else { "Start" }, 10.0, pal.fg_secondary)),
+                        ),
+                );
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .gap(px(2.0))
+                .child(text_muted(format!("{} containers · {} images", rows.len(), docker.images), 10.0, pal))
+                .children(rows)
+                .child(if docker.errors.is_empty() {
+                    view().into_element()
+                } else {
+                    text_ui(docker.errors.join(" · "), 10.0, pal.danger).into_element()
+                })
+                .into_element()
+        })))
 }

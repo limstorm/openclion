@@ -103,3 +103,12 @@ fn choosing_a_run_target_updates_the_title_bar_widget() {
     app.press("acme_tests").unwrap();
     app.wait_for("acme_tests (Debug)").unwrap();
 }
+
+#[test]
+fn the_services_panel_lists_docker() {
+    let mut app = start();
+    app.wait_for("Project").unwrap();
+    app.press("id:rail-services").unwrap();
+    app.wait_for("Services").unwrap();
+    app.wait_for("Refresh").unwrap();
+}

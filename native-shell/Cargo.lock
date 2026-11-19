@@ -3114,6 +3114,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ide-docker"
+version = "0.1.33"
+dependencies = [
+ "ide-core",
+ "libc",
+ "serde",
+ "serde_json",
+ "specta",
+ "tracing",
+ "which",
+]
+
+[[package]]
 name = "ide-jsonrpc"
 version = "0.1.33"
 dependencies = [
@@ -4476,6 +4489,7 @@ dependencies = [
  "ide-cmake",
  "ide-core",
  "ide-dap",
+ "ide-docker",
  "ide-language",
  "ide-lsp",
  "ide-search",

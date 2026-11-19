@@ -19,6 +19,7 @@ ide-language = { path = "../crates/ide-language" }
 ide-text = { path = "../crates/ide-text" }
 ide-terminal = { path = "../crates/ide-terminal" }
 ide-dap = { path = "../crates/ide-dap" }
+ide-docker = { path = "../crates/ide-docker" }
 tokio = { version = "1", features = ["sync"] }
 notify = "8"
 notify-debouncer-full = "0.6"

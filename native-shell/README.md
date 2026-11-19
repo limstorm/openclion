@@ -56,6 +56,7 @@ backend uses.
 | Rename symbol      | `ide-lsp` `textDocument/rename`                       | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                                                                 |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                                                                            |
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
+| Services (Docker)  | `ide-docker`                                          | Services tool window shows daemon status, containers and image count; Start/Stop acts on a container and refreshes the snapshot                                                                  |
 | File operations    | `std::fs` + native dialogs                            | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                                             |
 | File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                                                                         |
 | Settings           | nsh `Storage` + `serde_json`                          | Appearance/Editor/Keymap/Plugins/Build pages; font size, layout and recent projects persist; Keymap lists shortcuts, Plugins the bundled integrations                                            |
@@ -138,8 +139,9 @@ The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
-Debug watch is implemented; conditional breakpoints and more main-branch tool
-windows are the next slices, while the shell keeps the Islands layout.
+Debug watch/condition/logpoints and the Docker Services window are done;
+Database, GitHub, SSH, Notebook and AI tool windows are the next slices, while
+the shell keeps the Islands layout.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native

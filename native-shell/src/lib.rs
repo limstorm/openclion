@@ -44,6 +44,7 @@ pub fn App() -> impl IntoElement {
     install_shortcuts(state);
     state.refresh_cmake();
     state.refresh_vcs();
+    state.refresh_docker();
     terminal::ensure_started(state);
     debug::init(state);
     watch::start(state);
