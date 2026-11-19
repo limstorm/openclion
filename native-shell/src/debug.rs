@@ -31,6 +31,12 @@ pub struct DebugVar {
     pub expanded: bool,
 }
 
+#[derive(Clone, PartialEq)]
+pub struct WatchValue {
+    pub expression: String,
+    pub value: String,
+}
+
 #[derive(Clone)]
 pub struct DebugBridge {
     manager: Arc<DebugManager>,
@@ -98,6 +104,7 @@ fn handle(state: State, event: IdeEvent) {
             state.debug_session.set(None);
             state.debug_frames.set(Vec::new());
             state.debug_vars.set(Vec::new());
+            state.debug_watch_values.set(Vec::new());
             state.debug_line.set(None);
             state.debug_status.set("Session ended".to_owned());
         }
@@ -263,6 +270,54 @@ pub fn select_frame(state: State, index: usize) {
             }
         }
         state.debug_vars.set(vars);
+        refresh_watch(state);
+    });
+}
+
+/// Adds a watch expression and evaluates it at the selected frame.
+pub fn add_watch(state: State, expression: String) {
+    let expression = expression.trim().to_owned();
+    if expression.is_empty() {
+        return;
+    }
+    state.debug_watch.update(|watch| {
+        if !watch.contains(&expression) {
+            watch.push(expression);
+        }
+    });
+    state.debug_watch_input.set(String::new());
+    refresh_watch(state);
+}
+
+pub fn remove_watch(state: State, index: usize) {
+    state.debug_watch.update(|watch| {
+        if index < watch.len() {
+            watch.remove(index);
+        }
+    });
+    refresh_watch(state);
+}
+
+/// Re-evaluates every watch expression at the selected frame.
+pub fn refresh_watch(state: State) {
+    let (Some(session), Some(bridge)) = (state.debug_session.get(), state.debug_bridge.get()) else {
+        return;
+    };
+    let Some(frame) = state.debug_frames.get().get(state.debug_selected.get()).cloned() else {
+        return;
+    };
+    let manager = bridge.manager;
+    spawn(async move {
+        let mut values = Vec::new();
+        for expression in state.debug_watch.get() {
+            let value = manager
+                .evaluate(session, Some(frame.id), expression.clone())
+                .await
+                .map(|variable| variable.value)
+                .unwrap_or_else(|error| format!("<{error}>"));
+            values.push(WatchValue { expression, value });
+        }
+        state.debug_watch_values.set(values);
     });
 }
 

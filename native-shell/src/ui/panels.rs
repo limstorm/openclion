@@ -2,6 +2,7 @@
 //! bottom tool window (Terminal, Problems, Run, Services).
 
 use nsh_core::element::FontWeight;
+use nsh_core::element::input;
 use nsh_core::prelude::*;
 
 use crate::icons;
@@ -461,6 +462,7 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                 .child(tool_button(pal, icons::CLOSE, "Stop", move || crate::debug::stop(state)))
                 .child(text_ui(move || state.debug_status.get(), 11.0, pal.fg_muted).ml(px(8.0))),
         )
+        .child(watch_panel(state, pal))
         .child(
             view()
                 .flex_1()
@@ -554,6 +556,63 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                         .into_element()
                 }))),
         )
+}
+
+fn watch_panel(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .h(px(30.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(6.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_muted("Watch", 11.0, pal))
+        .child(
+            input()
+                .w(px(220.0))
+                .h(px(22.0))
+                .bg(pal.bg_island)
+                .text_color(pal.fg)
+                .text_size(px(11.0))
+                .placeholder("Expression")
+                .value(move || state.debug_watch_input.get())
+                .on_change(move |value: &str| state.debug_watch_input.set(value.to_owned()))
+                .on_submit(move |_: &str| crate::debug::add_watch(state, state.debug_watch_input.get())),
+        )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let values = state.debug_watch_values.get();
+            let expressions = state.debug_watch.get();
+            if expressions.is_empty() {
+                return view().into_element();
+            }
+            view()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .children(values.into_iter().take(4).enumerate().map(move |(index, value)| {
+                    view()
+                        .h(px(20.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(3.0))
+                        .px(px(5.0))
+                        .rounded(px(3.0))
+                        .bg(pal.bg_elev)
+                        .child(text_ui(format!("{} = {}", value.expression, value.value), 10.0, pal.fg_secondary))
+                        .child(
+                            view()
+                                .size(px(14.0))
+                                .items_center()
+                                .justify_center()
+                                .on_press(move || crate::debug::remove_watch(state, index))
+                                .child(icon(icons::CLOSE, 9.0, pal.fg_muted)),
+                        )
+                }))
+                .into_element()
+        })))
 }
 
 fn tool_button(pal: Palette, markup: &'static str, label: &'static str, on_press: impl Fn() + 'static) -> View {
