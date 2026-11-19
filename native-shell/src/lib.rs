@@ -96,6 +96,7 @@ fn install_shortcuts(state: State) {
         state.find_open.set(true);
         state.replace_open.set(false);
     });
+    on_key("ctrl+alt+l", move |_| crate::lsp::format(state));
     on_key("ctrl+h", move |_| {
         state.find_open.set(true);
         state.replace_open.set(true);

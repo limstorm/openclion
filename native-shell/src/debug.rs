@@ -193,6 +193,7 @@ fn refresh_stack(state: State, session: DebugSessionId, thread: i64) {
             })
             .collect();
         state.debug_frames.set(mapped);
+        state.debug_selected.set(0);
         let Some((frame_id, path, line, column)) = first else {
             return;
         };
@@ -234,6 +235,7 @@ pub fn select_frame(state: State, index: usize) {
         return;
     };
     let frame_id = frame.id;
+    state.debug_selected.set(index);
     let Some(bridge) = state.debug_bridge.get() else {
         return;
     };

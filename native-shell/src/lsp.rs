@@ -289,5 +289,78 @@ pub fn definition(state: State, position: EditorPosition, editor: ComponentRef<E
     });
 }
 
+/// clangd's formatting of the active document, applied in memory.
+pub fn format(state: State) {
+    let Some(session) = state.lsp.get() else {
+        return;
+    };
+    let Some(tab) = state.active_tab() else {
+        return;
+    };
+    let text = tab.text;
+    let manager = session.manager;
+    spawn(async move {
+        let options = ide_lsp::types::FormatOptions { tab_size: 4, insert_spaces: true, on_save: false };
+        let edits = match manager.format(DOC, None, options).await {
+            Ok(edits) => edits,
+            Err(error) => {
+                state.status.set(format!("Formatting unavailable: {error}"));
+                return;
+            }
+        };
+        let formatted = apply_edits(&text, &edits);
+        if formatted == text {
+            state.status.set("Already formatted".to_owned());
+            return;
+        }
+        state.update_active_text(formatted.clone());
+        if let Some(api) = state.editor.api::<EditorApi>() {
+            api.set_value(formatted.clone());
+        }
+        change(state, &formatted);
+        state.status.set("Formatted document".to_owned());
+    });
+}
+
+fn apply_edits(text: &str, edits: &[ide_core::TextEdit]) -> String {
+    let mut ordered: Vec<(usize, usize, &str)> = edits
+        .iter()
+        .map(|edit| (offset_of(text, edit.range.start), offset_of(text, edit.range.end), edit.new_text.as_str()))
+        .collect();
+    ordered.sort_by_key(|(start, _, _)| std::cmp::Reverse(*start));
+    let mut out = text.to_owned();
+    for (start, end, replacement) in ordered {
+        if start <= end && end <= out.len() {
+            out.replace_range(start..end, replacement);
+        }
+    }
+    out
+}
+
+fn offset_of(text: &str, pos: Pos) -> usize {
+    let mut line = 0;
+    let mut line_start = 0;
+    for (index, ch) in text.char_indices() {
+        if line == pos.line {
+            break;
+        }
+        if ch == '\n' {
+            line += 1;
+            line_start = index + 1;
+        }
+    }
+    if line != pos.line {
+        return text.len();
+    }
+    let mut col = 0;
+    for (index, ch) in text[line_start..].char_indices() {
+        if col >= pos.col {
+            return line_start + index;
+        }
+        col += ch.len_utf16() as u32;
+    }
+    text.len()
+}
+
 /// Diagnostics cached for every path, so switching tabs is immediate.
 pub type DiagnosticsCache = HashMap<PathBuf, Vec<Diagnostic>>;

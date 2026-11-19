@@ -453,6 +453,13 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                                 .gap(px(4.0))
                                 .px(px(6.0))
                                 .rounded(px(4.0))
+                                .bg(move || {
+                                    if state.debug_selected.get() == index {
+                                        pal.tree_selected
+                                    } else {
+                                        transparent_black().into()
+                                    }
+                                })
                                 .hover(move |s| s.bg(pal.tree_hover))
                                 .on_press(move || crate::debug::select_frame(state, index))
                                 .child(icon(icons::RUN, 12.0, pal.fg_muted))
