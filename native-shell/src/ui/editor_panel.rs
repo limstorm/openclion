@@ -3,8 +3,12 @@
 
 use std::path::PathBuf;
 
-use nsh_base::editor::{EditorClasses, EditorCompletionRequest, EditorSelection, editor};
+use nsh_base::editor::{
+    EditorApi, EditorClasses, EditorCommand, EditorCompletionRequest, EditorSearch, EditorSearchResult,
+    EditorSelection, editor,
+};
 use nsh_core::element::FontWeight;
+use nsh_core::element::input;
 use nsh_core::prelude::*;
 
 use crate::icons;
@@ -21,6 +25,7 @@ pub fn editor_area(state: State, pal: Palette) -> impl IntoElement {
         .overflow_hidden()
         .rounded(px(10.0))
         .bg(pal.bg_island)
+        .relative()
         .child(tabs_row(state, pal))
         .child(
             view()
@@ -30,6 +35,7 @@ pub fn editor_area(state: State, pal: Palette) -> impl IntoElement {
                 .w_full()
                 .child(dynamic(move || editor_body(state, pal).into_element())),
         )
+        .child(dynamic(move || find_bar(state, pal).into_element()))
 }
 
 fn tabs_row(state: State, pal: Palette) -> impl IntoElement {
@@ -179,6 +185,20 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
         .classes(classes)
         .diagnostics(move || state.diagnostics.get())
         .decorations(move || crate::debug::decorations(state))
+        .search(move || {
+            if !state.find_open.get() {
+                return None;
+            }
+            let query = state.find_query.get();
+            if query.is_empty() {
+                return None;
+            }
+            Some(EditorSearch::new(query))
+        })
+        .on_search_change(move |result: &EditorSearchResult| {
+            state.find_count.set(result.count);
+            state.find_current.set(result.current);
+        })
         .on_line_number_press(move |line: &u32| {
             crate::debug::toggle_breakpoint(state, *line);
         })
@@ -199,6 +219,140 @@ fn editor_body(state: State, pal: Palette) -> impl IntoElement {
             }
         })
         .into_element()
+}
+
+fn find_bar(state: State, pal: Palette) -> impl IntoElement {
+    if !state.find_open.get() {
+        return view().into_element();
+    }
+    let replace = state.replace_open.get();
+    view()
+        .absolute()
+        .top(px(42.0))
+        .right(px(18.0))
+        .w(px(380.0))
+        .flex_col()
+        .gap(px(4.0))
+        .p(px(6.0))
+        .rounded(px(7.0))
+        .border(px(1.0))
+        .border_color(pal.border_strong)
+        .bg(pal.bg_island)
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_row()
+                .items_center()
+                .gap(px(4.0))
+                .child(icon(icons::SEARCH, 14.0, pal.fg_muted))
+                .child(
+                    input()
+                        .flex_1()
+                        .h(px(24.0))
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(12.0))
+                        .placeholder("Find")
+                        .auto_focus(true)
+                        .value(move || state.find_query.get())
+                        .on_change(move |value: &str| state.find_query.set(value.to_owned()))
+                        .on_submit(move |_: &str| find_step(state, true)),
+                )
+                .child(text_muted(
+                    move || {
+                        let count = state.find_count.get();
+                        if count == 0 {
+                            "No matches".to_owned()
+                        } else {
+                            let current = state.find_current.get().map(|c| c + 1).unwrap_or(1);
+                            format!("{current}/{count}")
+                        }
+                    },
+                    11.0,
+                    pal,
+                ))
+                .child(bar_button(pal, icons::CHEVRON_UP, "Previous", move || find_step(state, false)))
+                .child(bar_button(pal, icons::CHEVRON_DOWN, "Next", move || find_step(state, true)))
+                .child(bar_button(pal, icons::CLOSE, "Close", move || {
+                    state.find_open.set(false);
+                })),
+        )
+        .child(dynamic(move || {
+            if !replace {
+                return view().into_element();
+            }
+            view()
+                .flex_col()
+                .gap(px(4.0))
+                .child(
+                    view()
+                        .h(px(28.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(4.0))
+                        .child(
+                            input()
+                                .flex_1()
+                                .h(px(24.0))
+                                .bg(pal.bg_island)
+                                .text_color(pal.fg)
+                                .text_size(px(12.0))
+                                .placeholder("Replace")
+                                .value(move || state.replace_query.get())
+                                .on_change(move |value: &str| state.replace_query.set(value.to_owned()))
+                                .on_submit(move |_: &str| replace_current(state)),
+                        )
+                        .child(text_button(pal, "Replace", move || replace_current(state)))
+                        .child(text_button(pal, "All", move || replace_all(state))),
+                )
+                .into_element()
+        }))
+        .into_element()
+}
+
+fn bar_button(pal: Palette, markup: &'static str, label: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .size(px(24.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .label(label)
+        .on_press(on_press)
+        .child(icon(markup, 13.0, pal.fg_muted))
+}
+
+fn text_button(pal: Palette, label: &'static str, on_press: impl Fn() + 'static) -> View {
+    view()
+        .h(px(24.0))
+        .px(px(8.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .border(px(1.0))
+        .border_color(pal.border_strong)
+        .hover(move |s| s.bg(pal.toolbar_hover))
+        .on_press(on_press)
+        .child(text_ui(label, 11.0, pal.fg_secondary))
+}
+
+fn find_step(state: State, forward: bool) {
+    if let Some(api) = state.editor.api::<EditorApi>() {
+        api.run(if forward { EditorCommand::FindNext } else { EditorCommand::FindPrevious });
+    }
+}
+
+fn replace_current(state: State) {
+    if let Some(api) = state.editor.api::<EditorApi>() {
+        api.replace(state.replace_query.get());
+    }
+}
+
+fn replace_all(state: State) {
+    if let Some(api) = state.editor.api::<EditorApi>() {
+        let result = api.replace_all(state.replace_query.get());
+        state.status.set(format!("Replaced {} occurrence(s)", result.count));
+    }
 }
 
 fn welcome(state: State, pal: Palette) -> impl IntoElement {

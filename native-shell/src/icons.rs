@@ -25,6 +25,7 @@ icons! {
     CMAKE = "cmake.svg",
     CHEVRON_DOWN = "chevron-down.svg",
     CHEVRON_RIGHT = "chevron-right.svg",
+    CHEVRON_UP = "chevron-up.svg",
     CLOSE = "close.svg",
     ADD = "add.svg",
     MORE_HORIZONTAL = "more-horizontal.svg",

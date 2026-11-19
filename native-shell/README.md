@@ -49,6 +49,7 @@ backend uses.
 | clangd diagnostics | `ide-lsp` + `ide-language`                            | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                            |
 | clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                       |
 | Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                     |
+| Find / Replace     | nsh Editor search + commands                          | Ctrl+F opens the find bar with match counts and next/previous; Ctrl+H adds replacement with Replace and Replace All                         |
 | Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                       |
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, stack frames and locals          |
 | File operations    | `std::fs` + native dialogs                            | Project header + / folder creates a file or folder beside the selection, opens it, and expands the tree                                     |
@@ -131,10 +132,9 @@ opens.
 
 The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
-the main branch backend. File operations cover create + external-change
-refresh, and workbench settings persist through nsh storage. Rename/delete and
-context menus, DAP refinements and the keymap/plugins surface are the next
-slices; the shell keeps the Islands layout while each lands.
+the main branch backend. File operations cover create/rename/delete with a
+context menu, workbench settings persist, and the editor has find/replace.
+DAP refinements and the keymap/plugins surface are the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native
@@ -145,9 +145,9 @@ half-coloured editor.
 
 ## Screenshots
 
-|                                                   |                                                     |
-| ------------------------------------------------- | --------------------------------------------------- |
-| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png)     |
-| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)             |
-| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)              |
-| ![Debugging](docs/native-shell-debug.png)         | ![Context menu](docs/native-shell-context-menu.png) |
+|                                                   |                                                 |
+| ------------------------------------------------- | ----------------------------------------------- |
+| ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
+| ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
+| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)          |
+| ![Debugging](docs/native-shell-debug.png)         | ![Find bar](docs/native-shell-find.png)         |
