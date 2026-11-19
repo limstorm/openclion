@@ -9,7 +9,7 @@ use crate::ui::icon;
 
 pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
     view()
-        .w(px(48.0))
+        .w(px(36.0))
         .flex_none()
         .h_full()
         .flex_col()
@@ -33,7 +33,7 @@ pub fn left_rail(state: State, pal: Palette) -> impl IntoElement {
 
 pub fn right_rail(state: State, pal: Palette) -> impl IntoElement {
     view()
-        .w(px(44.0))
+        .w(px(36.0))
         .flex_none()
         .h_full()
         .flex_col()

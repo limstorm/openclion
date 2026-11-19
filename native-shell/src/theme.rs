@@ -6,7 +6,6 @@ use nsh_core::element::{AdaptiveColor, FontAsset, asset};
 use nsh_core::prelude::*;
 
 pub const UI_FONT: FontAsset = asset!("Inter.ttf");
-pub const MONO_FONT: FontAsset = asset!("JetBrainsMono.ttf");
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Palette {

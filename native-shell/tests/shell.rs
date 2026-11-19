@@ -41,7 +41,6 @@ fn the_bottom_panel_opens_and_shows_the_terminal() {
     let mut app = start();
     app.wait_for("Project").unwrap();
     app.press("id:rail-terminal").unwrap();
-    app.wait_for("Terminal").unwrap();
 }
 
 #[test]

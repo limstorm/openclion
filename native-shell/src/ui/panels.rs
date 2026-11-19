@@ -6,7 +6,7 @@ use nsh_core::prelude::*;
 
 use crate::icons;
 use crate::model::{BottomTool, RightTool, State};
-use crate::theme::{MONO_FONT, Palette};
+use crate::theme::Palette;
 use crate::ui::{icon, text_muted, text_strong, text_ui};
 
 pub fn right_panel(state: State, pal: Palette) -> impl IntoElement {
@@ -271,21 +271,80 @@ pub fn bottom_panel(state: State, pal: Palette) -> impl IntoElement {
         .overflow_hidden()
         .rounded(px(10.0))
         .bg(pal.bg_island)
-        .child(dynamic(move || match state.bottom_tool.get() {
-            Some(BottomTool::Git) => git_tabs(state, pal).into_element(),
-            Some(BottomTool::Cmake) => cmake_bottom_tabs(state, pal).into_element(),
-            _ => bottom_tabs(state, pal).into_element(),
+        .child(dynamic(move || bottom_content(state, pal).into_element()))
+}
+
+fn bottom_content(state: State, pal: Palette) -> impl IntoElement {
+    match state.bottom_tool.get() {
+        Some(BottomTool::Git) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(git_tabs(state, pal))
+            .child(git_bottom(state, pal))
+            .into_element(),
+        Some(BottomTool::Cmake) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(cmake_bottom_tabs(state, pal))
+            .child(cmake_tree(state, pal))
+            .into_element(),
+        Some(BottomTool::Problems) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(section_header(state, pal, "Problems"))
+            .child(problems_body(state, pal))
+            .into_element(),
+        Some(BottomTool::Run) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(section_header(state, pal, "Run"))
+            .child(run_body(state, pal))
+            .into_element(),
+        Some(BottomTool::Usages) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(section_header(state, pal, "Usages"))
+            .child(usages_body(state, pal))
+            .into_element(),
+        Some(BottomTool::Hierarchy) => view()
+            .flex_col()
+            .flex_1()
+            .w_full()
+            .min_h(px(0.0))
+            .child(section_header(state, pal, "Hierarchy"))
+            .child(hierarchy_body(state, pal))
+            .into_element(),
+        Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
+        Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
+    }
+}
+
+fn section_header(state: State, pal: Palette, title: &'static str) -> impl IntoElement {
+    view()
+        .h(px(30.0))
+        .flex_none()
+        .w_full()
+        .flex_row()
+        .items_center()
+        .gap(px(6.0))
+        .px(px(8.0))
+        .border_b_1()
+        .border_color(pal.border)
+        .child(text_strong(title, 12.0, pal))
+        .child(view().flex_1())
+        .child(header_action(pal, icons::CLOSE, move || {
+            state.show_bottom.set(false);
         }))
-        .child(view().flex_1().min_h(px(0.0)).w_full().child(dynamic(move || match state.bottom_tool.get() {
-            Some(BottomTool::Hierarchy) => hierarchy_body(state, pal).into_element(),
-            Some(BottomTool::Usages) => usages_body(state, pal).into_element(),
-            Some(BottomTool::Debug) => debug_body(state, pal).into_element(),
-            Some(BottomTool::Terminal) | None => terminal_body(state, pal).into_element(),
-            Some(BottomTool::Problems) => problems_body(state, pal).into_element(),
-            Some(BottomTool::Run) => run_body(state, pal).into_element(),
-            Some(BottomTool::Git) => git_bottom(state, pal).into_element(),
-            Some(BottomTool::Cmake) => cmake_tree(state, pal).into_element(),
-        })))
 }
 
 fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
@@ -452,54 +511,6 @@ fn git_console(state: State, pal: Palette) -> impl IntoElement {
                 .child(text_ui(row.rel, 11.0, pal.fg).truncate())
         })))
         .into_element()
-}
-
-fn bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
-    view().h(px(36.0)).flex_none().w_full().child(dynamic(move || {
-        let current = state.bottom_tool.get();
-        view()
-            .h(px(36.0))
-            .w_full()
-            .flex_row()
-            .items_center()
-            .gap(px(2.0))
-            .px(px(6.0))
-            .border_b_1()
-            .border_color(pal.border)
-            .child(dynamic(move || {
-                (state.debug_active.get() || !state.debug_frames.get().is_empty())
-                    .then(|| bottom_tab(state, pal, "Debug", BottomTool::Debug, current).into_element())
-            }))
-            .child(dynamic(move || {
-                (!state.usages.get().is_empty())
-                    .then(|| bottom_tab(state, pal, "Usages", BottomTool::Usages, current).into_element())
-            }))
-            .child(bottom_tab(state, pal, "Terminal", BottomTool::Terminal, current))
-            .child(bottom_tab(state, pal, "Problems", BottomTool::Problems, current))
-            .child(bottom_tab(state, pal, "Run", BottomTool::Run, current))
-            .child(view().flex_1())
-            .child(header_action(pal, icons::CLOSE, move || {
-                state.show_bottom.set(false);
-            }))
-    }))
-}
-
-fn bottom_tab(state: State, pal: Palette, label: &'static str, tool: BottomTool, current: Option<BottomTool>) -> View {
-    let active = current == Some(tool);
-    view()
-        .h(px(26.0))
-        .flex_none()
-        .items_center()
-        .justify_center()
-        .px(px(10.0))
-        .rounded(px(5.0))
-        .bg(if active { pal.tab_selected } else { transparent_black().into() })
-        .hover(move |s| if active { s.bg(pal.tab_selected) } else { s.bg(pal.tab_hover) })
-        .on_press(move || {
-            state.bottom_tool.set(Some(tool));
-            state.show_bottom.set(true);
-        })
-        .child(text_ui(label, 12.0, if active { pal.fg_strong } else { pal.fg_secondary }))
 }
 
 fn hierarchy_body(state: State, pal: Palette) -> impl IntoElement {
@@ -883,7 +894,7 @@ fn terminal_body(state: State, pal: Palette) -> impl IntoElement {
             });
         }
     });
-    view().flex_1().w_full().min_h(px(0.0)).overflow_hidden().bg(pal.bg_island).child(
+    view().flex_1().w_full().min_h(px(0.0)).overflow_hidden().pl(px(6.0)).bg(pal.bg_island).child(
         nsh_base::terminal()
             .component_ref(&state.terminal_ref)
             .flex_1()

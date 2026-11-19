@@ -56,13 +56,13 @@ backend uses.
 | Rename symbol      | `ide-lsp` `textDocument/rename`                | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                                                                 |
 | Code actions       | `ide-lsp` `textDocument/codeAction`            | Alt+Enter lists quick fixes/refactors; the chosen action applies its WorkspaceEdit or runs its command                                                                                           |
 | Type hierarchy     | `ide-lsp` `prepareTypeHierarchy`               | Ctrl+Alt+H lists supertypes/subtypes in a Hierarchy dock; clicking opens the declaration                                                                                                         |
-| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, native monospace, no padding; clean path prompt (right-side Node/time RPROMPT removed), block cursor in the input cell after `$`                                               |
+| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal` | real login shell, native monospace, 6 px left inset; prompt is ` ~/…$` with no right-side Node/time and no trailing space, so the block cursor sits in the next cell                             |
 | Debugging          | `ide-dap` + lldb-dap                           | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Breakpoints list with enable toggles, Condition and Logpoint dialogs; Continue/Step/Stop, frames, expandable locals, Watch |
 | File operations    | `std::fs` + native dialogs                     | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                                             |
 | Project tree       | `std::fs` walk + nsh views                     | root on top, 12pt indentation per level, clicking the root collapses/expands the whole project                                                                                                   |
 | Title bar          | nsh window controls + native views             | ☰ application menu at the left, custom minimize/maximize/close at the right, project/run widgets in between                                                                                     |
 | Status bar         | `ide-vcs` + `/proc/self/statm`                 | current branch and OpenCLion RSS at the right; the branch button opens the Git dock                                                                                                              |
-| Bottom dock        | native views + `ide-vcs`/`ide-cmake`           | spans the full width below Project/editor/CMake and shows exactly one tool: Git or CMake, switched from the bottom-left rail buttons                                                             |
+| Bottom dock        | native views + `ide-vcs`/`ide-cmake`           | full-width area that shows exactly ONE tool at a time (Git, CMake, Terminal, Problems, Run, Debug…), with its own header and no tab strip for other tools                                        |
 | File watcher       | `notify` + `notify-debouncer-full`             | external creates/renames/deletes rebuild the tree and refresh git status                                                                                                                         |
 | Settings           | nsh `Storage` + `serde_json`                   | Appearance/Editor/Keymap/Plugins/Build pages; font size, layout and recent projects persist; Keymap lists shortcuts, Plugins the bundled integrations                                            |
 
@@ -120,7 +120,7 @@ cargo run
 | Save                | Ctrl+S                                               |
 | Close tab           | Ctrl+W or the tab's ×                                |
 | Find in Files       | Ctrl+Shift+F (or the rail magnifier)                 |
-| Terminal            | `ide-terminal` (portable-pty) + nsh `Terminal`       | real login shell, native monospace, no padding; clean path prompt (right-side Node/time RPROMPT removed), block cursor in the input cell after `$` |
+| Terminal            | Ctrl+` or the rail terminal icon                     |
 | Commit              | Ctrl+K                                               |
 | Git dock            | Alt+9, or the bottom-left Git rail button            |
 | CMake dock          | Alt+8, or the bottom-left CMake rail button          |
