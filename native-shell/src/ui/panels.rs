@@ -521,13 +521,30 @@ fn debug_body(state: State, pal: Palette) -> impl IntoElement {
                         .flex_col()
                         .w_full()
                         .py(px(4.0))
-                        .children(vars.into_iter().map(move |var| {
+                        .children(vars.into_iter().enumerate().map(move |(index, var)| {
+                            let depth = var.depth;
+                            let expandable = var.reference > 0;
                             view()
                                 .h(px(20.0))
                                 .flex_row()
                                 .items_center()
-                                .gap(px(6.0))
-                                .px(px(8.0))
+                                .gap(px(4.0))
+                                .pl(px(8.0 + 12.0 * depth as f32))
+                                .pr(px(8.0))
+                                .rounded(px(3.0))
+                                .hover(move |s| s.bg(pal.tree_hover))
+                                .on_press(move || crate::debug::toggle_variable(state, index))
+                                .child(dynamic(move || {
+                                    if !expandable {
+                                        return view().w(px(12.0)).into_element();
+                                    }
+                                    icon(
+                                        if var.expanded { icons::CHEVRON_DOWN } else { icons::CHEVRON_RIGHT },
+                                        11.0,
+                                        pal.fg_muted,
+                                    )
+                                    .into_element()
+                                }))
                                 .child(text_ui(var.name, 11.0, pal.fg))
                                 .child(text_ui("=", 11.0, pal.fg_faint))
                                 .child(text_ui(var.value, 11.0, pal.link).truncate())

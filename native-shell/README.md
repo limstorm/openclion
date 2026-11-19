@@ -39,25 +39,25 @@ native-shell/
 The shell is not a mock: it links the same `crates/ide-*` crates the Tauri
 backend uses.
 
-| Feature            | Backend                                               | In the shell                                                                                                                                  |
-| ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| CMake model        | `ide-cmake` (`load`, File API reply, presets)         | CMake tool window: builds, targets, kinds, `compile_commands.json`; falls back to `add_executable`/`add_library` before the first configure   |
-| Configure          | `cmake -S . -B build` + `ide_cmake::request`          | click the configuration widget; output streams into the Terminal panel                                                                        |
-| Build / Run        | `cmake --build … --target …` + the artifact           | title-bar green Run; output and the program's stdout land in the Terminal                                                                     |
-| Git status         | `ide-vcs` (`Repo::discover`, `status`, `branch_info`) | Commit tool window with branch, changed files and staged/unstaged letters; tree files are tinted by status                                    |
-| Find in Files      | `ide-search` (ripgrep engine)                         | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                                 |
-| clangd diagnostics | `ide-lsp` + `ide-language`                            | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                              |
-| clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                         |
-| Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                       |
-| Find / Replace     | nsh Editor search + commands                          | Ctrl+F opens the find bar with match counts and next/previous; Ctrl+H adds replacement with Replace and Replace All                           |
-| Format document    | `ide-lsp` `textDocument/formatting`                   | Ctrl+Alt+L formats the active document in memory through clangd, keeping the buffer dirty until saved                                         |
-| Find Usages        | `ide-lsp` `textDocument/references`                   | Alt+F7 lists project references in a Usages tool window; a click opens the file and places the caret                                          |
-| Rename symbol      | `ide-lsp` `textDocument/rename`                       | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS              |
-| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                         |
-| Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, selectable stack frames and locals |
-| File operations    | `std::fs` + native dialogs                            | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames          |
-| File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                      |
-| Settings           | nsh `Storage` + `serde_json`                          | editor font size, tool-window sizes/visibility and recent projects persist across runs; Settings shows a font stepper and recent list         |
+| Feature            | Backend                                               | In the shell                                                                                                                                       |
+| ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CMake model        | `ide-cmake` (`load`, File API reply, presets)         | CMake tool window: builds, targets, kinds, `compile_commands.json`; falls back to `add_executable`/`add_library` before the first configure        |
+| Configure          | `cmake -S . -B build` + `ide_cmake::request`          | click the configuration widget; output streams into the Terminal panel                                                                             |
+| Build / Run        | `cmake --build … --target …` + the artifact           | title-bar green Run; output and the program's stdout land in the Terminal                                                                          |
+| Git status         | `ide-vcs` (`Repo::discover`, `status`, `branch_info`) | Commit tool window with branch, changed files and staged/unstaged letters; tree files are tinted by status                                         |
+| Find in Files      | `ide-search` (ripgrep engine)                         | Ctrl+Shift+F search panel with parallel, ignore-aware results                                                                                      |
+| clangd diagnostics | `ide-lsp` + `ide-language`                            | documents open/change/close on clangd; native editor squiggles and Problems rows; server state in the status bar                                   |
+| clangd completion  | `ide-lsp` completion                                  | typing (and `.`/`->`/`::`/`<`) opens the native completion list with kinds, details and documentation                                              |
+| Go to definition   | `ide-lsp` goto                                        | F12 on a symbol opens the target and places the caret at the definition                                                                            |
+| Find / Replace     | nsh Editor search + commands                          | Ctrl+F opens the find bar with match counts and next/previous; Ctrl+H adds replacement with Replace and Replace All                                |
+| Format document    | `ide-lsp` `textDocument/formatting`                   | Ctrl+Alt+L formats the active document in memory through clangd, keeping the buffer dirty until saved                                              |
+| Find Usages        | `ide-lsp` `textDocument/references`                   | Alt+F7 lists project references in a Usages tool window; a click opens the file and places the caret                                               |
+| Rename symbol      | `ide-lsp` `textDocument/rename`                       | Shift+F6 prefills the word at the caret and applies clangd's WorkspaceEdit to open buffers and disk, then refreshes tree and VCS                   |
+| Terminal           | `ide-terminal` (portable-pty) + nsh `Terminal`        | a real login shell with ANSI colours, resize and input; Configure/Build/Run output is written into it                                              |
+| Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, selectable frames and expandable locals |
+| File operations    | `std::fs` + native dialogs                            | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames               |
+| File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                           |
+| Settings           | nsh `Storage` + `serde_json`                          | editor font size, tool-window sizes/visibility and recent projects persist across runs; Settings shows a font stepper and recent list              |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -137,7 +137,7 @@ The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
-DAP refinements and the keymap/plugins surface are the next slices; the shell keeps the Islands layout while each lands.
+Debug watch/conditional breakpoints and the keymap/plugins surface are the next slices; the shell keeps the Islands layout while each lands.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native

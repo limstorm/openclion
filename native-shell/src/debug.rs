@@ -26,6 +26,9 @@ pub struct DebugVar {
     pub name: String,
     pub value: String,
     pub type_name: Option<String>,
+    pub reference: i64,
+    pub depth: u32,
+    pub expanded: bool,
 }
 
 #[derive(Clone)]
@@ -218,6 +221,9 @@ fn refresh_stack(state: State, session: DebugSessionId, thread: i64) {
                     name: value.name,
                     value: value.value,
                     type_name: value.type_name,
+                    reference: value.variables_reference,
+                    depth: 0,
+                    expanded: false,
                 });
             }
         }
@@ -250,6 +256,9 @@ pub fn select_frame(state: State, index: usize) {
                     name: value.name,
                     value: value.value,
                     type_name: value.type_name,
+                    reference: value.variables_reference,
+                    depth: 0,
+                    expanded: false,
                 });
             }
         }
@@ -320,6 +329,66 @@ pub fn decorations(state: State) -> Vec<EditorDecoration> {
         out.push(decoration);
     }
     out
+}
+
+/// Expands or collapses a variable in the Locals tree.
+pub fn toggle_variable(state: State, index: usize) {
+    let vars = state.debug_vars.get();
+    let Some(variable) = vars.get(index) else {
+        return;
+    };
+    if variable.expanded {
+        let depth = variable.depth;
+        let mut next = vars;
+        next[index].expanded = false;
+        let mut end = index + 1;
+        while end < next.len() && next[end].depth > depth {
+            end += 1;
+        }
+        next.drain(index + 1..end);
+        state.debug_vars.set(next);
+        return;
+    }
+    if variable.reference == 0 {
+        return;
+    }
+    let reference = variable.reference;
+    let depth = variable.depth;
+    let scope = variable.scope.clone();
+    let Some(session) = state.debug_session.get() else {
+        return;
+    };
+    let Some(bridge) = state.debug_bridge.get() else {
+        return;
+    };
+    spawn(async move {
+        let Ok(values) = bridge.manager.variables(session, reference).await else {
+            return;
+        };
+        let mut vars = state.debug_vars.get();
+        let Some(parent) = vars.get_mut(index) else {
+            return;
+        };
+        parent.expanded = true;
+        let mut children: Vec<DebugVar> = values
+            .into_iter()
+            .map(|value| DebugVar {
+                scope: scope.clone(),
+                name: value.name,
+                value: value.value,
+                type_name: value.type_name,
+                reference: value.variables_reference,
+                depth: depth + 1,
+                expanded: false,
+            })
+            .collect();
+        if children.is_empty() {
+            return;
+        }
+        let at = (index + 1).min(vars.len());
+        vars.splice(at..at, children.drain(..));
+        state.debug_vars.set(vars);
+    });
 }
 
 pub fn resume(state: State) {
