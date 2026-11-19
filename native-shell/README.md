@@ -57,7 +57,7 @@ backend uses.
 | Debugging          | `ide-dap` + lldb-dap                                  | title-bar bug launches the CMake executable; F9 toggles a breakpoint; Debug window has Continue/Step/Stop, selectable frames, expandable locals and Watch expressions |
 | File operations    | `std::fs` + native dialogs                            | + / folder creates; right-click offers New File/Folder, Rename file (F2), Delete, Copy Path and Reveal; tabs and tree follow renames                                  |
 | File watcher       | `notify` + `notify-debouncer-full`                    | external creates/renames/deletes rebuild the tree and refresh git status                                                                                              |
-| Settings           | nsh `Storage` + `serde_json`                          | editor font size, tool-window sizes/visibility and recent projects persist across runs; Settings shows a font stepper and recent list                                 |
+| Settings           | nsh `Storage` + `serde_json`                          | Appearance/Editor/Keymap/Plugins/Build pages; font size, layout and recent projects persist; Keymap lists shortcuts, Plugins the bundled integrations                 |
 
 All backend calls run off the engine thread (`nsh blocking`) and report
 through signals, so the workbench never stalls while CMake or git works.
@@ -137,7 +137,8 @@ The migration is in progress: CMake, git, search, build/run, clangd
 diagnostics/completion/goto, the PTY terminal and lldb-dap debugging now use
 the main branch backend. File operations cover create/rename/delete with a
 context menu, workbench settings persist, and the editor has find/replace.
-Debug watch/conditional breakpoints and the keymap/plugins surface are the next slices; the shell keeps the Islands layout while each lands.
+Debug watch is implemented; conditional breakpoints and more main-branch tool
+windows are the next slices, while the shell keeps the Islands layout.
 
 Islands Light is the target and the default. `theme.rs` also carries the
 Islands Dark palette and the workbench re-colours from it, but the _native
@@ -152,5 +153,6 @@ half-coloured editor.
 | ------------------------------------------------- | ----------------------------------------------- |
 | ![Workbench](docs/native-shell-light.png)         | ![Completion](docs/native-shell-completion.png) |
 | ![Build and run](docs/native-shell-build-run.png) | ![Commit](docs/native-shell-commit.png)         |
-| ![Settings](docs/native-shell-settings.png)       | ![Terminal](docs/native-shell-pty.png)          |
+| ![Settings](docs/native-shell-settings.png)       | ![Keymap](docs/native-shell-keymap.png)         |
+| ![Plugins](docs/native-shell-plugins.png)         | ![Terminal](docs/native-shell-pty.png)          |
 | ![Debugging](docs/native-shell-debug.png)         | ![Find bar](docs/native-shell-find.png)         |
