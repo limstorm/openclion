@@ -51,6 +51,13 @@ pub struct CmakeSelection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GitConsoleLine {
+    pub kind: String,
+    pub time: String,
+    pub text: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GitLogRow {
     pub id: String,
     pub short_id: String,
@@ -385,9 +392,9 @@ impl State {
         let state = *self;
         let root = self.root.get();
         spawn(async move {
-            let (branches, stashes, worktrees) = blocking(move || {
+            let (branches, stashes, worktrees, tags) = blocking(move || {
                 let Ok(Some(repo)) = Repo::discover(&root) else {
-                    return (Vec::new(), Vec::new(), Vec::new());
+                    return (Vec::new(), Vec::new(), Vec::new(), Vec::new());
                 };
                 let branches = repo
                     .branches()
@@ -440,13 +447,15 @@ impl State {
                         rows
                     })
                     .unwrap_or_default();
-                (branches, stashes, worktrees)
+                let tags = repo.tags().unwrap_or_default();
+                (branches, stashes, worktrees, tags)
             })
             .await
             .unwrap_or_default();
             state.git_branches.set(branches);
             state.git_stashes.set(stashes);
             state.git_worktrees.set(worktrees);
+            state.git_tags.set(tags);
         });
     }
 
@@ -569,9 +578,14 @@ impl State {
         });
     }
 
-    fn log_git(&self, line: String) {
+    fn log_git(&self, kind: &str, line: String) {
+        let secs = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_secs())
+            .unwrap_or(0);
+        let time = format!("{:02}:{:02}:{:02}", (secs / 3600) % 24, (secs / 60) % 60, secs % 60);
         self.git_console.update(|lines| {
-            lines.push(line);
+            lines.push(GitConsoleLine { kind: kind.to_owned(), time, text: line });
             if lines.len() > 200 {
                 lines.remove(0);
             }
@@ -598,7 +612,10 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set(if stage { "Staged" } else { "Unstaged" }.to_owned());
-                    state.log_git(format!("git {} {}", if stage { "add" } else { "restore --staged" }, path_display));
+                    state.log_git(
+                        "cmd",
+                        format!("git {} {}", if stage { "add" } else { "restore --staged" }, path_display),
+                    );
                     state.refresh_vcs();
                 }
                 Ok(Err(error)) => state.status.set(format!("Git: {error}")),
@@ -643,7 +660,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Branch checked out".to_owned());
-                    state.log_git(format!("git checkout {branch_for_log}"));
+                    state.log_git("cmd", format!("git checkout {branch_for_log}"));
                     state.refresh_vcs();
                     state.refresh_git_log();
                     state.refresh_git_refs();
@@ -668,7 +685,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Stashed working tree".to_owned());
-                    state.log_git("git stash push -u".to_owned());
+                    state.log_git("cmd", "git stash push -u".to_owned());
                     state.refresh_vcs();
                     state.refresh_git_refs();
                 }
@@ -692,7 +709,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set(if pop { "Stash popped" } else { "Stash applied" }.to_owned());
-                    state.log_git(format!("git stash {} stash@{{{index}}}", if pop { "pop" } else { "apply" }));
+                    state.log_git("cmd", format!("git stash {} stash@{{{index}}}", if pop { "pop" } else { "apply" }));
                     state.refresh_vcs();
                     state.refresh_git_refs();
                 }
@@ -716,7 +733,7 @@ impl State {
             match result {
                 Ok(Ok(())) => {
                     state.status.set("Stash dropped".to_owned());
-                    state.log_git(format!("git stash drop stash@{{{index}}}"));
+                    state.log_git("cmd", format!("git stash drop stash@{{{index}}}"));
                     state.refresh_git_refs();
                 }
                 Ok(Err(error)) => state.status.set(format!("Stash failed: {error}")),

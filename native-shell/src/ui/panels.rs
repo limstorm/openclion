@@ -465,6 +465,23 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                         .border_color(pal.border)
                         .child(text_muted("Branches", 10.0, pal)),
                 )
+                .child(
+                    input()
+                        .h(px(24.0))
+                        .flex_none()
+                        .mx(px(4.0))
+                        .my(px(3.0))
+                        .px(px(6.0))
+                        .rounded(px(4.0))
+                        .border(px(1.0))
+                        .border_color(pal.border)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(10.0))
+                        .placeholder("Filter branches")
+                        .value(move || state.git_branch_filter.get())
+                        .on_change(move |value: &str| state.git_branch_filter.set(value.to_owned())),
+                )
                 .child(scroll().flex_1().child(dynamic(move || {
                     let selected = state.git_log_branch.get();
                     let mut rows: Vec<AnyElement> = Vec::new();
@@ -482,8 +499,12 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                             .child(text_ui("All branches", 10.0, pal.fg))
                             .into_element(),
                     );
+                    let query = state.git_branch_filter.get().to_lowercase();
                     for branch in state.git_branches.get() {
                         let name = branch.name.clone();
+                        if !query.is_empty() && !name.to_lowercase().contains(&query) {
+                            continue;
+                        }
                         let name_for_press = name.clone();
                         let active = selected.as_deref() == Some(name.as_str());
                         rows.push(
@@ -505,6 +526,39 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                                 .child(text_ui(name, 10.0, pal.fg).truncate())
                                 .into_element(),
                         );
+                    }
+                    let tags = state.git_tags.get();
+                    if !tags.is_empty() {
+                        rows.push(
+                            view()
+                                .h(px(20.0))
+                                .px(px(8.0))
+                                .items_center()
+                                .child(text_muted("Tags", 9.0, pal))
+                                .into_element(),
+                        );
+                        for tag in tags {
+                            if !query.is_empty() && !tag.to_lowercase().contains(&query) {
+                                continue;
+                            }
+                            let tag_for_press = tag.clone();
+                            let active = selected.as_deref() == Some(tag.as_str());
+                            rows.push(
+                                view()
+                                    .h(px(22.0))
+                                    .flex_row()
+                                    .items_center()
+                                    .gap(px(4.0))
+                                    .px(px(8.0))
+                                    .rounded(px(3.0))
+                                    .bg(if active { pal.tree_selected } else { transparent_black().into() })
+                                    .hover(move |s| s.bg(pal.tree_hover))
+                                    .on_press(move || state.select_log_branch(Some(tag_for_press.clone())))
+                                    .child(icon(icons::BOOKMARKS, 10.0, pal.fg_muted))
+                                    .child(text_ui(tag, 10.0, pal.fg).truncate())
+                                    .into_element(),
+                            );
+                        }
                     }
                     view().flex_col().w_full().children(rows).into_element()
                 }))),
@@ -922,7 +976,14 @@ fn git_console(state: State, pal: Palette) -> impl IntoElement {
             }
             view()
                 .flex_col()
-                .children(lines.into_iter().map(move |line| text_ui(format!("$ {line}"), 11.0, pal.fg_secondary)))
+                .children(lines.into_iter().map(move |line| {
+                    let color = match line.kind.as_str() {
+                        "err" => pal.danger,
+                        "info" => pal.fg,
+                        _ => pal.fg_secondary,
+                    };
+                    text_ui(format!("{}  {}", line.time, line.text), 11.0, color)
+                }))
                 .into_element()
         })))
         .into_element()
