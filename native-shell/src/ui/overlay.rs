@@ -20,6 +20,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
         .child(dynamic(move || code_action_popup(state, pal).into_element()))
+        .child(dynamic(move || worktree_dialog(state, pal).into_element()))
         .child(dynamic(move || app_menu(state, pal).into_element()))
         .child(dynamic(move || tree_menu(state, pal).into_element()))
         .child(dynamic(move || run_chooser(state, pal).into_element()))
@@ -754,6 +755,107 @@ fn code_action_popup(state: State, pal: Palette) -> impl IntoElement {
                             .into_element()
                     }))),
             ),
+        )
+        .into_element()
+}
+
+fn worktree_dialog(state: State, pal: Palette) -> impl IntoElement {
+    if !state.worktree_dialog.get() {
+        return view().into_element();
+    }
+    let root = state.root.get();
+
+    let branch = state.worktree_branch.get();
+    let folder = if branch.trim().is_empty() {
+        root.join(format!("../{}-wt", state.root_name()))
+    } else {
+        root.join(format!("../{}", branch.trim()))
+    };
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .items_center()
+        .justify_center()
+        .bg(c(0x00000040))
+        .child(
+            view()
+                .w(px(520.0))
+                .flex_col()
+                .gap(px(10.0))
+                .p(px(14.0))
+                .rounded(px(8.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .child(text_strong("New Worktree", 13.0, pal))
+                .child(text_muted("Check out a branch or revision in another folder", 11.0, pal))
+                .child(text_muted("Check out", 10.0, pal))
+                .child(
+                    input()
+                        .h(px(28.0))
+                        .px(px(8.0))
+                        .rounded(px(5.0))
+                        .border(px(1.0))
+                        .border_color(pal.border_strong)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(12.0))
+                        .placeholder("branch or revision")
+                        .auto_focus(true)
+                        .value(move || state.worktree_revision.get())
+                        .on_change(move |value: &str| state.worktree_revision.set(value.to_owned())),
+                )
+                .child(text_muted("New branch (optional)", 10.0, pal))
+                .child(
+                    input()
+                        .h(px(28.0))
+                        .px(px(8.0))
+                        .rounded(px(5.0))
+                        .border(px(1.0))
+                        .border_color(pal.border_strong)
+                        .bg(pal.bg_island)
+                        .text_color(pal.fg)
+                        .text_size(px(12.0))
+                        .placeholder("leave empty to check out as is")
+                        .value(move || state.worktree_branch.get())
+                        .on_change(move |value: &str| state.worktree_branch.set(value.to_owned())),
+                )
+                .child(text_muted(format!("Folder: {}", folder.display()), 10.0, pal).truncate())
+                .child(
+                    view()
+                        .flex_row()
+                        .justify_end()
+                        .gap(px(6.0))
+                        .child(
+                            view()
+                                .h(px(26.0))
+                                .px(px(12.0))
+                                .items_center()
+                                .rounded(px(5.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.worktree_dialog.set(false))
+                                .child(text_ui("Cancel", 12.0, pal.fg)),
+                        )
+                        .child(
+                            view()
+                                .h(px(26.0))
+                                .px(px(14.0))
+                                .items_center()
+                                .rounded(px(5.0))
+                                .bg(pal.accent)
+                                .on_press(move || {
+                                    state.worktree_dialog.set(false);
+                                    state.add_worktree(
+                                        folder.clone(),
+                                        state.worktree_revision.get(),
+                                        state.worktree_branch.get(),
+                                    );
+                                })
+                                .child(text_ui("Create", 12.0, white().into())),
+                        ),
+                ),
         )
         .into_element()
 }

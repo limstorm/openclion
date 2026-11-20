@@ -441,80 +441,167 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
 }
 
 fn git_log(state: State, pal: Palette) -> impl IntoElement {
+    let details = state.commit_details.get();
     view()
-        .flex_col()
+        .flex_row()
         .flex_1()
         .w_full()
         .min_h(px(0.0))
         .child(
             view()
-                .h(px(28.0))
-                .flex_none()
-                .w_full()
-                .flex_row()
-                .items_center()
-                .gap(px(8.0))
-                .px(px(10.0))
-                .border_b_1()
-                .border_color(pal.border)
-                .child(
-                    input()
-                        .w(px(220.0))
-                        .h(px(22.0))
-                        .px(px(6.0))
-                        .rounded(px(4.0))
-                        .border(px(1.0))
-                        .border_color(pal.border)
-                        .bg(pal.bg_island)
-                        .text_color(pal.fg)
-                        .text_size(px(11.0))
-                        .placeholder("Filter commits")
-                        .value(move || state.git_log_filter.get())
-                        .on_change(move |value: &str| state.git_log_filter.set(value.to_owned()))
-                        .on_submit(move |_: &str| state.refresh_git_log()),
-                )
-                .child(text_muted("Subject", 10.0, pal).flex_1())
-                .child(text_muted("Author", 10.0, pal).w(px(110.0)))
-                .child(text_muted("Date", 10.0, pal).w(px(86.0)))
-                .child(text_muted("Hash", 10.0, pal).w(px(70.0))),
-        )
-        .child(scroll().flex_1().child(dynamic(move || {
-            let rows = state.git_log.get();
-            if state.git_log_loading.get() && rows.is_empty() {
-                return view().p(px(10.0)).child(text_muted("Reading git log…", 12.0, pal)).into_element();
-            }
-            if rows.is_empty() {
-                return view().p(px(10.0)).child(text_muted("No commits", 12.0, pal)).into_element();
-            }
-            view()
                 .flex_col()
-                .w_full()
-                .children(rows.into_iter().take(50).map(move |row| {
+                .flex_1()
+                .min_w(px(0.0))
+                .min_h(px(0.0))
+                .child(
                     view()
-                        .h(px(24.0))
+                        .h(px(28.0))
                         .flex_none()
+                        .w_full()
                         .flex_row()
                         .items_center()
                         .gap(px(8.0))
                         .px(px(10.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
+                        .border_b_1()
+                        .border_color(pal.border)
                         .child(
+                            input()
+                                .w(px(200.0))
+                                .h(px(22.0))
+                                .px(px(6.0))
+                                .rounded(px(4.0))
+                                .border(px(1.0))
+                                .border_color(pal.border)
+                                .bg(pal.bg_island)
+                                .text_color(pal.fg)
+                                .text_size(px(11.0))
+                                .placeholder("Filter commits")
+                                .value(move || state.git_log_filter.get())
+                                .on_change(move |value: &str| state.git_log_filter.set(value.to_owned()))
+                                .on_submit(move |_: &str| state.refresh_git_log()),
+                        )
+                        .child(text_muted("Subject", 10.0, pal).flex_1())
+                        .child(text_muted("Author", 10.0, pal).w(px(100.0)))
+                        .child(text_muted("Date", 10.0, pal).w(px(84.0)))
+                        .child(text_muted("Hash", 10.0, pal).w(px(66.0))),
+                )
+                .child(scroll().flex_1().child(dynamic(move || {
+                    let rows = state.git_log.get();
+                    if state.git_log_loading.get() && rows.is_empty() {
+                        return view().p(px(10.0)).child(text_muted("Reading git log…", 12.0, pal)).into_element();
+                    }
+                    if rows.is_empty() {
+                        return view().p(px(10.0)).child(text_muted("No commits", 12.0, pal)).into_element();
+                    }
+                    let selected = state.commit_details.get().map(|details| details.id);
+                    view()
+                        .flex_col()
+                        .w_full()
+                        .children(rows.into_iter().take(100).map(move |row| {
+                            let id_for_press = row.id.clone();
+                            let active = selected.as_deref() == Some(row.id.as_str());
+                            let merge = row.parents > 1;
                             view()
+                                .h(px(24.0))
+                                .flex_none()
                                 .flex_row()
                                 .items_center()
-                                .gap(px(6.0))
-                                .flex_1()
-                                .min_w(px(0.0))
-                                .overflow_hidden()
-                                .child(icon(icons::COMMIT, 12.0, pal.link))
-                                .child(text_ui(row.summary, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate()),
-                        )
-                        .child(text_muted(row.author, 10.0, pal).w(px(110.0)).truncate())
-                        .child(text_muted(row.date, 10.0, pal).w(px(86.0)))
-                        .child(text_ui(row.short_id, 10.0, pal.link).w(px(70.0)))
-                }))
-                .into_element()
-        })))
+                                .gap(px(8.0))
+                                .px(px(10.0))
+                                .bg(if active { pal.tree_selected } else { transparent_black().into() })
+                                .hover(move |s| s.bg(pal.tree_hover))
+                                .on_press(move || state.select_commit(id_for_press.clone()))
+                                .child(
+                                    view()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .flex_1()
+                                        .min_w(px(0.0))
+                                        .overflow_hidden()
+                                        .pointer_events(PointerEvents::None)
+                                        .child(text_ui(if merge { "◆" } else { "●" }, 9.0, pal.link))
+                                        .child(text_ui(row.summary, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate()),
+                                )
+                                .child(
+                                    text_muted(row.author, 10.0, pal)
+                                        .w(px(100.0))
+                                        .truncate()
+                                        .pointer_events(PointerEvents::None),
+                                )
+                                .child(text_muted(row.date, 10.0, pal).w(px(84.0)).pointer_events(PointerEvents::None))
+                                .child(
+                                    text_ui(row.short_id, 10.0, pal.link)
+                                        .w(px(66.0))
+                                        .pointer_events(PointerEvents::None),
+                                )
+                        }))
+                        .into_element()
+                }))),
+        )
+        .child(
+            view()
+                .w(px(280.0))
+                .flex_none()
+                .min_h(px(0.0))
+                .flex_col()
+                .border_l_1()
+                .border_color(pal.border)
+                .child(
+                    view()
+                        .h(px(24.0))
+                        .flex_none()
+                        .w_full()
+                        .px(px(10.0))
+                        .items_center()
+                        .border_b_1()
+                        .border_color(pal.border)
+                        .child(text_muted("Commit Details", 10.0, pal)),
+                )
+                .child(scroll().flex_1().child(view().flex_col().w_full().p(px(10.0)).gap(px(4.0)).children(
+                    match details {
+                        Some(details) => {
+                            let mut rows: Vec<AnyElement> = Vec::new();
+                            rows.push(
+                                text_ui(details.summary.clone(), 12.0, pal.fg_strong)
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .into_element(),
+                            );
+                            rows.push(
+                                text_muted(format!("{} <{}>", details.author, details.email), 10.0, pal).into_element(),
+                            );
+                            rows.push(
+                                text_muted(format!("{}  ·  {}", details.short_id, details.date), 10.0, pal)
+                                    .into_element(),
+                            );
+                            if !details.message.trim().is_empty() {
+                                rows.push(view().h(px(1.0)).w_full().my(px(4.0)).bg(pal.border).into_element());
+                                for line in details.message.lines() {
+                                    rows.push(text_ui(line.to_owned(), 11.0, pal.fg_secondary).into_element());
+                                }
+                            }
+                            rows.push(view().h(px(1.0)).w_full().my(px(4.0)).bg(pal.border).into_element());
+                            rows.push(
+                                text_muted(format!("{} file(s) changed", details.files.len()), 10.0, pal)
+                                    .into_element(),
+                            );
+                            for file in details.files {
+                                rows.push(
+                                    view()
+                                        .flex_row()
+                                        .items_center()
+                                        .gap(px(6.0))
+                                        .child(text_ui(file.letter, 10.0, pal.link).w(px(12.0)))
+                                        .child(text_ui(file.path, 10.0, pal.fg).truncate())
+                                        .into_element(),
+                                );
+                            }
+                            rows
+                        }
+                        None => vec![text_muted("Select a commit", 11.0, pal).into_element()],
+                    },
+                ))),
+        )
         .into_element()
 }
 
@@ -529,14 +616,34 @@ fn git_changes(state: State, pal: Palette) -> impl IntoElement {
             if rows.is_empty() {
                 return view().p(px(10.0)).child(text_muted("No local changes", 12.0, pal)).into_element();
             }
-            view()
-                .flex_col()
-                .w_full()
-                .children(rows.into_iter().map(move |row| {
-                    let path_for_diff = row.path.clone();
-                    let path_for_stage = row.path.clone();
-                    let path_for_unstage = row.path.clone();
-                    let staged = row.staged;
+            let mut items: Vec<AnyElement> = Vec::new();
+            let mut current_dir = String::new();
+            for row in rows {
+                let dir = std::path::Path::new(&row.rel)
+                    .parent()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                if dir != current_dir {
+                    current_dir = dir.clone();
+                    if !dir.is_empty() {
+                        items.push(
+                            view()
+                                .h(px(22.0))
+                                .flex_row()
+                                .items_center()
+                                .gap(px(4.0))
+                                .px(px(10.0))
+                                .child(icon(icons::FOLDER, 12.0, pal.fg_muted))
+                                .child(text_muted(dir, 10.0, pal))
+                                .into_element(),
+                        );
+                    }
+                }
+                let path_for_diff = row.path.clone();
+                let path_for_stage = row.path.clone();
+                let path_for_unstage = row.path.clone();
+                let staged = row.staged;
+                items.push(
                     view()
                         .h(px(26.0))
                         .flex_row()
@@ -551,8 +658,10 @@ fn git_changes(state: State, pal: Palette) -> impl IntoElement {
                         .child(small_git_button(pal, "Unstage", move || {
                             state.stage_path(path_for_unstage.clone(), false)
                         }))
-                }))
-                .into_element()
+                        .into_element(),
+                );
+            }
+            view().flex_col().w_full().children(items).into_element()
         }))
         .into_element()
 }
@@ -743,6 +852,18 @@ fn git_worktrees(state: State, pal: Palette) -> impl IntoElement {
                 .gap(px(6.0))
                 .px(px(8.0))
                 .child(debug_text_button(pal, "Refresh", move || state.refresh_git_refs()))
+                .child(debug_text_button(pal, "New", move || {
+                    state.worktree_revision.set(state.vcs_branch.get().unwrap_or_default());
+                    state.worktree_branch.set(String::new());
+                    state.worktree_dialog.set(true);
+                }))
+                .child(debug_text_button(pal, "Remove", move || {
+                    if let Some(path) = state.worktree_selected.get() {
+                        state.remove_worktree(std::path::PathBuf::from(path), false);
+                    } else {
+                        state.status.set("Select a worktree to remove".to_owned());
+                    }
+                }))
                 .child(text_muted("Worktrees", 10.0, pal)),
         )
         .child(scroll().flex_1().child(dynamic(move || {

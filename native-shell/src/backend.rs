@@ -52,11 +52,31 @@ pub struct CmakeSelection {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitLogRow {
+    pub id: String,
     pub short_id: String,
     pub summary: String,
     pub author: String,
     pub date: String,
     pub refs: String,
+    pub parents: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommitFileRow {
+    pub path: String,
+    pub letter: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct CommitDetailsView {
+    pub id: String,
+    pub short_id: String,
+    pub summary: String,
+    pub message: String,
+    pub author: String,
+    pub email: String,
+    pub date: String,
+    pub files: Vec<CommitFileRow>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -425,6 +445,125 @@ impl State {
         });
     }
 
+    /// Loads the files of the selected commit for the Log's details pane.
+    pub fn select_commit(&self, id: String) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let details = blocking(move || -> Option<CommitDetailsView> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return None;
+                };
+                let query = ide_vcs::LogQuery {
+                    branch: None,
+                    path: None,
+                    author: None,
+                    text: None,
+                    skip: 0,
+                    limit: 1,
+                    range: Some(format!("{id}^..{id}")),
+                    text_regex: false,
+                    text_match_case: false,
+                    branches: Vec::new(),
+                    authors: Vec::new(),
+                    order: Default::default(),
+                    first_parent: false,
+                    no_merges: false,
+                    since_ms: None,
+                    until_ms: None,
+                };
+                let commit = repo.log(&query).ok().and_then(|rows| rows.into_iter().next());
+                let files = repo
+                    .commit_files(&id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|file| CommitFileRow {
+                        path: file.path,
+                        letter: match file.kind {
+                            ChangeKind::Added => "A",
+                            ChangeKind::Deleted => "D",
+                            ChangeKind::Renamed => "R",
+                            ChangeKind::Conflicted => "C",
+                            _ => "M",
+                        }
+                        .to_owned(),
+                    })
+                    .collect();
+                let (short_id, summary, message, author, email, date) = match commit {
+                    Some(commit) => (
+                        commit.short_id,
+                        commit.summary,
+                        commit.message,
+                        commit.author,
+                        commit.email,
+                        format_date(commit.time_ms),
+                    ),
+                    None => (
+                        id.chars().take(8).collect::<String>(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                        String::new(),
+                    ),
+                };
+                Some(CommitDetailsView { id: id.clone(), short_id, summary, message, author, email, date, files })
+            })
+            .await
+            .ok()
+            .flatten();
+            state.commit_details.set(details);
+        });
+    }
+
+    /// Adds a worktree at `path` for `revision`, creating `branch` when given.
+    pub fn add_worktree(&self, path: PathBuf, revision: String, branch: String) {
+        let state = *self;
+        let root = self.root.get();
+        let branch = branch.trim().to_owned();
+        let path_for_message = path.clone();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                let branch = if branch.is_empty() { None } else { Some(branch.as_str()) };
+                repo.add_worktree(&path, &revision, branch).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set(format!("Created worktree at {}", path_for_message.display()));
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Add worktree failed: {error}")),
+                Err(error) => state.status.set(format!("Add worktree task: {error}")),
+            }
+        });
+    }
+
+    pub fn remove_worktree(&self, path: PathBuf, force: bool) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                repo.remove_worktree(&path, force).map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Worktree removed".to_owned());
+                    state.refresh_git_refs();
+                }
+                Ok(Err(error)) => state.status.set(format!("Remove worktree failed: {error}")),
+                Err(error) => state.status.set(format!("Remove worktree task: {error}")),
+            }
+        });
+    }
+
     fn log_git(&self, line: String) {
         self.git_console.update(|lines| {
             lines.push(line);
@@ -614,11 +753,13 @@ impl State {
                     .unwrap_or_default()
                     .into_iter()
                     .map(|commit| GitLogRow {
+                        id: commit.id,
                         short_id: commit.short_id,
                         summary: commit.summary,
                         author: commit.author,
                         date: format_date(commit.time_ms),
                         refs: commit.refs.join(", "),
+                        parents: commit.parents.len(),
                     })
                     .collect()
             })
