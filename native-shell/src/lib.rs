@@ -158,6 +158,7 @@ fn install_shortcuts(state: State) {
         state.app_menu.set(false);
         state.code_action_popup.set(false);
         state.worktree_dialog.set(false);
+        state.diff_open.set(false);
         state.run_chooser.set(false);
         state.toast.set(None);
     });

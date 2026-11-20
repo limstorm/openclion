@@ -376,16 +376,7 @@ fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
 }
 
 fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
-    let labels: [(&'static str, u8); 8] = [
-        ("Changes", 3),
-        ("Shelf", 7),
-        ("Log", 0),
-        ("Console", 1),
-        ("Branches", 5),
-        ("Stashes", 6),
-        ("Worktrees", 2),
-        ("Diff", 4),
-    ];
+    let labels: [(&'static str, u8); 3] = [("Log", 0), ("Console", 1), ("Worktrees", 2)];
     view()
         .h(px(36.0))
         .flex_none()
@@ -442,11 +433,6 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
     match state.git_tab.get() {
         1 => git_console(state, pal).into_element(),
         2 => git_worktrees(state, pal).into_element(),
-        3 => git_changes(state, pal).into_element(),
-        4 => git_diff(state, pal).into_element(),
-        5 => git_branches(state, pal).into_element(),
-        6 => git_stashes(state, pal).into_element(),
-        7 => git_shelves(state, pal).into_element(),
         _ => git_log(state, pal).into_element(),
     }
 }
@@ -517,6 +503,7 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                             continue;
                         }
                         let name_for_press = name.clone();
+                        let checkout_name = name.clone();
                         let active = selected.as_deref() == Some(name.as_str());
                         rows.push(
                             view()
@@ -535,6 +522,22 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
                                     if branch.current { pal.success } else { pal.fg_muted },
                                 ))
                                 .child(text_ui(name, 10.0, pal.fg).truncate())
+                                .child(view().flex_1())
+                                .child({
+                                    if branch.current {
+                                        view().into_element()
+                                    } else {
+                                        view()
+                                            .h(px(16.0))
+                                            .px(px(4.0))
+                                            .items_center()
+                                            .rounded(px(3.0))
+                                            .hover(move |s| s.bg(pal.toolbar_hover))
+                                            .on_press(move || state.checkout_branch(checkout_name.clone()))
+                                            .child(text_ui("Checkout", 8.0, pal.link))
+                                            .into_element()
+                                    }
+                                })
                                 .into_element(),
                         );
                     }
@@ -732,96 +735,6 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
         .into_element()
 }
 
-fn git_changes(state: State, pal: Palette) -> impl IntoElement {
-    view()
-        .flex_col()
-        .flex_1()
-        .w_full()
-        .min_h(px(0.0))
-        .child(dynamic(move || {
-            let rows = state.vcs.get();
-            if rows.is_empty() {
-                return view().p(px(10.0)).child(text_muted("No local changes", 12.0, pal)).into_element();
-            }
-            let mut items: Vec<AnyElement> = Vec::new();
-            let mut current_dir = String::new();
-            for row in rows {
-                let dir = std::path::Path::new(&row.rel)
-                    .parent()
-                    .map(|p| p.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                if dir != current_dir {
-                    current_dir = dir.clone();
-                    if !dir.is_empty() {
-                        items.push(
-                            view()
-                                .h(px(22.0))
-                                .flex_row()
-                                .items_center()
-                                .gap(px(4.0))
-                                .px(px(10.0))
-                                .child(icon(icons::FOLDER, 12.0, pal.fg_muted))
-                                .child(text_muted(dir, 10.0, pal))
-                                .into_element(),
-                        );
-                    }
-                }
-                let path_for_diff = row.path.clone();
-                let path_for_stage = row.path.clone();
-                let path_for_unstage = row.path.clone();
-                let staged = row.staged;
-                items.push(
-                    view()
-                        .h(px(26.0))
-                        .flex_row()
-                        .items_center()
-                        .gap(px(6.0))
-                        .px(px(10.0))
-                        .hover(move |s| s.bg(pal.tree_hover))
-                        .on_press(move || state.show_diff(path_for_diff.clone(), staged))
-                        .child({
-                            let path_for_bg = row.path.clone();
-                            let path_for_toggle = row.path.clone();
-                            view()
-                                .size(px(13.0))
-                                .flex_none()
-                                .items_center()
-                                .justify_center()
-                                .rounded(px(3.0))
-                                .border(px(1.0))
-                                .border_color(pal.border_strong)
-                                .bg(move || {
-                                    state.commit_rev.get();
-                                    if state.commit_checked.with(|checked| checked.contains(&path_for_bg)) {
-                                        pal.accent
-                                    } else {
-                                        pal.bg_island
-                                    }
-                                })
-                                .on_press(move || state.toggle_commit_file(path_for_toggle.clone()))
-                                .child(dynamic(move || {
-                                    state.commit_rev.get();
-                                    if state.commit_checked.with(|checked| checked.contains(&row.path)) {
-                                        text_ui("✓", 8.0, white().into()).into_element()
-                                    } else {
-                                        view().into_element()
-                                    }
-                                }))
-                        })
-                        .child(text_ui(row.letter, 10.0, pal.link).w(px(14.0)))
-                        .child(text_ui(row.rel, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate())
-                        .child(small_git_button(pal, "Stage", move || state.stage_path(path_for_stage.clone(), true)))
-                        .child(small_git_button(pal, "Unstage", move || {
-                            state.stage_path(path_for_unstage.clone(), false)
-                        }))
-                        .into_element(),
-                );
-            }
-            view().flex_col().w_full().children(items).into_element()
-        }))
-        .into_element()
-}
-
 fn small_git_button(pal: Palette, label: &'static str, on_press: impl Fn() + 'static) -> View {
     view()
         .h(px(19.0))
@@ -836,80 +749,7 @@ fn small_git_button(pal: Palette, label: &'static str, on_press: impl Fn() + 'st
         .child(text_ui(label, 9.0, pal.fg_secondary))
 }
 
-fn git_diff(state: State, pal: Palette) -> impl IntoElement {
-    let Some(diff) = state.git_diff.get() else {
-        return view().p(px(10.0)).child(text_muted("Select a changed file to see its diff", 12.0, pal)).into_element();
-    };
-    view()
-        .flex_col()
-        .flex_1()
-        .w_full()
-        .min_h(px(0.0))
-        .child(view().h(px(24.0)).flex_none().px(px(10.0)).items_center().child(text_ui(
-            format!("{}  ({})", diff.title, if diff.staged { "index" } else { "working tree" }),
-            11.0,
-            pal.fg_secondary,
-        )))
-        .child(scroll().flex_1().child(view().flex_col().w_full().p(px(8.0)).children(diff.text.lines().map(
-            move |line| {
-                let color = if line.starts_with('+') && !line.starts_with("+++") {
-                    pal.success
-                } else if line.starts_with('-') && !line.starts_with("---") {
-                    pal.danger
-                } else if line.starts_with("@@") {
-                    pal.link
-                } else {
-                    pal.fg_secondary
-                };
-                text_ui(line.to_owned(), 11.0, color)
-            },
-        ))))
-        .into_element()
-}
-
-fn git_branches(state: State, pal: Palette) -> impl IntoElement {
-    scroll().flex_1().child(dynamic(move || {
-        let rows = state.git_branches.get();
-        if rows.is_empty() {
-            return view().p(px(10.0)).child(text_muted("No branches", 12.0, pal)).into_element();
-        }
-        view()
-            .flex_col()
-            .w_full()
-            .children(rows.into_iter().map(move |branch| {
-                let name = branch.name.clone();
-                let current = branch.current;
-                view()
-                    .h(px(24.0))
-                    .flex_row()
-                    .items_center()
-                    .gap(px(6.0))
-                    .px(px(10.0))
-                    .hover(move |s| s.bg(pal.tree_hover))
-                    .on_press(move || {
-                        if !current {
-                            state.checkout_branch(name.clone());
-                        }
-                    })
-                    .child(icon(icons::BRANCH, 12.0, if current { pal.success } else { pal.fg_muted }))
-                    .child(text_ui(branch.name, 11.0, pal.fg))
-                    .child(text_muted(if branch.remote { "remote" } else { "local" }, 9.0, pal))
-                    .child(view().flex_1())
-                    .child(text_muted(
-                        if branch.ahead + branch.behind > 0 {
-                            format!("↑{} ↓{}", branch.ahead, branch.behind)
-                        } else {
-                            String::new()
-                        },
-                        9.0,
-                        pal,
-                    ))
-            }))
-            .into_element()
-    }))
-}
-
-fn git_stashes(state: State, pal: Palette) -> impl IntoElement {
+pub(crate) fn git_stashes(state: State, pal: Palette) -> impl IntoElement {
     view()
         .flex_col()
         .flex_1()
@@ -954,7 +794,7 @@ fn git_stashes(state: State, pal: Palette) -> impl IntoElement {
         .into_element()
 }
 
-fn git_shelves(state: State, pal: Palette) -> impl IntoElement {
+pub(crate) fn git_shelves(state: State, pal: Palette) -> impl IntoElement {
     view()
         .flex_col()
         .flex_1()

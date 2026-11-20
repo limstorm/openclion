@@ -40,14 +40,25 @@ pub struct GitWorktreeRow {
 #[derive(Debug, Clone, PartialEq)]
 pub struct GitDiffView {
     pub title: String,
+    pub path: PathBuf,
     pub staged: bool,
     pub text: String,
+    pub hunks: Vec<HunkRow>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CmakeSelection {
     pub build_dir: String,
     pub target: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct HunkRow {
+    pub index: usize,
+    pub kind: String,
+    pub start: u32,
+    pub lines: u32,
+    pub old_text: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -394,6 +405,42 @@ impl State {
         self.refresh_git_log();
     }
 
+    /// Stages one hunk of the file shown in the Diff tab.
+    pub fn stage_hunk(&self, index: usize) {
+        let Some(diff) = self.git_diff.get() else {
+            return;
+        };
+        if diff.staged {
+            self.status.set("This diff is already staged".to_owned());
+            return;
+        }
+        let state = *self;
+        let root = self.root.get();
+        let diff_path = diff.path.clone();
+        let diff_path_clone = diff.path.clone();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                let current = std::fs::read_to_string(&diff_path).map_err(|error| error.to_string())?;
+                repo.stage_hunks(&diff_path, &current, &[index], ide_vcs::TextEncoding::from(encoding_rs::UTF_8))
+                    .map_err(|error| error.message)
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Staged hunk".to_owned());
+                    state.log_git("cmd", format!("git apply --cached hunk {index}"));
+                    state.refresh_vcs();
+                    state.show_diff(diff_path_clone.clone(), false);
+                }
+                Ok(Err(error)) => state.status.set(format!("Stage hunk failed: {error}")),
+                Err(error) => state.status.set(format!("Stage hunk task: {error}")),
+            }
+        });
+    }
+
     /// Lists `.openclion/shelf` entries.
     pub fn refresh_shelves(&self) {
         let state = *self;
@@ -729,17 +776,46 @@ impl State {
     pub fn show_diff(&self, path: PathBuf, staged: bool) {
         let state = *self;
         let root = self.root.get();
+        let path_for_text = path.clone();
+        let root_for_text = root.clone();
         let title = path.strip_prefix(&root).unwrap_or(&path).to_string_lossy().to_string();
         spawn(async move {
             let text = blocking(move || {
-                let Ok(Some(repo)) = Repo::discover(&root) else {
+                let Ok(Some(repo)) = Repo::discover(&root_for_text) else {
                     return String::new();
                 };
-                repo.diff_text(&path, staged, ide_vcs::TextEncoding::from(encoding_rs::UTF_8)).unwrap_or_default()
+                repo.diff_text(&path_for_text, staged, ide_vcs::TextEncoding::from(encoding_rs::UTF_8))
+                    .unwrap_or_default()
             })
             .await
             .unwrap_or_default();
-            state.git_diff.set(Some(GitDiffView { title, staged, text }));
+            let path_for_hunks = path.clone();
+            let hunks = blocking(move || -> Vec<HunkRow> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Vec::new();
+                };
+                let current = std::fs::read_to_string(&path_for_hunks).unwrap_or_default();
+                repo.line_hunks(&path_for_hunks, &current, staged, ide_vcs::TextEncoding::from(encoding_rs::UTF_8))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, hunk)| HunkRow {
+                        index,
+                        kind: match hunk.kind {
+                            ide_vcs::HunkKind::Added => "added",
+                            ide_vcs::HunkKind::Modified => "modified",
+                            ide_vcs::HunkKind::Deleted => "deleted",
+                        }
+                        .to_owned(),
+                        start: hunk.start,
+                        lines: hunk.lines,
+                        old_text: hunk.old_text,
+                    })
+                    .collect()
+            })
+            .await
+            .unwrap_or_default();
+            state.git_diff.set(Some(GitDiffView { title, path, staged, text, hunks }));
             state.git_tab.set(4);
             state.bottom_tool.set(Some(crate::model::BottomTool::Git));
             state.show_bottom.set(true);

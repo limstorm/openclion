@@ -245,9 +245,55 @@ fn commit_panel(state: State, pal: Palette) -> impl IntoElement {
                 }))
                 .child(header_action(pal, icons::REFRESH, move || {
                     state.refresh_vcs();
+                    state.refresh_shelves();
+                    state.refresh_git_refs();
                 }))
                 .child(header_action(pal, icons::MORE_HORIZONTAL, move || {})),
         ))
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
+                .w_full()
+                .flex_row()
+                .items_center()
+                .gap(px(2.0))
+                .px(px(4.0))
+                .border_b_1()
+                .border_color(pal.border)
+                .child(commit_tab(state, pal, "Commit", 0))
+                .child(commit_tab(state, pal, "Shelf", 1))
+                .child(commit_tab(state, pal, "Stash", 2)),
+        )
+        .child(dynamic(move || match state.commit_tab.get() {
+            1 => crate::ui::panels::git_shelves(state, pal).into_element(),
+            2 => crate::ui::panels::git_stashes(state, pal).into_element(),
+            _ => commit_changes(state, pal).into_element(),
+        }))
+}
+
+fn commit_tab(state: State, pal: Palette, label: &'static str, index: u8) -> View {
+    view()
+        .h(px(22.0))
+        .px(px(8.0))
+        .items_center()
+        .justify_center()
+        .rounded(px(4.0))
+        .bg(move || if state.commit_tab.get() == index { pal.tab_selected } else { transparent_black().into() })
+        .hover(move |s| s.bg(pal.tab_hover))
+        .on_press(move || state.commit_tab.set(index))
+        .child(
+            text_ui(label, 11.0, pal.fg_secondary)
+                .text_color(move || if state.commit_tab.get() == index { pal.fg_strong } else { pal.fg_secondary }),
+        )
+}
+
+fn commit_changes(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
         .child(
             view()
                 .h(px(36.0))
@@ -380,7 +426,7 @@ fn vcs_row(state: State, pal: Palette, row: crate::backend::VcsRow) -> View {
         .px(px(6.0))
         .rounded(px(5.0))
         .hover(move |s| s.bg(pal.tree_hover))
-        .on_press(move || state.open_path(path.clone()))
+        .on_press(move || state.show_diff(path.clone(), row.staged))
         .child({
             let path_for_bg = row.path.clone();
             let path_for_press = row.path.clone();
@@ -415,6 +461,21 @@ fn vcs_row(state: State, pal: Palette, row: crate::backend::VcsRow) -> View {
         .child(text_ui(row.rel, 13.0, pal.fg).truncate())
         .child(view().flex_1())
         .child(text_ui(row.letter, 11.0, letter_color))
+        .child({
+            let path_for_stage = row.path.clone();
+            let staged = row.staged;
+            view()
+                .h(px(16.0))
+                .px(px(4.0))
+                .items_center()
+                .justify_center()
+                .rounded(px(3.0))
+                .border(px(1.0))
+                .border_color(pal.border)
+                .hover(move |s| s.bg(pal.toolbar_hover))
+                .on_press(move || state.stage_path(path_for_stage.clone(), !staged))
+                .child(text_ui(if staged { "Unstage" } else { "Stage" }, 8.0, pal.fg_secondary))
+        })
 }
 
 fn structure_panel(state: State, pal: Palette) -> impl IntoElement {

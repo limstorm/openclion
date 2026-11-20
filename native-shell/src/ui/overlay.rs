@@ -19,6 +19,7 @@ pub fn overlays(state: State, pal: Palette) -> impl IntoElement {
         .child(dynamic(move || quick_open(state, pal).into_element()))
         .child(dynamic(move || project_menu(state, pal).into_element()))
         .child(dynamic(move || settings_dialog(state, pal).into_element()))
+        .child(dynamic(move || diff_dialog(state, pal).into_element()))
         .child(dynamic(move || code_action_popup(state, pal).into_element()))
         .child(dynamic(move || worktree_dialog(state, pal).into_element()))
         .child(dynamic(move || app_menu(state, pal).into_element()))
@@ -755,6 +756,97 @@ fn code_action_popup(state: State, pal: Palette) -> impl IntoElement {
                             .into_element()
                     }))),
             ),
+        )
+        .into_element()
+}
+
+fn diff_dialog(state: State, pal: Palette) -> impl IntoElement {
+    if !state.diff_open.get() {
+        return view().into_element();
+    }
+    let Some(diff) = state.git_diff.get() else {
+        return view().into_element();
+    };
+    view()
+        .absolute()
+        .inset(px(0.0))
+        .items_center()
+        .justify_center()
+        .bg(c(0x00000040))
+        .child(
+            view()
+                .w(px(980.0))
+                .h(px(680.0))
+                .flex_col()
+                .overflow_hidden()
+                .rounded(px(10.0))
+                .border(px(1.0))
+                .border_color(pal.border_strong)
+                .bg(pal.bg_island)
+                .child(
+                    view()
+                        .h(px(38.0))
+                        .flex_none()
+                        .flex_row()
+                        .items_center()
+                        .gap(px(8.0))
+                        .px(px(12.0))
+                        .border_b_1()
+                        .border_color(pal.border)
+                        .child(text_strong(diff.title.clone(), 12.0, pal))
+                        .child(text_muted(if diff.staged { "index" } else { "working tree" }, 10.0, pal))
+                        .child(view().flex_1())
+                        .children(
+                            diff.hunks
+                                .iter()
+                                .filter(|_| !diff.staged)
+                                .map(|hunk| {
+                                    let index = hunk.index;
+                                    view()
+                                        .h(px(22.0))
+                                        .px(px(8.0))
+                                        .items_center()
+                                        .rounded(px(4.0))
+                                        .border(px(1.0))
+                                        .border_color(pal.border_strong)
+                                        .hover(move |s| s.bg(pal.toolbar_hover))
+                                        .on_press(move || state.stage_hunk(index))
+                                        .child(text_ui("Stage hunk", 10.0, pal.fg_secondary))
+                                })
+                                .collect::<Vec<_>>(),
+                        )
+                        .child(
+                            view()
+                                .size(px(24.0))
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(4.0))
+                                .hover(move |s| s.bg(pal.toolbar_hover))
+                                .on_press(move || state.diff_open.set(false))
+                                .child(icon(icons::CLOSE, 12.0, pal.fg_muted)),
+                        ),
+                )
+                .child(
+                    scroll().flex_1().child(
+                        view().flex_col().w_full().p(px(10.0)).children(
+                            diff.text
+                                .lines()
+                                .map(move |line| {
+                                    let color = if line.starts_with('+') && !line.starts_with("+++") {
+                                        pal.success
+                                    } else if line.starts_with('-') && !line.starts_with("---") {
+                                        pal.danger
+                                    } else if line.starts_with("@@") {
+                                        pal.link
+                                    } else {
+                                        pal.fg_secondary
+                                    };
+                                    text_ui(line.to_owned(), 11.0, color)
+                                })
+                                .collect::<Vec<_>>(),
+                        ),
+                    ),
+                ),
         )
         .into_element()
 }
