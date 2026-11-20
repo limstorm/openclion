@@ -51,6 +51,13 @@ pub struct CmakeSelection {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct GitShelfRow {
+    pub id: String,
+    pub name: String,
+    pub files: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct GitConsoleLine {
     pub kind: String,
     pub time: String,
@@ -385,6 +392,100 @@ impl State {
     pub fn select_log_branch(&self, branch: Option<String>) {
         self.git_log_branch.set(branch);
         self.refresh_git_log();
+    }
+
+    /// Lists `.openclion/shelf` entries.
+    pub fn refresh_shelves(&self) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let rows = blocking(move || {
+                let dir = ide_core::project_dir::path(&root, "shelf");
+                ide_vcs::shelf::list(&dir)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|shelf| GitShelfRow { id: shelf.id, name: shelf.name, files: shelf.files.len() })
+                    .collect()
+            })
+            .await
+            .unwrap_or_default();
+            state.git_shelves.set(rows);
+        });
+    }
+
+    /// Shelves the checked changes and reverts them from the working tree.
+    pub fn shelve_checked(&self) {
+        let paths: Vec<PathBuf> = self
+            .vcs
+            .get()
+            .into_iter()
+            .filter(|row| self.commit_checked.with(|checked| checked.contains(&row.path)))
+            .map(|row| row.path)
+            .collect();
+        if paths.is_empty() {
+            self.status.set("Select at least one file to shelve".to_owned());
+            return;
+        }
+        let name = {
+            let message = self.commit_message.get();
+            if message.trim().is_empty() { "OpenCLion shelf".to_owned() } else { message.trim().to_owned() }
+        };
+        let state = *self;
+        let root = self.root.get();
+        self.status.set("Shelving…".to_owned());
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                let dir = ide_core::project_dir::path(&root, "shelf");
+                repo.shelve(&dir, &name, &paths).map_err(|error| error.message).map(|_| ())
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set("Shelved selected files".to_owned());
+                    state.refresh_vcs();
+                    state.refresh_shelves();
+                }
+                Ok(Err(error)) => state.status.set(format!("Shelve failed: {error}")),
+                Err(error) => state.status.set(format!("Shelve task: {error}")),
+            }
+        });
+    }
+
+    pub fn unshelve(&self, id: String, remove: bool) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let result = blocking(move || -> Result<(), String> {
+                let Ok(Some(repo)) = Repo::discover(&root) else {
+                    return Err("No git repository".to_owned());
+                };
+                let dir = ide_core::project_dir::path(&root, "shelf");
+                repo.unshelve(&dir, &id, remove).map_err(|error| error.message).map(|_| ())
+            })
+            .await;
+            match result {
+                Ok(Ok(())) => {
+                    state.status.set(if remove { "Unshelved" } else { "Applied shelf" }.to_owned());
+                    state.refresh_vcs();
+                    state.refresh_shelves();
+                }
+                Ok(Err(error)) => state.status.set(format!("Unshelve failed: {error}")),
+                Err(error) => state.status.set(format!("Unshelve task: {error}")),
+            }
+        });
+    }
+
+    pub fn delete_shelf(&self, id: String) {
+        let state = *self;
+        let root = self.root.get();
+        spawn(async move {
+            let dir = ide_core::project_dir::path(&root, "shelf");
+            let _ = blocking(move || ide_vcs::shelf::delete(&dir, &id)).await;
+            state.refresh_shelves();
+        });
     }
 
     /// Loads branches and stashes for the Git dock.

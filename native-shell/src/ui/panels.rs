@@ -415,6 +415,7 @@ fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
             state.refresh_vcs();
             state.refresh_git_log();
             state.refresh_git_refs();
+            state.refresh_shelves();
         }))
         .child(header_action(pal, icons::CLOSE, move || {
             state.show_bottom.set(false);
@@ -427,6 +428,7 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
             state.refresh_vcs();
             state.refresh_git_log();
             state.refresh_git_refs();
+            state.refresh_shelves();
         }
     });
     match state.git_tab.get() {
@@ -436,6 +438,7 @@ fn git_bottom(state: State, pal: Palette) -> impl IntoElement {
         4 => git_diff(state, pal).into_element(),
         5 => git_branches(state, pal).into_element(),
         6 => git_stashes(state, pal).into_element(),
+        7 => git_shelves(state, pal).into_element(),
         _ => git_log(state, pal).into_element(),
     }
 }
@@ -937,6 +940,54 @@ fn git_stashes(state: State, pal: Palette) -> impl IntoElement {
                         .child(small_git_button(pal, "Apply", move || state.stash_apply(index, false)))
                         .child(small_git_button(pal, "Pop", move || state.stash_apply(index, true)))
                         .child(small_git_button(pal, "Drop", move || state.stash_drop(index)))
+                }))
+                .into_element()
+        })))
+        .into_element()
+}
+
+fn git_shelves(state: State, pal: Palette) -> impl IntoElement {
+    view()
+        .flex_col()
+        .flex_1()
+        .w_full()
+        .min_h(px(0.0))
+        .child(
+            view()
+                .h(px(28.0))
+                .flex_none()
+                .flex_row()
+                .items_center()
+                .gap(px(6.0))
+                .px(px(8.0))
+                .child(debug_text_button(pal, "Shelve checked", move || state.shelve_checked()))
+                .child(debug_text_button(pal, "Refresh", move || state.refresh_shelves())),
+        )
+        .child(scroll().flex_1().child(dynamic(move || {
+            let rows = state.git_shelves.get();
+            if rows.is_empty() {
+                return view().p(px(10.0)).child(text_muted("No shelves", 12.0, pal)).into_element();
+            }
+            view()
+                .flex_col()
+                .w_full()
+                .children(rows.into_iter().map(move |shelf| {
+                    let id_apply = shelf.id.clone();
+                    let id_pop = shelf.id.clone();
+                    let id_delete = shelf.id.clone();
+                    view()
+                        .h(px(26.0))
+                        .flex_row()
+                        .items_center()
+                        .gap(px(6.0))
+                        .px(px(10.0))
+                        .hover(move |s| s.bg(pal.tree_hover))
+                        .child(icon(icons::BOOKMARKS, 12.0, pal.fg_muted))
+                        .child(text_ui(shelf.name, 11.0, pal.fg).flex_1().truncate())
+                        .child(text_muted(format!("{} file(s)", shelf.files), 9.0, pal))
+                        .child(small_git_button(pal, "Apply", move || state.unshelve(id_apply.clone(), false)))
+                        .child(small_git_button(pal, "Unshelve", move || state.unshelve(id_pop.clone(), true)))
+                        .child(small_git_button(pal, "Delete", move || state.delete_shelf(id_delete.clone())))
                 }))
                 .into_element()
         })))
