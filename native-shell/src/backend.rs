@@ -375,6 +375,11 @@ impl State {
         });
     }
 
+    pub fn select_log_branch(&self, branch: Option<String>) {
+        self.git_log_branch.set(branch);
+        self.refresh_git_log();
+    }
+
     /// Loads branches and stashes for the Git dock.
     pub fn refresh_git_refs(&self) {
         let state = *self;
@@ -725,6 +730,7 @@ impl State {
         let state = *self;
         let root = self.root.get();
         let filter = self.git_log_filter.get();
+        let branch = self.git_log_branch.get();
         self.git_log_loading.set(true);
         spawn(async move {
             let rows = blocking(move || {
@@ -732,7 +738,7 @@ impl State {
                     return Vec::new();
                 };
                 let query = ide_vcs::LogQuery {
-                    branch: None,
+                    branch: branch.clone(),
                     path: None,
                     author: None,
                     text: if filter.trim().is_empty() { None } else { Some(filter) },

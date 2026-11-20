@@ -449,6 +449,68 @@ fn git_log(state: State, pal: Palette) -> impl IntoElement {
         .min_h(px(0.0))
         .child(
             view()
+                .w(px(170.0))
+                .flex_none()
+                .flex_col()
+                .min_h(px(0.0))
+                .border_r_1()
+                .border_color(pal.border)
+                .child(
+                    view()
+                        .h(px(24.0))
+                        .flex_none()
+                        .px(px(8.0))
+                        .items_center()
+                        .border_b_1()
+                        .border_color(pal.border)
+                        .child(text_muted("Branches", 10.0, pal)),
+                )
+                .child(scroll().flex_1().child(dynamic(move || {
+                    let selected = state.git_log_branch.get();
+                    let mut rows: Vec<AnyElement> = Vec::new();
+                    rows.push(
+                        view()
+                            .h(px(22.0))
+                            .flex_row()
+                            .items_center()
+                            .gap(px(4.0))
+                            .px(px(8.0))
+                            .rounded(px(3.0))
+                            .bg(if selected.is_none() { pal.tree_selected } else { transparent_black().into() })
+                            .hover(move |s| s.bg(pal.tree_hover))
+                            .on_press(move || state.select_log_branch(None))
+                            .child(text_ui("All branches", 10.0, pal.fg))
+                            .into_element(),
+                    );
+                    for branch in state.git_branches.get() {
+                        let name = branch.name.clone();
+                        let name_for_press = name.clone();
+                        let active = selected.as_deref() == Some(name.as_str());
+                        rows.push(
+                            view()
+                                .h(px(22.0))
+                                .flex_row()
+                                .items_center()
+                                .gap(px(4.0))
+                                .px(px(8.0))
+                                .rounded(px(3.0))
+                                .bg(if active { pal.tree_selected } else { transparent_black().into() })
+                                .hover(move |s| s.bg(pal.tree_hover))
+                                .on_press(move || state.select_log_branch(Some(name_for_press.clone())))
+                                .child(icon(
+                                    icons::BRANCH,
+                                    10.0,
+                                    if branch.current { pal.success } else { pal.fg_muted },
+                                ))
+                                .child(text_ui(name, 10.0, pal.fg).truncate())
+                                .into_element(),
+                        );
+                    }
+                    view().flex_col().w_full().children(rows).into_element()
+                }))),
+        )
+        .child(
+            view()
                 .flex_col()
                 .flex_1()
                 .min_w(px(0.0))
@@ -652,6 +714,35 @@ fn git_changes(state: State, pal: Palette) -> impl IntoElement {
                         .px(px(10.0))
                         .hover(move |s| s.bg(pal.tree_hover))
                         .on_press(move || state.show_diff(path_for_diff.clone(), staged))
+                        .child({
+                            let path_for_bg = row.path.clone();
+                            let path_for_toggle = row.path.clone();
+                            view()
+                                .size(px(13.0))
+                                .flex_none()
+                                .items_center()
+                                .justify_center()
+                                .rounded(px(3.0))
+                                .border(px(1.0))
+                                .border_color(pal.border_strong)
+                                .bg(move || {
+                                    state.commit_rev.get();
+                                    if state.commit_checked.with(|checked| checked.contains(&path_for_bg)) {
+                                        pal.accent
+                                    } else {
+                                        pal.bg_island
+                                    }
+                                })
+                                .on_press(move || state.toggle_commit_file(path_for_toggle.clone()))
+                                .child(dynamic(move || {
+                                    state.commit_rev.get();
+                                    if state.commit_checked.with(|checked| checked.contains(&row.path)) {
+                                        text_ui("✓", 8.0, white().into()).into_element()
+                                    } else {
+                                        view().into_element()
+                                    }
+                                }))
+                        })
                         .child(text_ui(row.letter, 10.0, pal.link).w(px(14.0)))
                         .child(text_ui(row.rel, 11.0, pal.fg).flex_1().min_w(px(0.0)).truncate())
                         .child(small_git_button(pal, "Stage", move || state.stage_path(path_for_stage.clone(), true)))
