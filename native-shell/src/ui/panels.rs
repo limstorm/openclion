@@ -376,8 +376,16 @@ fn cmake_bottom_tabs(state: State, pal: Palette) -> impl IntoElement {
 }
 
 fn git_tabs(state: State, pal: Palette) -> impl IntoElement {
-    let labels: [(&'static str, u8); 7] =
-        [("Changes", 3), ("Log", 0), ("Console", 1), ("Branches", 5), ("Stashes", 6), ("Worktrees", 2), ("Diff", 4)];
+    let labels: [(&'static str, u8); 8] = [
+        ("Changes", 3),
+        ("Shelf", 7),
+        ("Log", 0),
+        ("Console", 1),
+        ("Branches", 5),
+        ("Stashes", 6),
+        ("Worktrees", 2),
+        ("Diff", 4),
+    ];
     view()
         .h(px(36.0))
         .flex_none()
